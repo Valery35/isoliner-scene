@@ -786,7 +786,24 @@ impl SceneApp {
         let ctrl = ui.input(|i| i.modifiers.ctrl || i.modifiers.command);
         let d = resp.drag_delta();
         let (dx, dy) = (f64::from(d.x), f64::from(d.y));
-        if d != egui::Vec2::ZERO {
+        // два пальца: щипок, поворот и сдвиг; масштаб egui здесь - щипок,
+        // а не Ctrl + колесо
+        let touch = ui
+            .input(|i| i.multi_touch())
+            .filter(|t| t.num_touches >= 2 && resp.contains_pointer());
+        if let Some(t) = touch {
+            let mut v = self.view_camera();
+            camera::touch(
+                &mut v,
+                f64::from(t.zoom_delta),
+                f64::from(t.rotation_delta),
+                f64::from(t.translation_delta.x),
+                f64::from(t.translation_delta.y),
+                wpt,
+            );
+            self.set_view_camera(v);
+            self.anim = None;
+        } else if d != egui::Vec2::ZERO {
             let mut v = self.view_camera();
             let mut moved = true;
             if resp.dragged_by(egui::PointerButton::Primary) {
@@ -811,7 +828,7 @@ impl SceneApp {
                 self.anim = None;
             }
         }
-        if resp.hovered() {
+        if resp.hovered() && touch.is_none() {
             let (scroll, zoom) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta()));
             if scroll != 0.0 {
                 let mut v = self.view_camera();

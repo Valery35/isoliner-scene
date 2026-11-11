@@ -198,6 +198,20 @@ pub fn zoom_fov(cam: &mut Camera, notches: f64) {
     cam.fov = (fov * 0.999f64.powf(notches * 120.0)).clamp(1.0, 179.0);
 }
 
+/// Два пальца, как на карте телефона (образец - PlanetX Lite):
+/// щипок `zoom` - во сколько раз ближе, поворот пальцев `turn`
+/// в радианах вращает сцену вокруг отвеса, сдвиг пальцев `dx`, `dy`
+/// в пикселях тянет сцену за собой.
+pub fn touch(cam: &mut Camera, zoom: f64, turn: f64, dx: f64, dy: f64, width: f64) {
+    if zoom.is_finite() && zoom > 0.0 {
+        cam.distance /= zoom;
+    }
+    if turn.is_finite() {
+        cam.azimuth -= turn.to_degrees();
+    }
+    pan(cam, dx, dy, width);
+}
+
 /// Охват для кадра, как окно модуля: наибольшее из ширины плана
 /// и высоты с преувеличением, не меньше метра.
 pub fn view_span(lo: [f64; 3], hi: [f64; 3], vex: f64) -> f64 {
@@ -409,6 +423,21 @@ mod tests {
         let mut d = cam();
         pan_upright(&mut d, 0.0, 0.0, 10.0, 500.0);
         assert!(d.center[2] > 5.0 && (d.center[0] - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn two_fingers_zoom_turn_and_drag() {
+        let mut c = cam();
+        touch(&mut c, 2.0, 0.0, 0.0, 0.0, 500.0);
+        assert!((c.distance - 150.0).abs() < 1e-9);
+        touch(&mut c, 1.0, std::f64::consts::FRAC_PI_2, 0.0, 0.0, 500.0);
+        assert!((c.azimuth + 150.0).abs() < 1e-9);
+        let before = c.center;
+        touch(&mut c, 1.0, 0.0, 10.0, 0.0, 500.0);
+        assert_ne!(c.center, before);
+        // мусор от датчика не портит камеру
+        touch(&mut c, f64::NAN, f64::NAN, 0.0, 0.0, 500.0);
+        assert!(c.distance.is_finite() && c.azimuth.is_finite());
     }
 
     #[test]
