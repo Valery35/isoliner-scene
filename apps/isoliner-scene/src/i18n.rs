@@ -72,8 +72,28 @@ const TABLE: &[(&str, &str)] = &[
     ("Не записалось: %s", "Could not save: %s"),
     ("Записано: %s", "Saved: %s"),
     (
-        "Левая кнопка - вращать, правая - сдвигать, колесо - ближе и дальше.",
-        "Left button rotates, right button pans, the wheel zooms.",
+        "Левая кнопка - вращение, Ctrl + левая или средняя - сдвиг, колесо - масштаб, Ctrl + колесо - угол обзора, щелчок правой - центр вращения, щелчок левой - опрос точки.",
+        "Left button rotates, Ctrl + left or middle pans, the wheel zooms, Ctrl + wheel changes the field of view, a right click sets the rotation center, a left click probes a point.",
+    ),
+    ("Градиентный фон", "Gradient background"),
+    ("Вид сверху", "Top view"),
+    ("Сбросить вид", "Reset view"),
+    ("Вращение", "Spin"),
+    (
+        "%s: X %s, Y %s, отметка %s м",
+        "%s: X %s, Y %s, elevation %s m",
+    ),
+    (
+        "Центр вращения: %s, %s, отметка %s м.",
+        "Rotation center: %s, %s, elevation %s m.",
+    ),
+    (
+        "Центр вращения - вся сцена.",
+        "Rotation center: the whole scene.",
+    ),
+    (
+        "Мимо объекта: центр не изменён. Щелчок за пределами площадки вернёт центр на всю сцену.",
+        "Missed the objects: the center is unchanged. A click outside the site returns the center to the whole scene.",
     ),
     (
         "Азимут %.0f°, наклон %.0f°, удаление %s м",

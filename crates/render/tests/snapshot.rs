@@ -8,24 +8,18 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use render::{BACKGROUND, GpuScene, Look, Renderer, Target, headless, read_rgba};
+use render::{BG_GRADIENT, BG_PLAIN, GpuScene, Look, Renderer, Target, headless, read_rgba};
 use scene_core::{Frame, mesh};
 use scene_format::read_package;
 
+/// Цвет sRGB в байтах, как его видит окно модуля.
+fn bytes(c: [f32; 3]) -> [u8; 3] {
+    c.map(|v| (v * 255.0).round() as u8)
+}
+
+/// Доля пикселей ровного фона окна модуля, 250, 250, 248.
 fn background_share(rgba: &[u8]) -> f64 {
-    let bg: Vec<u8> = BACKGROUND[..3]
-        .iter()
-        .map(|c| {
-            // sRGB, как пишет текстура кадра
-            let c = *c;
-            let s = if c <= 0.0031308 {
-                12.92 * c
-            } else {
-                1.055 * c.powf(1.0 / 2.4) - 0.055
-            };
-            (s * 255.0).round() as u8
-        })
-        .collect();
+    let bg = bytes(BG_PLAIN.bottom);
     let n = rgba.len() / 4;
     let same = rgba
         .as_chunks::<4>()
@@ -61,6 +55,7 @@ fn demo_scene_renders_with_its_camera() {
         camera: frame.camera_to_view(&pkg.meta.camera.unwrap()),
         vex: frame.vex,
         opacity: 1.0,
+        background: BG_PLAIN,
     };
     renderer.render(&device, &queue, &target, &scene, &look);
     let rgba = read_rgba(&device, &queue, &target).unwrap();
@@ -85,4 +80,34 @@ fn demo_scene_renders_with_its_camera() {
     renderer.render(&device, &queue, &target, &scene, &away);
     let rgba = read_rgba(&device, &queue, &target).unwrap();
     assert!(background_share(&rgba) > 0.999);
+
+    // градиент окна модуля: верх кадра холодный, низ светлый, числа
+    // sRGB те же, что в QGIS
+    away.background = BG_GRADIENT;
+    renderer.render(&device, &queue, &target, &scene, &away);
+    let rgba = read_rgba(&device, &queue, &target).unwrap();
+    let px = |row: usize| {
+        let i = (row * 800 + 400) * 4;
+        [rgba[i], rgba[i + 1], rgba[i + 2]]
+    };
+    let near = |a: [u8; 3], b: [u8; 3]| (0..3).all(|k| a[k].abs_diff(b[k]) <= 2);
+    assert!(near(px(0), bytes(BG_GRADIENT.top)), "верх {:?}", px(0));
+    assert!(
+        near(px(599), bytes(BG_GRADIENT.bottom)),
+        "низ {:?}",
+        px(599)
+    );
+    let mid = px(300);
+    assert!(mid[0] > px(0)[0] && mid[0] < px(599)[0], "середина {mid:?}");
+
+    // кадр с градиентом - для сверки со снимком окна модуля
+    let mut look = look;
+    look.background = BG_GRADIENT;
+    renderer.render(&device, &queue, &target, &scene, &look);
+    let rgba = read_rgba(&device, &queue, &target).unwrap();
+    let mut ppm = format!("P6\n{} {}\n255\n", target.width, target.height).into_bytes();
+    for p in rgba.as_chunks::<4>().0 {
+        ppm.extend_from_slice(&p[..3]);
+    }
+    std::fs::write(format!("{dir}/scene_demo_gradient.ppm"), ppm).unwrap();
 }

@@ -64,6 +64,9 @@ fn grouped(x: f64, decimals: usize) -> String {
     }
 }
 
+/// Подсказка по мыши, как `CAMERA_HINT` окна модуля.
+const HINT: &str = "Левая кнопка - вращение, Ctrl + левая или средняя - сдвиг, колесо - масштаб, Ctrl + колесо - угол обзора, щелчок правой - центр вращения, щелчок левой - опрос точки.";
+
 struct Gpu {
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -88,6 +91,11 @@ pub struct Incoming {
 /// Файл, выбранный в браузере, ждёт здесь ближайшего кадра.
 type Inbox = Arc<Mutex<Option<Incoming>>>;
 
+/// Точка опроса в настоящих координатах.
+struct Probe {
+    point: [f64; 3],
+}
+
 /// Строка списка частей.
 struct Row {
     info: Option<PartInfo>,
@@ -111,6 +119,11 @@ pub struct SceneApp {
     opacity: f32,
     views: Vec<Camera>,
     anim: Option<Anim>,
+    /// Вращение кнопкой «Вращение».
+    spin: bool,
+    /// Градиентный фон, как `state.bg_grad` окна модуля.
+    gradient: bool,
+    probe: Option<Probe>,
     target: Option<Target>,
     tex: Option<egui::TextureId>,
     dirty: bool,
@@ -143,6 +156,9 @@ impl SceneApp {
             opacity: 1.0,
             views: Vec::new(),
             anim: None,
+            spin: false,
+            gradient: true,
+            probe: None,
             target: None,
             tex: None,
             dirty: true,
@@ -236,6 +252,13 @@ impl SceneApp {
             None => Frame::default(),
         };
         self.views = pkg.meta.views.clone();
+        // градиент в окне модуля включён по умолчанию
+        self.gradient = pkg
+            .meta
+            .state
+            .get("bg_grad")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(true);
         self.scene = self
             .gpu
             .as_ref()
@@ -251,6 +274,7 @@ impl SceneApp {
         self.name = Some(name);
         self.reset_camera(1280.0, 800.0);
         self.anim = None;
+        self.probe = None;
         self.dirty = true;
     }
 
@@ -303,6 +327,9 @@ impl SceneApp {
         out.meta.camera = Some(self.cam);
         out.meta.views = self.views.clone();
         out.meta.vex = self.vex;
+        if let Some(state) = out.meta.state.as_object_mut() {
+            state.insert("bg_grad".into(), self.gradient.into());
+        }
         let bytes = match write_package(&out) {
             Ok(b) => b,
             Err(e) => {
@@ -330,6 +357,134 @@ impl SceneApp {
             Ok(dest) => fill(self.t("Записано: %s"), &[dest]),
             Err(e) => fill(self.t("Не записалось: %s"), &[e]),
         };
+    }
+
+    /// Охват для кадра, как окно модуля.
+    fn span(&self) -> f64 {
+        self.pkg
+            .as_ref()
+            .and_then(|p| mesh::bounds(&p.parts))
+            .map_or(0.0, |(lo, hi)| camera::view_span(lo, hi, self.vex))
+    }
+
+    /// Попадание луча из точки кадра (точки egui от угла кадра
+    /// `w` x `h`) в видимые тела.
+    fn hit_at(&self, px: f64, py: f64, w: f64, h: f64) -> Option<mesh::Hit> {
+        let pkg = self.pkg.as_ref()?;
+        let scene = self.scene.as_ref()?;
+        let (o, d) = camera::ray(&self.view_camera(), w, h, px, py)?;
+        let visible = pkg
+            .parts
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| scene.parts.get(*i).is_some_and(|p| p.visible));
+        mesh::raycast(visible, &self.frame_now(), o, d)
+    }
+
+    /// Щелчок пришёлся за пределы площадки (`_outside_scene` окна
+    /// модуля): луч до уровня середины сцены, запас в четверть охвата.
+    fn outside(&self, px: f64, py: f64, w: f64, h: f64) -> bool {
+        let Some((o, d)) = camera::ray(&self.view_camera(), w, h, px, py) else {
+            return true;
+        };
+        if d.z.abs() < 1e-12 {
+            return true;
+        }
+        let t = -o.z / d.z;
+        if t < 0.0 {
+            return true;
+        }
+        let p = o + d * t;
+        let Some((lo, hi)) = self.pkg.as_ref().and_then(|p| mesh::bounds(&p.parts)) else {
+            return true;
+        };
+        let edge = 0.5 * (hi[0] - lo[0]).max(hi[1] - lo[1]) * 1.25;
+        p.x.abs() > edge || p.y.abs() > edge
+    }
+
+    /// Щелчок правой: центр вращения в точку сцены (`_pivot_at`).
+    fn pivot_at(&mut self, px: f64, py: f64, w: f64, h: f64) {
+        if self.pkg.is_none() {
+            return;
+        }
+        let view = self.view_camera();
+        match self.hit_at(px, py, w, h) {
+            Some(hit) => {
+                self.set_view_camera(camera::center_keeping_view(&view, hit.point));
+                let p = self.frame_now().to_world(hit.point);
+                self.status = fill(
+                    self.t("Центр вращения: %s, %s, отметка %s м."),
+                    &[grouped(p[0], 1), grouped(p[1], 1), format!("{:.2}", p[2])],
+                );
+            }
+            None if self.outside(px, py, w, h) => {
+                self.set_view_camera(camera::center_keeping_view(&view, [0.0; 3]));
+                self.status = self.t("Центр вращения - вся сцена.").to_string();
+            }
+            None => {
+                self.status = self
+                    .t("Мимо объекта: центр не изменён. Щелчок за пределами площадки вернёт центр на всю сцену.")
+                    .to_string();
+            }
+        }
+        self.anim = None;
+    }
+
+    /// Щелчок левой: опрос точки. Мимо - опрос снимается.
+    fn probe_at(&mut self, px: f64, py: f64, w: f64, h: f64) {
+        let Some(hit) = self.hit_at(px, py, w, h) else {
+            if self.probe.take().is_some() {
+                self.status.clear();
+            }
+            return;
+        };
+        let p = self.frame_now().to_world(hit.point);
+        let name = self
+            .scene
+            .as_ref()
+            .and_then(|s| s.parts.get(hit.part))
+            .map_or(String::new(), |q| q.name.clone());
+        let mut text = fill(
+            self.t("%s: X %s, Y %s, отметка %s м"),
+            &[
+                name,
+                grouped(p[0], 1),
+                grouped(p[1], 1),
+                format!("{:.2}", p[2]),
+            ],
+        );
+        if let Some(v) = self.rows.get(hit.part).and_then(|r| r.volume) {
+            text.push_str(", ");
+            text.push_str(&fill(self.t("объём %s м3"), &[grouped(v, 1)]));
+        }
+        self.status = text;
+        self.probe = Some(Probe { point: p });
+    }
+
+    /// Стрелки вращают, как в окне модуля: 2 градуса на 16 мс.
+    fn keys(&mut self, ui: &egui::Ui) {
+        if ui.ctx().egui_wants_keyboard_input() {
+            return;
+        }
+        let (dt, l, r, u, d) = ui.input(|i| {
+            (
+                f64::from(i.stable_dt.min(0.1)),
+                i.key_down(egui::Key::ArrowLeft),
+                i.key_down(egui::Key::ArrowRight),
+                i.key_down(egui::Key::ArrowUp),
+                i.key_down(egui::Key::ArrowDown),
+            )
+        });
+        let speed = 125.0 * dt;
+        let azim = (f64::from(u8::from(l)) - f64::from(u8::from(r))) * speed;
+        let elev = (f64::from(u8::from(d)) - f64::from(u8::from(u))) * speed;
+        if azim != 0.0 || elev != 0.0 {
+            self.cam.azimuth += azim;
+            self.cam.elevation = (self.cam.elevation + elev).clamp(-90.0, 90.0);
+            self.anim = None;
+            self.dirty = true;
+            ui.ctx().request_repaint();
+        }
     }
 
     fn start(&mut self, frames: Vec<Camera>, now: f64) {
@@ -387,6 +542,21 @@ impl SceneApp {
                 self.fly_to(c, now);
             }
         });
+        // кнопки плашки окна модуля
+        ui.horizontal(|ui| {
+            if ui.button(self.t("Вид сверху")).clicked() {
+                let v = camera::top(&self.view_camera());
+                self.set_view_camera(v);
+                self.anim = None;
+            }
+            if ui.button(self.t("Сбросить вид")).clicked() {
+                let v = camera::reset(&self.view_camera(), self.span());
+                self.set_view_camera(v);
+                self.anim = None;
+            }
+            let label = self.t("Вращение");
+            ui.toggle_value(&mut self.spin, label);
+        });
         let mut ortho = self.cam.ortho;
         if ui
             .checkbox(&mut ortho, self.t("Параллельная проекция"))
@@ -406,6 +576,10 @@ impl SceneApp {
         {
             // точка взгляда остаётся на месте в настоящих координатах
             self.vex = vex;
+            self.dirty = true;
+        }
+        let label = self.t("Градиентный фон");
+        if ui.checkbox(&mut self.gradient, label).changed() {
             self.dirty = true;
         }
         let label = self.t("Непрозрачность");
@@ -581,30 +755,72 @@ impl SceneApp {
             self.dirty = true;
         }
 
-        // мышь: левая - вращать, правая и средняя - сдвигать, колесо - удаление
+        // Мышь как в окне модуля (`_PickView`, `GLViewWidget`): левая -
+        // вращать, Ctrl + левая - сдвиг в плоскости экрана, средняя -
+        // сдвиг по плану, Ctrl + средняя - вбок и вверх, колесо -
+        // удаление, Ctrl + колесо - раствор. Правая с протяжкой тоже
+        // сдвигает: в окне модуля она свободна. Пиксели мыши - точки
+        // egui, как логические пиксели Qt.
         let (w, h) = (f64::from(pw), f64::from(ph));
+        let (wpt, hpt) = (f64::from(rect.width()), f64::from(rect.height()));
+        let ctrl = ui.input(|i| i.modifiers.ctrl || i.modifiers.command);
         let d = resp.drag_delta();
-        if resp.dragged_by(egui::PointerButton::Primary) && d != egui::Vec2::ZERO {
+        let (dx, dy) = (f64::from(d.x), f64::from(d.y));
+        if d != egui::Vec2::ZERO {
             let mut v = self.view_camera();
-            camera::orbit(&mut v, f64::from(d.x), f64::from(d.y));
-            self.set_view_camera(v);
-            self.anim = None;
-        } else if (resp.dragged_by(egui::PointerButton::Secondary)
-            || resp.dragged_by(egui::PointerButton::Middle))
-            && d != egui::Vec2::ZERO
-        {
-            let mut v = self.view_camera();
-            camera::pan(&mut v, f64::from(d.x * ppp), f64::from(d.y * ppp), h);
-            self.set_view_camera(v);
-            self.anim = None;
+            let mut moved = true;
+            if resp.dragged_by(egui::PointerButton::Primary) {
+                if ctrl {
+                    camera::pan(&mut v, dx, dy, wpt);
+                } else {
+                    camera::orbit(&mut v, dx, dy);
+                }
+            } else if resp.dragged_by(egui::PointerButton::Middle) {
+                if ctrl {
+                    camera::pan_upright(&mut v, dx, 0.0, dy, wpt);
+                } else {
+                    camera::pan_upright(&mut v, dx, dy, 0.0, wpt);
+                }
+            } else if resp.dragged_by(egui::PointerButton::Secondary) {
+                camera::pan(&mut v, dx, dy, wpt);
+            } else {
+                moved = false;
+            }
+            if moved {
+                self.set_view_camera(v);
+                self.anim = None;
+            }
         }
         if resp.hovered() {
-            let scroll = ui.ctx().input(|i| i.smooth_scroll_delta.y);
+            let (scroll, zoom) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta()));
             if scroll != 0.0 {
                 let mut v = self.view_camera();
                 camera::zoom(&mut v, f64::from(scroll) / 50.0);
                 self.set_view_camera(v);
                 self.anim = None;
+            }
+            // Ctrl + колесо egui отдаёт масштабом: раствор делится на него
+            if zoom != 1.0 && zoom > 0.0 {
+                let mut v = self.view_camera();
+                camera::zoom_fov(&mut v, f64::from(zoom).ln() / (-120.0 * 0.999f64.ln()));
+                self.set_view_camera(v);
+                self.anim = None;
+            }
+        }
+        self.keys(ui);
+        if self.spin {
+            // вращение окна модуля: градус на 40 мс
+            let dt = f64::from(ui.input(|i| i.stable_dt).min(0.1));
+            self.cam.azimuth = (self.cam.azimuth + 25.0 * dt).rem_euclid(360.0);
+            self.dirty = true;
+            ui.ctx().request_repaint();
+        }
+        if let Some(pos) = resp.interact_pointer_pos() {
+            let (px, py) = (f64::from(pos.x - rect.min.x), f64::from(pos.y - rect.min.y));
+            if resp.secondary_clicked() {
+                self.pivot_at(px, py, wpt, hpt);
+            } else if resp.clicked() {
+                self.probe_at(px, py, wpt, hpt);
             }
         }
         if resp.double_clicked() {
@@ -635,6 +851,11 @@ impl SceneApp {
                     camera: self.view_camera(),
                     vex: self.vex,
                     opacity: self.opacity,
+                    background: if self.gradient {
+                        render::BG_GRADIENT
+                    } else {
+                        render::BG_PLAIN
+                    },
                 };
                 gpu.renderer
                     .render(&gpu.device, &gpu.queue, target, scene, &look);
@@ -648,6 +869,18 @@ impl SceneApp {
                 egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                 egui::Color32::WHITE,
             );
+        }
+        // маркер опроса - красная точка, как шарик окна модуля
+        if let Some(p) = &self.probe {
+            let v = self.frame_now().to_view(p.point);
+            if let Some([sx, sy]) = camera::to_screen(&self.view_camera(), wpt, hpt, v) {
+                let at = rect.min + egui::vec2(sx as f32, sy as f32);
+                if rect.contains(at) {
+                    let painter = ui.painter();
+                    painter.circle_filled(at, 5.0, egui::Color32::from_rgb(217, 38, 38));
+                    painter.circle_stroke(at, 5.0, egui::Stroke::new(1.5, egui::Color32::WHITE));
+                }
+            }
         }
         if self.pkg.is_none() {
             ui.painter().text(
@@ -722,12 +955,13 @@ impl eframe::App for SceneApp {
                         grouped(c.distance, 0),
                     ],
                 ));
+                // ответ опроса важнее подсказки: он идёт первым
+                if !self.status.is_empty() {
+                    ui.separator();
+                    ui.label(&self.status);
+                }
                 ui.separator();
-                ui.weak(
-                    self.t("Левая кнопка - вращать, правая - сдвигать, колесо - ближе и дальше."),
-                );
-                ui.separator();
-                ui.weak(&self.status);
+                ui.weak(self.t(HINT));
             });
         });
         egui::CentralPanel::no_frame().show(ui, |ui| self.view(ui, now));

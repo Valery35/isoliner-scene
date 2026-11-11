@@ -8,13 +8,21 @@
 // Нормаль грани - по производным положения: тела модуля делят вершины
 // между гранями под прямым углом, и сглаженная нормаль размывала бы
 // рёбра штрека.
+//
+// Свет и фон - как в окне модуля (lights.py, viewer_dialog.py). Окно
+// модуля считает цвет прямо в числах экрана, кадр здесь - текстура
+// без sRGB (render::COLOR_FORMAT), и числа на выходе те же, что
+// в окне QGIS.
 
 struct U {
     view_proj: mat4x4<f32>,
-    // xyz - направление на свет в координатах просмотра
-    light: vec4<f32>,
+    // три источника света в координатах просмотра, w - вес
+    lights: array<vec4<f32>, 3>,
     // x - преувеличение, y - общая непрозрачность
     params: vec4<f32>,
+    // фон: верх и низ кадра, sRGB
+    bg_top: vec4<f32>,
+    bg_bottom: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> u: U;
@@ -35,17 +43,43 @@ fn vs(@location(0) p: vec3<f32>, @location(1) c: vec4<f32>) -> VsOut {
     return out;
 }
 
+// Мягкий свет окна модуля (lights.soft_shader): три источника,
+// освещённость по модулю косинуса - у поверхности нет изнанки, и грань,
+// отвёрнутая от источника, не чернеет.
 @fragment
 fn fs_mesh(v: VsOut) -> @location(0) vec4<f32> {
     let n = normalize(cross(dpdx(v.world), dpdy(v.world)));
-    let l = normalize(u.light.xyz);
-    // свет с двух сторон: у поверхности пласта нет «изнанки»
-    let d = abs(dot(n, l));
-    let shade = 0.38 + 0.62 * d;
-    return vec4<f32>(v.color.rgb * shade, v.color.a * u.params.y);
+    var p = 0.0;
+    for (var i = 0; i < 3; i++) {
+        p += u.lights[i].w * abs(dot(n, u.lights[i].xyz));
+    }
+    let rgb = clamp(v.color.rgb * (0.32 + 0.78 * p), vec3<f32>(0.0), vec3<f32>(1.0));
+    return vec4<f32>(rgb, v.color.a * u.params.y);
 }
 
 @fragment
 fn fs_line(v: VsOut) -> @location(0) vec4<f32> {
     return vec4<f32>(v.color.rgb, v.color.a * u.params.y);
+}
+
+// Фон: треугольник на весь кадр, сверху холоднее, снизу светлее.
+struct BgOut {
+    @builtin(position) pos: vec4<f32>,
+    @location(0) up: f32,
+};
+
+@vertex
+fn vs_bg(@builtin(vertex_index) i: u32) -> BgOut {
+    let x = f32(i32(i & 1u) * 4 - 1);
+    let y = f32(i32(i >> 1u) * 4 - 1);
+    var out: BgOut;
+    out.pos = vec4<f32>(x, y, 1.0, 1.0);
+    out.up = (y + 1.0) / 2.0;
+    return out;
+}
+
+@fragment
+fn fs_bg(v: BgOut) -> @location(0) vec4<f32> {
+    let c = mix(u.bg_bottom.rgb, u.bg_top.rgb, clamp(v.up, 0.0, 1.0));
+    return vec4<f32>(c, 1.0);
 }

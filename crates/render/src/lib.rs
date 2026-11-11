@@ -16,22 +16,50 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 use bytemuck::{Pod, Zeroable};
-use glam::DVec3;
+use glam::{DMat3, DVec3};
 use wgpu::util::DeviceExt;
 
 use scene_core::camera::{View, eye};
 use scene_core::{Camera, Frame};
 use scene_format::{Indices, Part};
 
-/// Формат кадра.
-pub const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+/// Формат кадра. Без sRGB: окно модуля (OpenGL pyqtgraph) считает
+/// свет, фон и прозрачность прямо в числах экрана, и кадр здесь
+/// держит те же числа. egui показывает такую текстуру как есть,
+/// а текстуру sRGB на WebGPU показывал затемнённой.
+pub const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 /// Сглаживание краёв: отсчётов на пиксель.
 pub const SAMPLES: u32 = 4;
 /// Цвет части без своего цвета.
 pub const DEFAULT_COLOR: [f32; 4] = [0.70, 0.72, 0.75, 1.0];
-/// Фон кадра.
-pub const BACKGROUND: [f64; 4] = [0.955, 0.960, 0.950, 1.0];
+/// Фон окна модуля с градиентом (`_bg_apply`): верх и низ, sRGB.
+/// Сверху холоднее, снизу светлее, как небо и земля.
+pub const BG_GRADIENT: Background = Background {
+    top: [0.78, 0.84, 0.92],
+    bottom: [0.98, 0.98, 0.96],
+};
+/// Ровный фон окна модуля без градиента: 250, 250, 248.
+pub const BG_PLAIN: Background = Background {
+    top: [250.0 / 255.0, 250.0 / 255.0, 248.0 / 255.0],
+    bottom: [250.0 / 255.0, 250.0 / 255.0, 248.0 / 255.0],
+};
+
+/// Три источника мягкого света окна модуля (`lights.py`): направление
+/// в координатах камеры и вес. Основной рисует форму, второй светит
+/// с другой стороны вполсилы, третий снизу подсвечивает.
+const LIGHTS: [([f64; 3], f32); 3] = [
+    ([1.0, -1.0, -1.0], 0.55),
+    ([-1.0, 0.5, -0.8], 0.28),
+    ([0.2, 1.0, -0.5], 0.17),
+];
+
+/// Фон кадра: цвет верха и низа, sRGB в долях единицы.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Background {
+    pub top: [f32; 3],
+    pub bottom: [f32; 3],
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -44,8 +72,10 @@ struct Vertex {
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct Uniforms {
     view_proj: [[f32; 4]; 4],
-    light: [f32; 4],
+    lights: [[f32; 4]; 3],
     params: [f32; 4],
+    bg_top: [f32; 4],
+    bg_bottom: [f32; 4],
 }
 
 /// Часть сцены в видеокарте.
@@ -202,10 +232,13 @@ pub struct Look {
     pub vex: f64,
     /// Общая непрозрачность тел, 0..1.
     pub opacity: f32,
+    /// Фон кадра.
+    pub background: Background,
 }
 
 /// Конвейеры и общие буферы.
 pub struct Renderer {
+    background: wgpu::RenderPipeline,
     mesh_solid: wgpu::RenderPipeline,
     mesh_blend: wgpu::RenderPipeline,
     lines: wgpu::RenderPipeline,
@@ -297,7 +330,43 @@ impl Renderer {
                 cache: None,
             })
         };
+        // фон: без вершин и без глубины, рисуется первым
+        let background = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("фон"),
+            layout: Some(&pl),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_bg"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::Always),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: SAMPLES,
+                ..Default::default()
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_bg"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: COLOR_FORMAT,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
         Self {
+            background,
             mesh_solid: make(
                 "тела",
                 "fs_mesh",
@@ -335,15 +404,22 @@ impl Renderer {
     ) {
         let cam = look.camera;
         let view = View::new(&cam, f64::from(target.width), f64::from(target.height));
-        // свет из-за плеча наблюдателя и немного сверху
         let e = DVec3::from(eye(&cam));
-        let c = DVec3::from(cam.center);
-        let to_eye = (e - c).normalize_or_zero();
-        let light = (to_eye + DVec3::Z * 0.6).normalize_or_zero();
+        // Свет задан в координатах камеры, как в окне модуля, и не
+        // «залипает» на модели при вращении. В шейдер он идёт
+        // в координатах просмотра: поворот вида, обращённый.
+        let to_view = DMat3::from_mat4(view.view).transpose();
+        let lights = LIGHTS.map(|(d, w)| {
+            let l = (to_view * DVec3::from(d)).normalize_or_zero();
+            [l.x as f32, l.y as f32, l.z as f32, w]
+        });
+        let bg = look.background;
         let u = Uniforms {
             view_proj: view.view_proj().as_mat4().to_cols_array_2d(),
-            light: [light.x as f32, light.y as f32, light.z as f32, 0.0],
+            lights,
             params: [look.vex as f32, look.opacity.clamp(0.0, 1.0), 0.0, 0.0],
+            bg_top: [bg.top[0], bg.top[1], bg.top[2], 1.0],
+            bg_bottom: [bg.bottom[0], bg.bottom[1], bg.bottom[2], 1.0],
         };
         queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&u));
 
@@ -364,7 +440,6 @@ impl Renderer {
             label: Some("кадр"),
         });
         {
-            let [r, g, b, a] = BACKGROUND;
             let mut pass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("сцена"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -372,7 +447,7 @@ impl Renderer {
                     depth_slice: None,
                     resolve_target: Some(&target.color_view),
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color { r, g, b, a }),
+                        load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
                         store: wgpu::StoreOp::Discard,
                     },
                 })],
@@ -389,6 +464,8 @@ impl Renderer {
                 multiview_mask: None,
             });
             pass.set_bind_group(0, &self.bind, &[]);
+            pass.set_pipeline(&self.background);
+            pass.draw(0..3, 0..1);
             let draw = |pass: &mut wgpu::RenderPass<'_>, p: &GpuPart| {
                 pass.set_vertex_buffer(0, p.vbuf.slice(..));
                 pass.set_index_buffer(p.ibuf.slice(..), wgpu::IndexFormat::Uint32);
