@@ -9,6 +9,20 @@
   <title>Isoliner Scene</title>
   <meta name="description" content="Сцена модуля QGIS Isoliner3D в браузере: пакет .i3dscene с камерой из QGIS.">
   <meta name="theme-color" content="#1b1b1b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Isoliner Scene">
+  <link data-trunk rel="icon" href="favicon.png">
+  <!-- Установка на телефон и работа без сети: манифест, значки,
+       service worker (sw.js). Образец - страница PlanetX Lite. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link data-trunk rel="copy-file" href="manifest.webmanifest">
+  <link data-trunk rel="copy-file" href="sw.js">
+  <link data-trunk rel="copy-file" href="icon-192.png">
+  <link data-trunk rel="copy-file" href="icon-512.png">
+  <link data-trunk rel="copy-file" href="icon-maskable-512.png">
+  <link data-trunk rel="copy-file" href="apple-touch-icon.png">
   <link data-trunk rel="rust" data-bin="isoliner-scene" data-wasm-opt="0">
   <style>
     html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #1b1b1b; }
@@ -30,6 +44,9 @@
     // Подпись значка на языке браузера: русский или английский.
     document.getElementById('loading-text').textContent =
       (navigator.language || '').startsWith('ru') ? 'Isoliner Scene загружается…' : 'Isoliner Scene is loading…';
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch((e) => console.log('Isoliner Scene: service worker', e));
+    }
   </script>
 </body>
 </html>
