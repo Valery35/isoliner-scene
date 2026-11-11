@@ -2,7 +2,8 @@
 // Copyright (C) 2026 ООО «Информ++». Лицензия Apache 2.0.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Страница в браузере: запуск окна на холсте и скачивание пакета.
+//! Страница в браузере: запуск окна на холсте, пакет по ссылке
+//! и скачивание пакета. Параметры адреса - `share.rs`.
 
 use std::sync::Arc;
 
@@ -16,7 +17,7 @@ const DEMO: &[u8] = include_bytes!("../../../fixtures/scene_demo.i3dscene");
 
 /// Текст - в консоль браузера и поверх страницы. Так видна ошибка
 /// запуска и на телефоне без консоли.
-fn show(text: &str) {
+pub fn show(text: &str) {
     web_sys::console::log_1(&text.into());
     if let Some(out) = web_sys::window()
         .and_then(|w| w.document())
@@ -28,6 +29,29 @@ fn show(text: &str) {
 
 fn js_err(e: wasm_bindgen::JsValue) -> String {
     format!("{e:?}")
+}
+
+/// Скачать файл по адресу. Размер ограничен, как у части пакета:
+/// чужой адрес считается враждебным.
+pub async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
+    use wasm_bindgen_futures::JsFuture;
+    let window = web_sys::window().ok_or_else(|| "нет окна".to_string())?;
+    let resp: web_sys::Response = JsFuture::from(window.fetch_with_str(url))
+        .await
+        .map_err(js_err)?
+        .dyn_into()
+        .map_err(|_| "нет ответа".to_string())?;
+    if !resp.ok() {
+        return Err(format!("ответ {}", resp.status()));
+    }
+    let buf = JsFuture::from(resp.array_buffer().map_err(js_err)?)
+        .await
+        .map_err(js_err)?;
+    let arr = js_sys::Uint8Array::new(&buf);
+    if u64::from(arr.length()) > scene_format::MAX_ENTRY {
+        return Err("файл больше допустимого".to_string());
+    }
+    Ok(arr.to_vec())
 }
 
 /// Отдать пакет браузеру как скачиваемый файл.
@@ -56,6 +80,10 @@ pub fn download(name: &str, bytes: &[u8]) -> Result<(), String> {
 /// Запуск окна на холсте `#scene` страницы `index.html`.
 pub fn start() {
     std::panic::set_hook(Box::new(|info| show(&format!("Isoliner Scene: {info}"))));
+    let search = web_sys::window()
+        .and_then(|w| w.location().search().ok())
+        .unwrap_or_default();
+    let query = crate::share::parse_query(&search);
     let Some(canvas) = web_sys::window()
         .and_then(|w| w.document())
         .and_then(|d| d.get_element_by_id("scene"))
@@ -94,9 +122,19 @@ pub fn start() {
             .start(
                 canvas,
                 options,
-                Box::new(|cc| {
+                Box::new(move |cc| {
                     let mut app = SceneApp::new(cc);
-                    app.open_bytes("scene_demo.i3dscene".to_string(), DEMO);
+                    if let Some(pose) = query.pose {
+                        app.set_pose(pose);
+                    }
+                    if query.check {
+                        app.start_check();
+                    }
+                    // пакет по ссылке или демо модуля
+                    match query.scene {
+                        Some(url) => app.fetch(url, &cc.egui_ctx),
+                        None => app.open_bytes("scene_demo.i3dscene".to_string(), DEMO),
+                    }
                     Ok(Box::new(app))
                 }),
             )

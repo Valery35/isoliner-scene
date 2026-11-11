@@ -5,7 +5,8 @@
 //! Isoliner Scene: открыть пакет сцены .i3dscene и смотреть его так,
 //! как он выглядел в окне Isoliner3D.
 //!
-//! Запуск: `isoliner-scene [файл.i3dscene]`. Та же программа собирается
+//! Запуск: `isoliner-scene [файл.i3dscene] [--pose ...] [--check]`.
+//! Та же программа собирается
 //! страницей для браузера: `trunk build` в этой папке, `index.html`.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -13,12 +14,30 @@
 
 mod app;
 mod i18n;
+mod share;
 #[cfg(target_arch = "wasm32")]
 mod web;
 
+/// Ключи командной строки: `файл.i3dscene`, `--pose x,y,z,...` -
+/// камера как в ссылке «Поделиться», `--check` - самопроверка
+/// с отчётом в вывод.
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
-    let path = std::env::args_os().nth(1).map(std::path::PathBuf::from);
+    let mut path = None;
+    let mut pose = None;
+    let mut check = false;
+    let mut args = std::env::args_os().skip(1);
+    while let Some(a) = args.next() {
+        match a.to_str() {
+            Some("--pose") => {
+                pose = args
+                    .next()
+                    .and_then(|v| v.to_str().and_then(share::parse_pose));
+            }
+            Some("--check") => check = true,
+            _ => path = Some(std::path::PathBuf::from(a)),
+        }
+    }
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("Isoliner Scene")
@@ -31,6 +50,12 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| {
             let mut app = app::SceneApp::new(cc);
+            if let Some(p) = pose {
+                app.set_pose(p);
+            }
+            if check {
+                app.start_check();
+            }
             if let Some(p) = path {
                 app.open(&p);
             }

@@ -20,6 +20,7 @@ use scene_core::{Camera, Frame, flight, mesh};
 use scene_format::{Package, Part, PartInfo, read_package, write_package};
 
 use crate::i18n::{Lang, tr};
+use crate::share;
 
 /// Подставить значения в шаблон по порядку: `%s`, `%d`, `%.0f`.
 fn fill(template: &str, args: &[String]) -> String {
@@ -86,10 +87,25 @@ struct Anim {
 pub struct Incoming {
     pub name: String,
     pub bytes: Vec<u8>,
+    /// Адрес, если пакет пришёл по ссылке `?scene=`: его повторит
+    /// ссылка «Поделиться».
+    pub url: Option<String>,
 }
 
-/// Файл, выбранный в браузере, ждёт здесь ближайшего кадра.
-type Inbox = Arc<Mutex<Option<Incoming>>>;
+/// Файл, выбранный или скачанный в браузере, ждёт здесь ближайшего
+/// кадра. Ошибка - текст для строки состояния.
+type Inbox = Arc<Mutex<Option<Result<Incoming, String>>>>;
+
+/// Самопроверка страницы `?check`: кадры с начала и время начала.
+struct Check {
+    start: f64,
+    frames: u32,
+    done: bool,
+}
+
+/// Страница программы в браузере: туда ведёт ссылка «Поделиться»
+/// из окна на диске.
+pub const SITE_APP: &str = "https://valery35.github.io/isoliner-scene/app/";
 
 /// Точка опроса в настоящих координатах.
 struct Probe {
@@ -130,6 +146,14 @@ pub struct SceneApp {
     tex: Option<egui::TextureId>,
     dirty: bool,
     status: String,
+    /// Последняя ошибка открытия: её видит самопроверка.
+    error: Option<String>,
+    /// Адрес пакета, открытого по ссылке.
+    source: Option<String>,
+    /// Камера из `?pose=`: ставится, когда пакет откроется.
+    pending_pose: Option<Camera>,
+    share_open: bool,
+    check: Option<Check>,
 }
 
 impl SceneApp {
@@ -165,7 +189,45 @@ impl SceneApp {
             tex: None,
             dirty: true,
             status: String::new(),
+            error: None,
+            source: None,
+            pending_pose: None,
+            share_open: false,
+            check: None,
         }
+    }
+
+    /// Камера, которую поставить при открытии пакета (`?pose=`).
+    pub fn set_pose(&mut self, cam: Camera) {
+        self.pending_pose = Some(cam);
+    }
+
+    /// Включить самопроверку страницы (`?check`).
+    pub fn start_check(&mut self) {
+        self.check = Some(Check {
+            start: -1.0,
+            frames: 0,
+            done: false,
+        });
+    }
+
+    /// Скачать пакет по ссылке (`?scene=`). Ответ приходит через inbox.
+    #[cfg(target_arch = "wasm32")]
+    pub fn fetch(&mut self, url: String, ctx: &egui::Context) {
+        self.status = fill(self.t("Загружается: %s"), std::slice::from_ref(&url));
+        let inbox = self.inbox.clone();
+        let ctx = ctx.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let got = crate::web::fetch_bytes(&url).await.map(|bytes| Incoming {
+                name: url.rsplit('/').next().unwrap_or(&url).to_string(),
+                bytes,
+                url: Some(url.clone()),
+            });
+            if let Ok(mut slot) = inbox.lock() {
+                *slot = Some(got.map_err(|e| format!("{url}: {e}")));
+            }
+            ctx.request_repaint();
+        });
     }
 
     fn t(&self, ru: &'static str) -> &'static str {
@@ -184,8 +246,15 @@ impl SceneApp {
     /// Открыть пакет из байтов: перетаскивание и выбор файла в браузере.
     pub fn open_bytes(&mut self, name: String, bytes: &[u8]) {
         match read_package(bytes) {
-            Ok(pkg) => self.load(pkg, name),
-            Err(e) => self.status = fill(self.t("Не открылось: %s"), &[e.to_string()]),
+            Ok(pkg) => {
+                self.load(pkg, name);
+                self.source = None;
+                self.error = None;
+            }
+            Err(e) => {
+                self.status = fill(self.t("Не открылось: %s"), &[e.to_string()]);
+                self.error = Some(self.status.clone());
+            }
         }
     }
 
@@ -212,9 +281,10 @@ impl SceneApp {
                     let file = Incoming {
                         name: f.file_name(),
                         bytes: f.read().await,
+                        url: None,
                     };
                     if let Ok(mut slot) = inbox.lock() {
-                        *slot = Some(file);
+                        *slot = Some(Ok(file));
                     }
                     ctx.request_repaint();
                 }
@@ -276,6 +346,9 @@ impl SceneApp {
         self.status.clone_from(&name);
         self.name = Some(name);
         self.reset_camera(1280.0, 800.0);
+        if let Some(pose) = self.pending_pose.take() {
+            self.cam = pose;
+        }
         self.anim = None;
         self.probe = None;
         self.dirty = true;
@@ -476,6 +549,101 @@ impl SceneApp {
         self.probe = Some(Probe { point: p });
     }
 
+    /// Адрес страницы для ссылки: в браузере - своя страница, на диске -
+    /// страница программы на сайте.
+    fn page_url() -> String {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(loc) = web_sys::window().map(|w| w.location())
+            && let (Ok(origin), Ok(path)) = (loc.origin(), loc.pathname())
+        {
+            return format!("{origin}{path}");
+        }
+        SITE_APP.to_string()
+    }
+
+    /// Окно «Поделиться»: ссылка с камерой и адресом пакета.
+    fn share_window(&mut self, ctx: &egui::Context) {
+        if !self.share_open || self.pkg.is_none() {
+            return;
+        }
+        let link = share::link(&Self::page_url(), self.source.as_deref(), &self.cam);
+        let mut open = true;
+        let (title, copy) = (self.t("Поделиться"), self.t("Копировать"));
+        let note = self.source.is_none().then(|| {
+            self.t("Пакет открыт с диска: по ссылке откроется сцена демо с этой камерой. Пакет по ссылке - адрес файла в параметре ?scene=.")
+        });
+        egui::Window::new(title)
+            .open(&mut open)
+            .collapsible(false)
+            .default_width(480.0)
+            .show(ctx, |ui| {
+                let mut shown = link.as_str();
+                ui.add(egui::TextEdit::multiline(&mut shown).desired_width(f32::INFINITY));
+                if ui.button(copy).clicked() {
+                    ui.ctx().copy_text(link.clone());
+                }
+                if let Some(n) = note {
+                    ui.weak(n);
+                }
+            });
+        self.share_open = open;
+    }
+
+    /// Самопроверка `?check`: пакет открыт, видеокарта есть, кадры
+    /// рисуются. Отчёт - строкой, в браузере в консоль и поверх страницы.
+    fn run_check(&mut self, ctx: &egui::Context) {
+        let now = ctx.input(|i| i.time);
+        let Some(check) = self.check.as_mut() else {
+            return;
+        };
+        if check.done {
+            return;
+        }
+        if check.start < 0.0 {
+            check.start = now;
+        }
+        if self.target.is_some() && self.pkg.is_some() {
+            check.frames += 1;
+        }
+        let elapsed = now - check.start;
+        // ждём 30 кадров сцены, но не дольше 20 секунд
+        if check.frames < 30 && elapsed < 20.0 && self.error.is_none() {
+            ctx.request_repaint();
+            return;
+        }
+        check.done = true;
+        let frames = check.frames;
+        let mut problems = Vec::new();
+        if self.gpu.is_none() {
+            problems.push("нет видеокарты".to_string());
+        }
+        if let Some(e) = &self.error {
+            problems.push(e.clone());
+        }
+        if self.pkg.is_none() {
+            problems.push("пакет не открыт".to_string());
+        }
+        if frames < 30 {
+            problems.push(format!("кадров {frames} за {elapsed:.1} с"));
+        }
+        let parts = self.rows.len();
+        let name = self.name.clone().unwrap_or_default();
+        let report = if problems.is_empty() {
+            format!(
+                "Isoliner Scene: проверка пройдена. {name}, частей {parts}, кадров {frames} за {elapsed:.1} с"
+            )
+        } else {
+            format!(
+                "Isoliner Scene: проверка не пройдена: {}",
+                problems.join("; ")
+            )
+        };
+        #[cfg(target_arch = "wasm32")]
+        crate::web::show(&report);
+        #[cfg(not(target_arch = "wasm32"))]
+        println!("{report}");
+    }
+
     /// Стрелки вращают, как в окне модуля: 2 градуса на 16 мс.
     fn keys(&mut self, ui: &egui::Ui) {
         if ui.ctx().egui_wants_keyboard_input() {
@@ -571,6 +739,8 @@ impl SceneApp {
             }
             let label = self.t("Вращение");
             ui.toggle_value(&mut self.spin, label);
+            let label = self.t("Поделиться");
+            ui.toggle_value(&mut self.share_open, label);
         });
         let mut ortho = self.cam.ortho;
         if ui
@@ -953,15 +1123,15 @@ impl eframe::App for SceneApp {
                 let ctx = ui.ctx().clone();
                 wasm_bindgen_futures::spawn_local(async move {
                     let name = f.path().display().to_string();
-                    let read = f.bytes_async().await;
-                    let file = match read {
-                        Ok(bytes) => Incoming { name, bytes },
-                        // пустой файл - пакет не прочтётся, и окно скажет об этом
-                        Err(_) => Incoming {
-                            name,
-                            bytes: Vec::new(),
-                        },
-                    };
+                    let file = f
+                        .bytes_async()
+                        .await
+                        .map(|bytes| Incoming {
+                            name: name.clone(),
+                            bytes,
+                            url: None,
+                        })
+                        .map_err(|e| format!("{name}: {e}"));
                     if let Ok(mut slot) = inbox.lock() {
                         *slot = Some(file);
                     }
@@ -970,9 +1140,21 @@ impl eframe::App for SceneApp {
             }
         }
         let picked = self.inbox.lock().ok().and_then(|mut slot| slot.take());
-        if let Some(file) = picked {
-            self.open_bytes(file.name, &file.bytes);
+        match picked {
+            Some(Ok(file)) => {
+                self.open_bytes(file.name, &file.bytes);
+                if self.error.is_none() {
+                    self.source = file.url;
+                }
+            }
+            Some(Err(e)) => {
+                self.status = fill(self.t("Не загрузилось: %s"), &[e]);
+                self.error = Some(self.status.clone());
+            }
+            None => {}
         }
+        self.share_window(ui.ctx());
+        self.run_check(ui.ctx());
         let view_size = self.target.as_ref().map_or(egui::vec2(1280.0, 800.0), |t| {
             egui::vec2(t.width as f32, t.height as f32)
         });
