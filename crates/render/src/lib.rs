@@ -626,12 +626,54 @@ impl Renderer {
     }
 }
 
-/// Снять кадр в RGBA (sRGB), строки сверху вниз.
-pub fn read_rgba(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    target: &Target,
-) -> Result<Vec<u8>, String> {
+/// Снимок кадра, который ещё читается из видеокарты. В браузере
+/// ждать видеокарту нельзя: окно спрашивает [`Readback::poll`]
+/// на каждом кадре, пока снимок не будет готов.
+pub struct Readback {
+    buf: wgpu::Buffer,
+    width: u32,
+    height: u32,
+    padded: u32,
+    state: std::sync::Arc<std::sync::Mutex<Option<Result<(), String>>>>,
+}
+
+impl Readback {
+    /// Ширина и высота снимка в пикселях.
+    pub fn size(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    /// Готовый снимок в RGBA, строки сверху вниз, или None, если
+    /// видеокарта ещё не отдала его.
+    pub fn poll(&self, device: &wgpu::Device) -> Option<Result<Vec<u8>, String>> {
+        // на диске отображение буфера двигает poll, в браузере - сам браузер
+        if let Err(e) = device.poll(wgpu::PollType::Poll) {
+            return Some(Err(e.to_string()));
+        }
+        let done = self.state.lock().ok()?.take()?;
+        Some(done.and_then(|()| self.collect()))
+    }
+
+    fn collect(&self) -> Result<Vec<u8>, String> {
+        let row = self.width as usize * 4;
+        let data = self
+            .buf
+            .slice(..)
+            .get_mapped_range()
+            .map_err(|e| format!("{e:?}"))?;
+        let mut out = Vec::with_capacity(row * self.height as usize);
+        for y in 0..self.height as usize {
+            let s = y * self.padded as usize;
+            out.extend_from_slice(data.get(s..s + row).ok_or("снимок обрезан")?);
+        }
+        drop(data);
+        self.buf.unmap();
+        Ok(out)
+    }
+}
+
+/// Начать снимок кадра `target`.
+pub fn start_readback(device: &wgpu::Device, queue: &wgpu::Queue, target: &Target) -> Readback {
     let row = target.width * 4;
     let padded =
         row.div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT) * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
@@ -666,26 +708,35 @@ pub fn read_rgba(
         },
     );
     queue.submit(Some(enc.finish()));
-    let slice = buf.slice(..);
-    let (tx, rx) = std::sync::mpsc::channel();
-    slice.map_async(wgpu::MapMode::Read, move |r| {
-        let _ = tx.send(r);
+    let state = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let to = state.clone();
+    buf.slice(..).map_async(wgpu::MapMode::Read, move |r| {
+        if let Ok(mut s) = to.lock() {
+            *s = Some(r.map_err(|e| e.to_string()));
+        }
     });
+    Readback {
+        buf,
+        width: target.width,
+        height: target.height,
+        padded,
+        state,
+    }
+}
+
+/// Снять кадр в RGBA, строки сверху вниз, с ожиданием видеокарты.
+/// Только на диске: в браузере ждать нельзя, там [`start_readback`].
+pub fn read_rgba(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    target: &Target,
+) -> Result<Vec<u8>, String> {
+    let rb = start_readback(device, queue, target);
     device
         .poll(wgpu::PollType::wait_indefinitely())
         .map_err(|e| e.to_string())?;
-    rx.recv()
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())?;
-    let data = slice.get_mapped_range().map_err(|e| format!("{e:?}"))?;
-    let mut out = Vec::with_capacity((row * target.height) as usize);
-    for y in 0..target.height as usize {
-        let s = y * padded as usize;
-        out.extend_from_slice(&data[s..s + row as usize]);
-    }
-    drop(data);
-    buf.unmap();
-    Ok(out)
+    rb.poll(device)
+        .unwrap_or_else(|| Err("видеокарта не отдала снимок".to_string()))
 }
 
 /// Камера пакета в координатах просмотра для кадра `frame`.

@@ -54,14 +54,14 @@ pub async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
     Ok(arr.to_vec())
 }
 
-/// Отдать пакет браузеру как скачиваемый файл.
-pub fn download(name: &str, bytes: &[u8]) -> Result<(), String> {
+/// Отдать файл браузеру как скачиваемый: пакет или снимок PNG.
+pub fn download(name: &str, bytes: &[u8], mime: &str) -> Result<(), String> {
     let doc = web_sys::window()
         .and_then(|w| w.document())
         .ok_or_else(|| "нет документа".to_string())?;
     let parts = js_sys::Array::of1(&js_sys::Uint8Array::from(bytes));
     let opts = web_sys::BlobPropertyBag::new();
-    opts.set_type("application/zip");
+    opts.set_type(mime);
     let blob =
         web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &opts).map_err(js_err)?;
     let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(js_err)?;

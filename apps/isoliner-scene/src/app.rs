@@ -20,7 +20,7 @@ use scene_core::{Camera, Frame, flight, mesh};
 use scene_format::{Package, Part, PartInfo, read_package, write_package};
 
 use crate::i18n::{Lang, tr};
-use crate::share;
+use crate::{share, shot};
 
 /// Подставить значения в шаблон по порядку: `%s`, `%d`, `%.0f`.
 fn fill(template: &str, args: &[String]) -> String {
@@ -154,6 +154,8 @@ pub struct SceneApp {
     pending_pose: Option<Camera>,
     share_open: bool,
     check: Option<Check>,
+    /// Снимок кадра, который ещё читается из видеокарты.
+    shot: Option<render::Readback>,
 }
 
 impl SceneApp {
@@ -194,7 +196,61 @@ impl SceneApp {
             pending_pose: None,
             share_open: false,
             check: None,
+            shot: None,
         }
+    }
+
+    /// Начать снимок кадра: текстура кадра уже держит последний кадр.
+    fn take_shot(&mut self, ctx: &egui::Context) {
+        if let (Some(gpu), Some(target)) = (&self.gpu, &self.target) {
+            self.shot = Some(render::start_readback(&gpu.device, &gpu.queue, target));
+            ctx.request_repaint();
+        }
+    }
+
+    /// Снимок готов - в PNG и в файл: на диске через выбор файла,
+    /// в браузере - скачиванием.
+    fn finish_shot(&mut self, ctx: &egui::Context) {
+        let (Some(gpu), Some(rb)) = (&self.gpu, &self.shot) else {
+            return;
+        };
+        let Some(got) = rb.poll(&gpu.device) else {
+            ctx.request_repaint();
+            return;
+        };
+        let (w, h) = rb.size();
+        self.shot = None;
+        let png = got.and_then(|rgba| shot::encode_png(w, h, &rgba));
+        let bytes = match png {
+            Ok(b) => b,
+            Err(e) => {
+                self.status = fill(self.t("Не записалось: %s"), &[e]);
+                return;
+            }
+        };
+        let name = shot::png_name(self.name.as_deref());
+        #[cfg(not(target_arch = "wasm32"))]
+        let res = {
+            let Some(dest) = rfd::FileDialog::new()
+                .add_filter("PNG", &["png"])
+                .set_file_name(name)
+                .save_file()
+            else {
+                return;
+            };
+            std::fs::write(&dest, bytes)
+                .map(|()| dest.display().to_string())
+                .map_err(|e| e.to_string())
+        };
+        #[cfg(target_arch = "wasm32")]
+        let res = crate::web::download(&name, &bytes, "image/png").map(|()| name);
+        self.status = match res {
+            Ok(dest) => fill(
+                self.t("Снимок %s x %s: %s"),
+                &[w.to_string(), h.to_string(), dest],
+            ),
+            Err(e) => fill(self.t("Не записалось: %s"), &[e]),
+        };
     }
 
     /// Камера, которую поставить при открытии пакета (`?pose=`).
@@ -428,7 +484,7 @@ impl SceneApp {
         };
         // в браузере пакет скачивается в папку загрузок
         #[cfg(target_arch = "wasm32")]
-        let res = crate::web::download(&name, &bytes).map(|()| name);
+        let res = crate::web::download(&name, &bytes, "application/zip").map(|()| name);
         self.status = match res {
             Ok(dest) => fill(self.t("Записано: %s"), &[dest]),
             Err(e) => fill(self.t("Не записалось: %s"), &[e]),
@@ -741,6 +797,15 @@ impl SceneApp {
             ui.toggle_value(&mut self.spin, label);
             let label = self.t("Поделиться");
             ui.toggle_value(&mut self.share_open, label);
+            if ui
+                .add_enabled(
+                    self.target.is_some() && self.shot.is_none(),
+                    egui::Button::new(self.t("Снимок PNG")),
+                )
+                .clicked()
+            {
+                self.take_shot(ui.ctx());
+            }
         });
         let mut ortho = self.cam.ortho;
         if ui
@@ -1155,6 +1220,7 @@ impl eframe::App for SceneApp {
         }
         self.share_window(ui.ctx());
         self.run_check(ui.ctx());
+        self.finish_shot(ui.ctx());
         let view_size = self.target.as_ref().map_or(egui::vec2(1280.0, 800.0), |t| {
             egui::vec2(t.width as f32, t.height as f32)
         });

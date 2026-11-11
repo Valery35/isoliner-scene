@@ -15,6 +15,7 @@
 mod app;
 mod i18n;
 mod share;
+mod shot;
 #[cfg(target_arch = "wasm32")]
 mod web;
 

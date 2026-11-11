@@ -1050,6 +1050,7 @@ dependencies = [
  "egui-wgpu",
  "glam",
  "js-sys",
+ "png",
  "render",
  "rfd",
  "scene-core",
