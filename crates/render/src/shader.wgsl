@@ -23,6 +23,8 @@ struct U {
     // фон: верх и низ кадра, sRGB
     bg_top: vec4<f32>,
     bg_bottom: vec4<f32>,
+    // ширина и высота кадра в пикселях, пикселей на точку экрана
+    screen: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> u: U;
@@ -60,6 +62,47 @@ fn fs_mesh(v: VsOut) -> @location(0) vec4<f32> {
 @fragment
 fn fs_line(v: VsOut) -> @location(0) vec4<f32> {
     return vec4<f32>(v.color.rgb, v.color.a * u.params.y);
+}
+
+// Точки-значки: круг постоянного размера в пикселях экрана, как спрайт
+// pxMode окна модуля. Квадрат из шести вершин раздвигается от точки
+// в координатах отсечения, лишнее срезается по кругу.
+struct PtOut {
+    @builtin(position) pos: vec4<f32>,
+    @location(0) color: vec4<f32>,
+    @location(1) uv: vec2<f32>,
+};
+
+@vertex
+fn vs_point(
+    @builtin(vertex_index) vi: u32,
+    @location(0) p: vec3<f32>,
+    @location(1) c: vec4<f32>,
+    @location(2) size: f32,
+) -> PtOut {
+    var corners = array<vec2<f32>, 6>(
+        vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, -1.0), vec2<f32>(1.0, 1.0),
+        vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, 1.0), vec2<f32>(-1.0, 1.0),
+    );
+    let k = corners[vi % 6u];
+    var clip = u.view_proj * vec4<f32>(p.x, p.y, p.z * u.params.x, 1.0);
+    // полразмера в пикселях кадра, в долях кадра от -1 до 1
+    let half = 0.5 * size * u.screen.z;
+    clip.x += k.x * half * 2.0 / max(u.screen.x, 1.0) * clip.w;
+    clip.y += k.y * half * 2.0 / max(u.screen.y, 1.0) * clip.w;
+    var out: PtOut;
+    out.pos = clip;
+    out.color = c;
+    out.uv = k;
+    return out;
+}
+
+@fragment
+fn fs_point(v: PtOut) -> @location(0) vec4<f32> {
+    if dot(v.uv, v.uv) > 1.0 {
+        discard;
+    }
+    return v.color;
 }
 
 // Фон: треугольник на весь кадр, сверху холоднее, снизу светлее.

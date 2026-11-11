@@ -7,7 +7,7 @@
 use std::io::{Cursor, Read, Write};
 
 use crate::glb::{self, Georef, Part};
-use crate::meta::{FORMAT, PartInfo, PartKind, SceneMeta};
+use crate::meta::{FORMAT, FORMAT_POINTS, PartInfo, PartKind, SceneMeta};
 use crate::{Error, MAX_ENTRY};
 
 pub const GLB_NAME: &str = "scene.glb";
@@ -76,12 +76,14 @@ pub fn describe(parts: &[Part], old: &[PartInfo]) -> Vec<PartInfo> {
                 kind: match p.indices {
                     glb::Indices::Triangles(_) => PartKind::Mesh,
                     glb::Indices::Lines(_) => PartKind::Lines,
+                    glb::Indices::Points(_) => PartKind::Points,
                 },
                 verts: p.verts.len() as u64,
                 elements: p.indices.len() as u64,
                 decor: prev.is_some_and(|o| o.decor),
                 layer: prev.and_then(|o| o.layer.clone()),
                 opacity: prev.and_then(|o| o.opacity),
+                shape: prev.and_then(|o| o.shape.clone()),
             }
         })
         .collect()
@@ -91,9 +93,14 @@ pub fn describe(parts: &[Part], old: &[PartInfo]) -> Vec<PartInfo> {
 /// точка начала - по охвату, как в модуле.
 pub fn write_package(pkg: &Package) -> Result<Vec<u8>, Error> {
     let mut meta = pkg.meta.clone();
-    meta.format = FORMAT;
     meta.origin = glb::georef_origin(&pkg.parts, 1000.0);
     meta.parts = describe(&pkg.parts, &pkg.meta.parts);
+    // наименьший формат, которым пакет читается, как в модуле
+    meta.format = if meta.parts.iter().any(|p| p.kind == PartKind::Points) {
+        FORMAT_POINTS
+    } else {
+        1
+    };
     meta.glb = GLB_NAME.to_string();
     let georef = Georef {
         crs: meta.crs.authid.clone(),

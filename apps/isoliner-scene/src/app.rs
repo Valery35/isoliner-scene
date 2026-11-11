@@ -101,6 +101,8 @@ struct Row {
     info: Option<PartInfo>,
     volume: Option<f64>,
     swatch: [f32; 4],
+    /// Треугольников, отрезков или точек.
+    count: usize,
 }
 
 pub struct SceneApp {
@@ -233,6 +235,7 @@ impl SceneApp {
             self.rows.push(Row {
                 info: infos.iter().find(|i| i.node == node).cloned(),
                 volume: mesh::body_volume(&part),
+                count: part.indices.len(),
                 swatch: part
                     .colors
                     .as_ref()
@@ -372,13 +375,25 @@ impl SceneApp {
     fn hit_at(&self, px: f64, py: f64, w: f64, h: f64) -> Option<mesh::Hit> {
         let pkg = self.pkg.as_ref()?;
         let scene = self.scene.as_ref()?;
-        let (o, d) = camera::ray(&self.view_camera(), w, h, px, py)?;
-        let visible = pkg
-            .parts
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| scene.parts.get(*i).is_some_and(|p| p.visible));
-        mesh::raycast(visible, &self.frame_now(), o, d)
+        let view = self.view_camera();
+        let frame = self.frame_now();
+        let (o, d) = camera::ray(&view, w, h, px, py)?;
+        let visible = || {
+            pkg.parts
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| scene.parts.get(*i).is_some_and(|p| p.visible))
+        };
+        let body = mesh::raycast(visible(), &frame, o, d);
+        // значок пробы: под курсором, если не закрыт телом ближе к глазу
+        let mark = mesh::pick_point(visible(), &frame, &view, w, h, px, py, 4.0);
+        let eye = glam::DVec3::from(camera::eye(&view));
+        let dist = |p: [f64; 3]| (glam::DVec3::from(p) - eye).length();
+        match (body, mark) {
+            (Some(b), Some(m)) if dist(b.point) < m.t => Some(b),
+            (_, Some(m)) => Some(m),
+            (b, None) => b,
+        }
     }
 
     /// Щелчок пришёлся за пределы площадки (`_outside_scene` окна
@@ -621,6 +636,11 @@ impl SceneApp {
                         };
                         if row.info.as_ref().is_some_and(|i| i.decor) {
                             note = tr(lang, "оформление").to_string();
+                        } else if p.points {
+                            note = fill(tr(lang, "точки: %s"), &[row.count.to_string()]);
+                        } else if row.info.as_ref().is_some_and(|i| i.shape.is_some()) {
+                            // значки скважин и реперов - плоские фигуры
+                            note = tr(lang, "значки").to_string();
                         } else if !p.lines {
                             note = match row.volume {
                                 Some(v) => fill(tr(lang, "объём %s м3"), &[grouped(v, 1)]),
@@ -856,6 +876,7 @@ impl SceneApp {
                     } else {
                         render::BG_PLAIN
                     },
+                    pixels_per_point: ppp,
                 };
                 gpu.renderer
                     .render(&gpu.device, &gpu.queue, target, scene, &look);

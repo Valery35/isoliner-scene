@@ -68,6 +68,18 @@ struct Vertex {
     color: [f32; 4],
 }
 
+/// Точка-значок: положение, цвет, размер в пикселях экрана.
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct PointMark {
+    pos: [f32; 3],
+    color: [f32; 4],
+    size: f32,
+}
+
+/// Размер значка точки без `_SIZE`, пиксели.
+pub const DEFAULT_POINT_SIZE: f32 = 8.0;
+
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct Uniforms {
@@ -76,18 +88,23 @@ struct Uniforms {
     params: [f32; 4],
     bg_top: [f32; 4],
     bg_bottom: [f32; 4],
+    /// ширина и высота кадра в пикселях, пикселей на точку экрана
+    screen: [f32; 4],
 }
 
 /// Часть сцены в видеокарте.
 pub struct GpuPart {
     pub name: String,
     pub lines: bool,
+    /// Точки-значки: квадрат на точку, круг в шейдере.
+    pub points: bool,
     pub transparent: bool,
     pub visible: bool,
     /// Середина части в координатах сцены без преувеличения.
     pub center: [f64; 3],
     vbuf: wgpu::Buffer,
-    ibuf: wgpu::Buffer,
+    /// У точек номеров нет: точка - один экземпляр квадрата.
+    ibuf: Option<wgpu::Buffer>,
     count: u32,
 }
 
@@ -105,6 +122,10 @@ impl GpuScene {
         let mut out = Vec::with_capacity(parts.len());
         for part in parts {
             if part.verts.is_empty() || part.indices.is_empty() {
+                continue;
+            }
+            if let Indices::Points(idx) = &part.indices {
+                out.push(upload_points(device, part, idx, frame));
                 continue;
             }
             let mut sum = [0.0f64; 3];
@@ -132,6 +153,7 @@ impl GpuScene {
             let (flat, lines): (Vec<u32>, bool) = match &part.indices {
                 Indices::Triangles(t) => (t.iter().flatten().copied().collect(), false),
                 Indices::Lines(l) => (l.iter().flatten().copied().collect(), true),
+                Indices::Points(_) => continue,
             };
             let transparent = part
                 .colors
@@ -150,15 +172,65 @@ impl GpuScene {
             out.push(GpuPart {
                 name: part.name.clone(),
                 lines,
+                points: false,
                 transparent,
                 visible: true,
                 center: [sum[0] / n, sum[1] / n, sum[2] / n],
                 vbuf,
-                ibuf,
+                ibuf: Some(ibuf),
                 count: flat.len() as u32,
             });
         }
         Self { parts: out, frame }
+    }
+}
+
+/// Точки части в буфер экземпляров. Номер точки за краем вершин
+/// пропускается: читатель пакета их уже проверил, здесь - на всякий
+/// случай без паники.
+fn upload_points(device: &wgpu::Device, part: &Part, idx: &[u32], frame: Frame) -> GpuPart {
+    let mut sum = [0.0f64; 3];
+    let marks: Vec<PointMark> = idx
+        .iter()
+        .filter_map(|&i| {
+            let v = part.verts.get(i as usize)?;
+            let p = [v[0] - frame.cx, v[1] - frame.cy, v[2] - frame.cz];
+            for k in 0..3 {
+                sum[k] += p[k];
+            }
+            let i = i as usize;
+            Some(PointMark {
+                pos: [p[0] as f32, p[1] as f32, p[2] as f32],
+                color: part
+                    .colors
+                    .as_ref()
+                    .and_then(|c| c.get(i).copied())
+                    .unwrap_or(DEFAULT_COLOR),
+                size: part
+                    .sizes
+                    .as_ref()
+                    .and_then(|s| s.get(i).copied())
+                    .filter(|s| s.is_finite() && *s > 0.0)
+                    .unwrap_or(DEFAULT_POINT_SIZE),
+            })
+        })
+        .collect();
+    let n = marks.len().max(1) as f64;
+    let vbuf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("точки части"),
+        contents: bytemuck::cast_slice(&marks),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    GpuPart {
+        name: part.name.clone(),
+        lines: false,
+        points: true,
+        transparent: marks.iter().any(|m| m.color[3] < 0.999),
+        visible: true,
+        center: [sum[0] / n, sum[1] / n, sum[2] / n],
+        vbuf,
+        ibuf: None,
+        count: marks.len() as u32,
     }
 }
 
@@ -234,11 +306,15 @@ pub struct Look {
     pub opacity: f32,
     /// Фон кадра.
     pub background: Background,
+    /// Пикселей кадра на пиксель значка: размер точки в пакете задан
+    /// в пикселях экрана окна QGIS.
+    pub pixels_per_point: f32,
 }
 
 /// Конвейеры и общие буферы.
 pub struct Renderer {
     background: wgpu::RenderPipeline,
+    points: wgpu::RenderPipeline,
     mesh_solid: wgpu::RenderPipeline,
     mesh_blend: wgpu::RenderPipeline,
     lines: wgpu::RenderPipeline,
@@ -365,8 +441,49 @@ impl Renderer {
             multiview_mask: None,
             cache: None,
         });
+        // точки: квадрат из шести вершин на экземпляр
+        let pattrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x4, 2 => Float32];
+        let points = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("точки"),
+            layout: Some(&pl),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_point"),
+                compilation_options: Default::default(),
+                buffers: &[Some(wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<PointMark>() as u64,
+                    step_mode: wgpu::VertexStepMode::Instance,
+                    attributes: &pattrs,
+                })],
+            },
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::LessEqual),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: SAMPLES,
+                ..Default::default()
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_point"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: COLOR_FORMAT,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
         Self {
             background,
+            points,
             mesh_solid: make(
                 "тела",
                 "fs_mesh",
@@ -420,6 +537,12 @@ impl Renderer {
             params: [look.vex as f32, look.opacity.clamp(0.0, 1.0), 0.0, 0.0],
             bg_top: [bg.top[0], bg.top[1], bg.top[2], 1.0],
             bg_bottom: [bg.bottom[0], bg.bottom[1], bg.bottom[2], 1.0],
+            screen: [
+                target.width as f32,
+                target.height as f32,
+                look.pixels_per_point.max(0.1),
+                0.0,
+            ],
         };
         queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&u));
 
@@ -432,7 +555,9 @@ impl Renderer {
         let mut soft: Vec<&GpuPart> = scene
             .parts
             .iter()
-            .filter(|p| p.visible && !p.lines && (p.transparent || look.opacity < 0.999))
+            .filter(|p| {
+                p.visible && !p.lines && !p.points && (p.transparent || look.opacity < 0.999)
+            })
             .collect();
         soft.sort_by(|a, b| dist(b).total_cmp(&dist(a)));
 
@@ -468,15 +593,24 @@ impl Renderer {
             pass.draw(0..3, 0..1);
             let draw = |pass: &mut wgpu::RenderPass<'_>, p: &GpuPart| {
                 pass.set_vertex_buffer(0, p.vbuf.slice(..));
-                pass.set_index_buffer(p.ibuf.slice(..), wgpu::IndexFormat::Uint32);
-                pass.draw_indexed(0..p.count, 0, 0..1);
+                match &p.ibuf {
+                    Some(ib) => {
+                        pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                        pass.draw_indexed(0..p.count, 0, 0..1);
+                    }
+                    None => pass.draw(0..6, 0..p.count),
+                }
             };
             pass.set_pipeline(&self.mesh_solid);
-            for p in scene
-                .parts
-                .iter()
-                .filter(|p| p.visible && !p.lines && !p.transparent && look.opacity >= 0.999)
-            {
+            for p in scene.parts.iter().filter(|p| {
+                p.visible && !p.lines && !p.points && !p.transparent && look.opacity >= 0.999
+            }) {
+                draw(&mut pass, p);
+            }
+            // точки - после тел и до прозрачных: значок пробы виден
+            // сквозь полупрозрачный пласт, как в окне модуля
+            pass.set_pipeline(&self.points);
+            for p in scene.parts.iter().filter(|p| p.visible && p.points) {
                 draw(&mut pass, p);
             }
             pass.set_pipeline(&self.lines);

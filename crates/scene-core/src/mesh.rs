@@ -114,6 +114,58 @@ pub fn raycast<'a>(
     best
 }
 
+/// Точка-значок под курсором: значок попадает, если курсор на его
+/// круге (`sizes` - диаметр в пикселях, `scale` пикселей кадра на
+/// пиксель значка), но не дальше `min_px` от центра мелкого значка.
+/// Из нескольких - ближняя к глазу. `t` у попадания - удаление
+/// от глаза в координатах просмотра.
+#[allow(clippy::too_many_arguments)]
+pub fn pick_point<'a>(
+    parts: impl IntoIterator<Item = (usize, &'a Part)>,
+    frame: &Frame,
+    cam: &crate::Camera,
+    width: f64,
+    height: f64,
+    px: f64,
+    py: f64,
+    min_px: f64,
+) -> Option<Hit> {
+    let eye = DVec3::from(crate::camera::eye(cam));
+    let mut best: Option<Hit> = None;
+    for (n, part) in parts {
+        let Indices::Points(idx) = &part.indices else {
+            continue;
+        };
+        for &i in idx {
+            let Some(v) = part.verts.get(i as usize) else {
+                continue;
+            };
+            let p = frame.to_view(*v);
+            let Some([sx, sy]) = crate::camera::to_screen(cam, width, height, p) else {
+                continue;
+            };
+            let size = part
+                .sizes
+                .as_ref()
+                .and_then(|s| s.get(i as usize))
+                .map_or(8.0, |s| f64::from(*s));
+            let r = (size / 2.0).max(min_px);
+            if (sx - px).hypot(sy - py) > r {
+                continue;
+            }
+            let t = (DVec3::from(p) - eye).length();
+            if best.is_none_or(|h| t < h.t) {
+                best = Some(Hit {
+                    part: n,
+                    point: p,
+                    t,
+                });
+            }
+        }
+    }
+    best
+}
+
 /// Луч и треугольник, алгоритм Мёллера - Трумбора. Обе стороны
 /// грани: у поверхности пласта нет изнанки.
 fn hit_triangle(o: DVec3, d: DVec3, a: DVec3, b: DVec3, c: DVec3) -> Option<f64> {
@@ -177,6 +229,7 @@ mod tests {
             verts,
             indices: Indices::Triangles(tris),
             colors: None,
+            sizes: None,
         }
     }
 
@@ -203,5 +256,37 @@ mod tests {
         // мимо
         let miss = raycast([(0, &near)], &frame, DVec3::new(5.0, 0.0, 50.0), d);
         assert!(miss.is_none());
+    }
+
+    #[test]
+    fn point_mark_is_picked_on_its_circle() {
+        let frame = Frame::default();
+        let cam = crate::Camera {
+            center: [0.0; 3],
+            distance: 100.0,
+            azimuth: -90.0,
+            elevation: 90.0,
+            fov: 60.0,
+            ortho: true,
+        };
+        // две пробы одна над другой и одна в стороне
+        let part = Part {
+            name: "пробы".into(),
+            verts: vec![[0.0, 0.0, 0.0], [0.0, 0.0, 10.0], [30.0, 0.0, 0.0]],
+            indices: Indices::Points(vec![0, 1, 2]),
+            colors: None,
+            sizes: Some(vec![12.0, 12.0, 6.0]),
+        };
+        let (w, h) = (400.0, 400.0);
+        let [sx, sy] = crate::camera::to_screen(&cam, w, h, [0.0; 3]).unwrap();
+        // по центру - верхняя, ближняя к глазу
+        let hit = pick_point([(3, &part)], &frame, &cam, w, h, sx + 4.0, sy, 3.0).unwrap();
+        assert_eq!(hit.part, 3);
+        assert_eq!(hit.point, [0.0, 0.0, 10.0]);
+        // за краем круга 12 пикселей - мимо
+        assert!(pick_point([(3, &part)], &frame, &cam, w, h, sx + 7.0, sy, 3.0).is_none());
+        // мелкий значок ловится не ближе min_px
+        let [qx, qy] = crate::camera::to_screen(&cam, w, h, [30.0, 0.0, 0.0]).unwrap();
+        assert!(pick_point([(3, &part)], &frame, &cam, w, h, qx + 4.5, qy, 5.0).is_some());
     }
 }

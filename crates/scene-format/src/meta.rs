@@ -6,8 +6,11 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Номер формата пакета, который понимает крейт.
-pub const FORMAT: u32 = 1;
+/// Наибольший номер формата пакета, который понимает крейт.
+pub const FORMAT: u32 = 2;
+/// С этого формата в пакете бывают точки. Пакет без точек пишется
+/// форматом 1, как в модуле: наименьшим, которым он читается.
+pub const FORMAT_POINTS: u32 = 2;
 
 fn d_distance() -> f64 {
     10.0
@@ -62,12 +65,13 @@ pub struct Crs {
     pub wkt: String,
 }
 
-/// Вид части: тело из треугольников или линии.
+/// Вид части: тело из треугольников, линии или точки.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PartKind {
     Mesh,
     Lines,
+    Points,
 }
 
 /// Часть сцены в scene.json: узел GLB и признаки показа.
@@ -88,6 +92,10 @@ pub struct PartInfo {
     pub layer: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub opacity: Option<f64>,
+    /// Значок точечного слоя: circle у точек, square, diamond, triangle,
+    /// cross у плоских фигур, которые идут мешем.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape: Option<String>,
 }
 
 fn d_vex() -> f64 {

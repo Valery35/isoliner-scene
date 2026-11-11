@@ -8,7 +8,8 @@
 //! из двух частей:
 //!
 //! - `scene.glb` - геометрия: план сдвинут на круглую точку начала,
-//!   высоты настоящие, привязка в `asset.extras.isoliner3d`;
+//!   высоты настоящие, привязка в `asset.extras.isoliner3d`. Тела,
+//!   линии, а с формата 2 и точки с размером значка в пикселях;
 //! - `scene.json` - имя, система координат, камера и виды облёта
 //!   в настоящих координатах, список частей и состояние окна QGIS.
 //!
@@ -26,7 +27,7 @@ mod meta;
 mod package;
 
 pub use glb::{Georef, Indices, Part};
-pub use meta::{Camera, Crs, FORMAT, PartInfo, PartKind, SceneMeta};
+pub use meta::{Camera, Crs, FORMAT, FORMAT_POINTS, PartInfo, PartKind, SceneMeta};
 pub use package::{GLB_NAME, JSON_NAME, Package, read_package, write_package};
 
 use std::fmt;

@@ -64,6 +64,8 @@ const TABLE: &[(&str, &str)] = &[
     ("оформление", "decor"),
     ("объём %s м3", "volume %s m3"),
     ("не замкнуто", "not closed"),
+    ("точки: %s", "points: %s"),
+    ("значки", "marks"),
     (
         "Перетащите пакет .i3dscene в окно или нажмите «Открыть».",
         "Drop an .i3dscene package into the window or press Open.",

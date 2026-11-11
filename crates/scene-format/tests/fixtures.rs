@@ -154,6 +154,113 @@ fn decor_follows_the_box_switch_of_the_window() {
     assert!(pkg.meta.box_shown());
 }
 
+/// Пакет формата 2 из модуля: пробы - точки POINTS с размером значка
+/// в пикселях, значки скважин и реперов - плоские фигуры мешем,
+/// борозды - линии. Всё как в `scene_points.expected.json`.
+#[test]
+fn reads_points_and_marks_of_the_module() {
+    let pkg = read_package(&fixture("scene_points.i3dscene")).unwrap();
+    let exp: Value = serde_json::from_slice(&fixture("scene_points.expected.json")).unwrap();
+    assert_eq!(pkg.meta.format, exp["format"].as_u64().unwrap() as u32);
+    assert_eq!(pkg.meta.name, exp["name"].as_str().unwrap());
+    let parts = exp["parts"].as_array().unwrap();
+    assert_eq!(pkg.parts.len(), parts.len());
+    for ((got, info), want) in pkg.parts.iter().zip(&pkg.meta.parts).zip(parts) {
+        let name = want["name"].as_str().unwrap();
+        assert_eq!(got.name, name);
+        let kind = match want["kind"].as_str().unwrap() {
+            "mesh" => PartKind::Mesh,
+            "lines" => PartKind::Lines,
+            "points" => PartKind::Points,
+            k => panic!("вид {k}"),
+        };
+        assert_eq!(info.kind, kind, "{name}");
+        assert_eq!(
+            matches!(got.indices, Indices::Points(_)),
+            kind == PartKind::Points,
+            "{name}"
+        );
+        assert_eq!(got.verts.len() as u64, want["verts"].as_u64().unwrap());
+        assert_eq!(got.indices.len() as u64, want["elements"].as_u64().unwrap());
+        assert_eq!(info.shape.as_deref(), want["shape"].as_str(), "{name}");
+        // охват в пределах ошибки float32 модуля и сантиметра
+        let tol = want["max_error"].as_f64().unwrap() + 0.01;
+        for k in 0..3 {
+            let lo = got.verts.iter().map(|v| v[k]).fold(f64::INFINITY, f64::min);
+            let hi = got
+                .verts
+                .iter()
+                .map(|v| v[k])
+                .fold(f64::NEG_INFINITY, f64::max);
+            assert!(
+                close(lo, want["bbox"][0][k].as_f64().unwrap(), tol),
+                "{name}"
+            );
+            assert!(
+                close(hi, want["bbox"][1][k].as_f64().unwrap(), tol),
+                "{name}"
+            );
+        }
+        let cols = got.colors.as_ref().unwrap();
+        for k in 0..4 {
+            assert!(close(
+                f64::from(cols[0][k]),
+                want["first_color"][k].as_f64().unwrap(),
+                1e-6
+            ));
+        }
+        if kind == PartKind::Points {
+            let sizes = got.sizes.as_ref().unwrap();
+            let want_sizes: Vec<f64> = want["sizes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|s| s.as_f64().unwrap())
+                .collect();
+            assert_eq!(sizes.len(), want_sizes.len());
+            for (a, b) in sizes.iter().zip(&want_sizes) {
+                assert!(close(f64::from(*a), *b, 1e-6));
+            }
+            for (c, w) in cols.iter().zip(want["colors"].as_array().unwrap()) {
+                for k in 0..4 {
+                    assert!(close(f64::from(c[k]), w[k].as_f64().unwrap(), 1e-6));
+                }
+            }
+        } else {
+            assert!(got.sizes.is_none(), "{name}");
+        }
+    }
+    // запись и чтение обратно: точки, размеры и формат на месте
+    let back = read_package(&write_package(&pkg).unwrap()).unwrap();
+    assert_eq!(back.meta.format, 2);
+    assert_eq!(back.meta.parts, pkg.meta.parts);
+    for (a, b) in back.parts.iter().zip(&pkg.parts) {
+        assert_eq!(a.indices, b.indices);
+        assert_eq!(a.sizes, b.sizes);
+        assert_eq!(a.colors, b.colors);
+    }
+    // пакет без точек по-прежнему пишется первым форматом
+    let demo = read_package(&fixture("scene_demo.i3dscene")).unwrap();
+    let again = read_package(&write_package(&demo).unwrap()).unwrap();
+    assert_eq!(again.meta.format, 1);
+}
+
+/// Размеров у точек не столько, сколько точек - ошибка, а не падение.
+#[test]
+fn broken_point_sizes_are_refused() {
+    let pkg = read_package(&fixture("scene_points.i3dscene")).unwrap();
+    let mut bad = pkg.parts.clone();
+    let i = bad
+        .iter()
+        .position(|p| matches!(p.indices, Indices::Points(_)))
+        .unwrap();
+    if let Indices::Points(p) = &mut bad[i].indices {
+        p[0] = 9999;
+    }
+    let glb = scene_format::glb::write(&bad, "x", &pkg.georef);
+    assert!(scene_format::glb::read(&glb).is_err());
+}
+
 #[test]
 fn newer_format_is_refused() {
     let mut pkg = read_package(&fixture("scene_demo.i3dscene")).unwrap();
@@ -164,10 +271,10 @@ fn newer_format_is_refused() {
     let mut zw = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
     let opts = zip::write::SimpleFileOptions::default();
     zw.start_file("scene.json", opts).unwrap();
-    std::io::Write::write_all(&mut zw, br#"{"format": 2}"#).unwrap();
+    std::io::Write::write_all(&mut zw, br#"{"format": 3}"#).unwrap();
     let data = zw.finish().unwrap().into_inner();
     assert!(matches!(
         read_package(&data),
-        Err(scene_format::Error::TooNew(2))
+        Err(scene_format::Error::TooNew(3))
     ));
 }

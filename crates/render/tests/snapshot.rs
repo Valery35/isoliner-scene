@@ -30,6 +30,76 @@ fn background_share(rgba: &[u8]) -> f64 {
     same as f64 / n as f64
 }
 
+/// Пакет с пробами: круглые значки видны своим цветом и своим
+/// размером в пикселях, вдвое крупнее при двух пикселях на точку.
+#[test]
+fn point_marks_render_in_screen_pixels() {
+    let (device, queue) = match headless() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("видеокарты нет, кадр не проверяется: {e}");
+            return;
+        }
+    };
+    let path = format!(
+        "{}/../../fixtures/scene_points.i3dscene",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let pkg = read_package(&std::fs::read(path).unwrap()).unwrap();
+    let (lo, hi) = mesh::bounds(&pkg.parts).unwrap();
+    let frame = Frame::around(lo, hi, pkg.meta.vex);
+    let mut scene = GpuScene::upload(&device, &pkg.parts, frame);
+    assert_eq!(scene.parts.len(), pkg.parts.len());
+    let probes = scene.parts.iter().position(|p| p.points).unwrap();
+    // только пробы: их пиксели не спутать с другими частями
+    for (i, p) in scene.parts.iter_mut().enumerate() {
+        p.visible = i == probes;
+    }
+    let renderer = Renderer::new(&device);
+    let target = Target::new(&device, 800, 600);
+    let mut look = Look {
+        camera: frame.camera_to_view(&pkg.meta.camera.unwrap()),
+        vex: frame.vex,
+        opacity: 1.0,
+        background: BG_PLAIN,
+        pixels_per_point: 1.0,
+    };
+    // сколько пикселей не фон
+    let ink = |look: &Look| {
+        renderer.render(&device, &queue, &target, &scene, look);
+        let rgba = read_rgba(&device, &queue, &target).unwrap();
+        let bg = bytes(BG_PLAIN.bottom);
+        rgba.as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|p| (0..3).any(|k| p[k].abs_diff(bg[k]) > 8))
+            .count()
+    };
+    let one = ink(&look);
+    // 12 кругов 6, 9 и 12 пикселей: площадь около 12 * 75 пикселей,
+    // часть может накрыть друг друга
+    assert!(one > 200 && one < 2000, "пикселей {one}");
+    look.pixels_per_point = 2.0;
+    let two = ink(&look);
+    assert!(
+        two as f64 > one as f64 * 2.5 && (two as f64) < one as f64 * 5.0,
+        "{one} -> {two}"
+    );
+    // цвет первой пробы на месте
+    look.pixels_per_point = 1.0;
+    renderer.render(&device, &queue, &target, &scene, &look);
+    let rgba = read_rgba(&device, &queue, &target).unwrap();
+    let c = pkg.parts[probes].colors.as_ref().unwrap()[0];
+    let want = bytes([c[0], c[1], c[2]]);
+    assert!(
+        rgba.as_chunks::<4>()
+            .0
+            .iter()
+            .any(|p| (0..3).all(|k| p[k].abs_diff(want[k]) <= 2)),
+        "нет цвета {want:?}"
+    );
+}
+
 #[test]
 fn demo_scene_renders_with_its_camera() {
     let (device, queue) = match headless() {
@@ -56,6 +126,7 @@ fn demo_scene_renders_with_its_camera() {
         vex: frame.vex,
         opacity: 1.0,
         background: BG_PLAIN,
+        pixels_per_point: 1.0,
     };
     renderer.render(&device, &queue, &target, &scene, &look);
     let rgba = read_rgba(&device, &queue, &target).unwrap();

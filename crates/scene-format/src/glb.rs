@@ -4,8 +4,9 @@
 
 //! GLB сцены: чтение и запись в том виде, как пишет `gltf.py` модуля.
 //!
-//! Узел - одна часть, у части один примитив: треугольники или линии,
-//! позиции float32, номера вершин uint32, цвет вершин RGBA float32.
+//! Узел - одна часть, у части один примитив: треугольники, линии или
+//! точки, позиции float32, номера вершин uint32, цвет вершин RGBA
+//! float32. У точек ещё размер значка в пикселях, атрибут `_SIZE`.
 //! Оси glTF: x - восток, y - вверх, z - минус север. Позиция в файле -
 //! сдвиг от точки начала `origin`, настоящая координата считается
 //! в double: восток = x + origin[0], север = -z + origin[1],
@@ -24,20 +25,24 @@ const USHORT: u64 = 5123;
 const UBYTE: u64 = 5121;
 const TRIANGLES: u64 = 4;
 const LINES: u64 = 1;
+const POINTS: u64 = 0;
 
 /// Номера вершин части.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Indices {
     Triangles(Vec<[u32; 3]>),
     Lines(Vec<[u32; 2]>),
+    /// Точки (пробы, значки скважин), пакет формата 2.
+    Points(Vec<u32>),
 }
 
 impl Indices {
-    /// Количество треугольников или отрезков.
+    /// Количество треугольников, отрезков или точек.
     pub fn len(&self) -> usize {
         match self {
             Indices::Triangles(t) => t.len(),
             Indices::Lines(l) => l.len(),
+            Indices::Points(p) => p.len(),
         }
     }
 
@@ -55,6 +60,9 @@ pub struct Part {
     pub indices: Indices,
     /// Цвет вершин RGBA в долях единицы.
     pub colors: Option<Vec<[f32; 4]>>,
+    /// Размер значка точки в пикселях экрана, атрибут `_SIZE`. Только
+    /// у точек.
+    pub sizes: Option<Vec<f32>>,
 }
 
 /// Привязка из `asset.extras.isoliner3d`.
@@ -249,7 +257,18 @@ pub fn read(glb: &[u8]) -> Result<(Vec<Part>, Georef), Error> {
         let indices = match mode {
             TRIANGLES => Indices::Triangles(idx.as_chunks::<3>().0.to_vec()),
             LINES => Indices::Lines(idx.as_chunks::<2>().0.to_vec()),
+            POINTS => Indices::Points(idx),
             m => return Err(bad(format!("вид примитива {m}"))),
+        };
+        let sizes = match attrs.get("_SIZE").and_then(Value::as_u64) {
+            Some(si) if matches!(indices, Indices::Points(_)) => {
+                let s = doc.floats(si, 1)?;
+                if s.len() != verts.len() {
+                    return Err(bad("размеров не столько, сколько точек"));
+                }
+                Some(s)
+            }
+            _ => None,
         };
         let colors = match attrs.get("COLOR_0").and_then(Value::as_u64) {
             Some(ci) => {
@@ -276,6 +295,7 @@ pub fn read(glb: &[u8]) -> Result<(Vec<Part>, Georef), Error> {
             verts,
             indices,
             colors,
+            sizes,
         });
     }
     Ok((parts, georef))
@@ -355,6 +375,7 @@ pub fn write(parts: &[Part], name: &str, georef: &Georef) -> Vec<u8> {
         let (flat, mode): (Vec<u32>, u64) = match &part.indices {
             Indices::Triangles(t) => (t.iter().flatten().copied().collect(), TRIANGLES),
             Indices::Lines(l) => (l.iter().flatten().copied().collect(), LINES),
+            Indices::Points(p) => (p.clone(), POINTS),
         };
         let ib: Vec<u8> = flat.iter().flat_map(|i| i.to_le_bytes()).collect();
         let fi = add_view(&mut buf, &ib, 34963);
@@ -375,6 +396,18 @@ pub fn write(parts: &[Part], name: &str, georef: &Georef) -> Vec<u8> {
             attrs["COLOR_0"] = json!(accessors.len() - 1);
             soft = cols.iter().any(|c| c[3] < 0.999);
             need_blend |= soft;
+        }
+        // размер значка - своим атрибутом, как gltf.py модуля
+        if let Some(sizes) = part
+            .sizes
+            .as_ref()
+            .filter(|s| mode == POINTS && s.len() == pos.len())
+        {
+            let sb: Vec<u8> = sizes.iter().flat_map(|s| s.to_le_bytes()).collect();
+            let si = add_view(&mut buf, &sb, 34962);
+            accessors.push(json!({"bufferView": si, "componentType": FLOAT,
+                "count": sizes.len(), "type": "SCALAR"}));
+            attrs["_SIZE"] = json!(accessors.len() - 1);
         }
         meshes.push(json!({"name": part.name, "primitives": [{
             "attributes": attrs, "indices": i_acc,
