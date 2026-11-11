@@ -4,6 +4,1068 @@
  "version": "1.4.13",
  "tools": [
   {
+   "code": "2.11",
+   "name": "boolean_shells",
+   "title": {
+    "ru": "Булевы операции с оболочками",
+    "en": "Boolean operations on shells"
+   },
+   "group": "2",
+   "help": {
+    "ru": "Вычитает, объединяет и пересекает два тела.\n\nТак считают отработку: из оболочки рудного тела вычитают оболочку отработанной камеры и получают остаток запасов. Пересечение даёт то, что попало в зону, объединение - два тела как одно.\n\nРабота идёт не по сеткам, а по ячейкам: обе оболочки переводятся в занятость общего куба, операция выполняется над занятостью, и результат снова превращается в тело. Точная операция над сетками режет треугольники друг о друга и на касаниях регулярно даёт незамкнутый результат, по которому объём уже не взять.\n\nЦена этого решения: тело выходит ступенчатым, а точность ограничена ячейкой. Ошибка идёт по площади поверхности и убывает вместе с ячейкой: на кубе в десять метров ячейка 0.5 м дала ошибку объёма пять процентов, 0.25 м - два с половиной, 0.1 м - попала точно. Память при этом растёт кубом.\n\nОболочки на входе должны быть замкнуты: у незамкнутой внутренности нет, и определить, что внутри, нечем. Незамкнутая на входе - отказ с указанием объекта.",
+    "en": "Subtracts, unites and intersects two bodies.\n\nThis is how mining is accounted for: the shell of a mined-out chamber is subtracted from the shell of an ore body and the remaining reserves come out. An intersection gives what fell inside a zone, a union takes two bodies as one.\n\nThe work goes not over meshes but over cells: both shells are turned into the occupancy of a common cube, the operation is done over the occupancy, and the result is turned back into a body. An exact operation over meshes cuts triangles against each other and on touches regularly gives a result that is not closed, and no volume can be taken from it.\n\nThe price of this decision: the body comes out stepped, and the accuracy is limited by the cell. The error follows the surface area and falls with the cell: on a ten-metre cube a cell of 0.5 m gave a volume error of five per cent, 0.25 m two and a half, 0.1 m landed exactly. The memory meanwhile grows as a cube.\n\nThe shells on input must be closed: one that is not has no inside, and there is nothing to tell what is within. A shell that is not closed on input is refused with the object named."
+   },
+   "params": [
+    {
+     "key": "SHELL_A",
+     "kind": "mesh",
+     "label": {
+      "ru": "Первое тело (полигоны с Z)",
+      "en": "The first body (polygons with Z)"
+     },
+     "hint": {
+      "ru": "Первое тело: замкнутая оболочка из слоя полигонов с Z. Такие даёт кнопка оболочек в окне просмотра и инструмент 2.04.",
+      "en": "The first body: a closed shell from a layer of polygons with Z. The shells button in the viewer and the tool 2.04 give such layers."
+     }
+    },
+    {
+     "key": "SHELL_B",
+     "kind": "mesh",
+     "label": {
+      "ru": "Второе тело (полигоны с Z)",
+      "en": "The second body (polygons with Z)"
+     },
+     "hint": {
+      "ru": "Второе тело. Для вычитания это то, что вырезают из первого: отработанная камера, зона обводнения.",
+      "en": "The second body. For a difference this is what is cut out of the first: a mined-out chamber, a flooded zone."
+     }
+    },
+    {
+     "key": "OP",
+     "kind": "enum",
+     "label": {
+      "ru": "Действие",
+      "en": "Action"
+     },
+     "hint": {
+      "ru": "Вычитание оставляет от первого тела то, чего нет во втором. Объединение берёт оба, пересечение - только общую часть.",
+      "en": "A difference leaves of the first body what the second does not hold. A union takes both, an intersection only the common part."
+     },
+     "default": 0,
+     "options": [
+      {
+       "ru": "Вычитание (первое минус второе)",
+       "en": "Difference (the first minus the second)"
+      },
+      {
+       "ru": "Объединение",
+       "en": "Union"
+      },
+      {
+       "ru": "Пересечение",
+       "en": "Intersection"
+      }
+     ]
+    },
+    {
+     "key": "CELL",
+     "kind": "number",
+     "label": {
+      "ru": "Сторона ячейки, м",
+      "en": "Side of the cell, m"
+     },
+     "hint": {
+      "ru": "Сторона ячейки. Она и задаёт точность: ошибка идёт по площади поверхности и убывает вместе с ячейкой вдвое на каждую половину. На кубе в десять метров ячейка 0.5 м дала ошибку объёма 5 процентов, 0.25 м - два с половиной, 0.1 м - попала точно. Память растёт кубом, поэтому мельче нужного не берите.",
+      "en": "The side of the cell. It sets the accuracy: the error follows the surface area and halves with every halving of the cell. On a ten-metre cube a cell of 0.5 m gave a volume error of 5 per cent, 0.25 m two and a half, 0.1 m landed exactly. The memory grows as a cube, so do not take it finer than needed."
+     },
+     "default": 1.0,
+     "minimum": 1e-06
+    },
+    {
+     "key": "OUTPUT",
+     "kind": "sink",
+     "label": {
+      "ru": "Результат (тела)",
+      "en": "The result (bodies)"
+     },
+     "hint": {
+      "ru": "Тела результата: полигоны с Z, объём каждого в атрибутах. Оболочка замкнута всегда, поэтому объём по ней считается.",
+      "en": "The bodies of the result: polygons with Z, the volume of each in the attributes. The shell is always closed, so the volume can be computed from it."
+     },
+     "geometry": "polygonz"
+    }
+   ],
+   "messages": [
+    {
+     "ru": "Куб %d x %d x %d, ячеек %d.",
+     "en": "Cube %d by %d by %d, %d cells."
+    },
+    {
+     "ru": "Занято ячеек: %d, объём по ним %.1f м3.",
+     "en": "Cells occupied: %d, their volume %.1f m3."
+    },
+    {
+     "ru": "Тел: %d, объём по оболочкам %.1f м3. Точность ограничена ячейкой: ошибка идёт по площади поверхности и убывает вместе с ячейкой.",
+     "en": "Bodies: %d, volume over the shells %.1f m3. The accuracy is limited by the cell: the error follows the surface area and falls with the cell."
+    },
+    {
+     "ru": "Первое тело",
+     "en": "The first body"
+    },
+    {
+     "ru": "Второе тело",
+     "en": "The second body"
+    },
+    {
+     "ru": "%s: граней %d, объём %.1f м3.",
+     "en": "%s: %d faces, volume %.1f m3."
+    },
+    {
+     "ru": "Ячеек слишком много: %d. Память растёт кубом, укрупните ячейку.",
+     "en": "Too many cells: %d. The memory grows as a cube, use a coarser cell."
+    },
+    {
+     "ru": "От результата не осталось ни одной ячейки. Для пересечения это значит, что тела не перекрываются, для вычитания - что второе поглотило первое.",
+     "en": "Not one cell is left of the result. For an intersection that means the bodies do not overlap, for a difference that the second swallowed the first."
+    },
+    {
+     "ru": "Граней вышло слишком много: укрупните ячейку.",
+     "en": "Too many faces came out: use a coarser cell."
+    },
+    {
+     "ru": "%s: треугольников не нашлось. Нужен слой полигонов с высотой, какой даёт кнопка оболочек в окне просмотра.",
+     "en": "%s: no triangles were found. A layer of polygons with height is needed, of the kind the shells button in the viewer gives."
+    },
+    {
+     "ru": "%s: оболочка не замкнута, рваных рёбер %d. У незамкнутой внутренности нет, и определить, что внутри, нечем.",
+     "en": "%s: the shell is not closed, %d torn edges. A shell that is not closed has no inside, and there is nothing to tell what is within."
+    }
+   ]
+  },
+  {
+   "code": "2.12",
+   "name": "select_by_shell",
+   "title": {
+    "ru": "Выборка оболочкой",
+    "en": "Selection by a shell"
+   },
+   "group": "2",
+   "help": {
+    "ru": "Отбирает объекты, попавшие в замкнутую оболочку, и считает по ним сводку.\n\nТак получают запас: блочная модель, оболочка рудного тела или зоны отработки, и на выходе объём, тоннаж и средневзвешенное содержание отобранного. Отбор снаружи даёт остаток, не строя вычитания тел.\n\nОтбирать можно не только точки. Линии и полигоны с высотой идут тем же путём: скважины, прошившие тело, следы выработок, оболочки других тел.\n\nТочка считается внутри по правилу чётности: из неё вверх пускается луч, и если оболочка пересекается нечётное число раз, точка внутри. Ячейки для этого не нужны, и ответ выходит точный, а не с точностью до ячейки, как у булевых операций.\n\nУ линий и полигонов смотрятся вершины. Отрезок, прошивший тело насквозь между двумя своими вершинами, вершинами не ловится - на этот случай есть шаг опроса вдоль.\n\nОбъём отобранных блоков сверяется с объёмом самой оболочки: расхождение показывает, насколько модель груба для этого тела.\n\nОболочка должна быть замкнута: у незамкнутой внутренности нет.",
+    "en": "Selects the features that fell into a closed shell and computes a summary over them.\n\nThat is how reserves are obtained: a block model, the shell of an ore body or of a mined-out zone, and out come the volume, the tonnage and the volume-weighted grade of the selection. Selecting the outside gives the remainder without building a difference of bodies.\n\nNot only points can be selected. Lines and polygons with height go the same way: holes that pierced the body, traces of workings, shells of other bodies.\n\nA point counts as inside by the parity rule: a ray is sent up from it, and if the shell is crossed an odd number of times the point is inside. No cells are needed for that, and the answer comes out exact rather than to within a cell, as with the boolean operations.\n\nFor lines and polygons the vertices are looked at. A segment that goes right through the body between two of its own vertices is not caught by vertices - the sampling step along is there for that.\n\nThe volume of the selected blocks is checked against the volume of the shell itself: the difference shows how coarse the model is for this body.\n\nThe shell must be closed: one that is not has no inside."
+   },
+   "params": [
+    {
+     "key": "INPUT",
+     "kind": "features",
+     "label": {
+      "ru": "Что отбирать (объекты с Z)",
+      "en": "What to select (features with Z)"
+     },
+     "hint": {
+      "ru": "Что отбирать: точки, линии или полигоны с высотой. Блочная модель из 2.03 и 1.03, пробы, следы выработок, оболочки других тел - лишь бы у геометрии была Z.",
+      "en": "What to select: points, lines or polygons with height. A block model from 2.03 and 1.03, samples, traces of workings, shells of other bodies - as long as the geometry has Z."
+     }
+    },
+    {
+     "key": "SHELL",
+     "kind": "mesh",
+     "label": {
+      "ru": "Оболочка (полигоны с Z)",
+      "en": "The shell (polygons with Z)"
+     },
+     "hint": {
+      "ru": "Замкнутая оболочка, которой идёт отбор: рудное тело, зона отработки, контур подсчёта. Такие даёт кнопка оболочек в окне просмотра, 2.04 и 2.11.",
+      "en": "The closed shell the selection is made by: an ore body, a mined-out zone, a block of reserves. The shells button in the viewer, 2.04 and 2.11 give such shells."
+     }
+    },
+    {
+     "key": "MODE",
+     "kind": "enum",
+     "label": {
+      "ru": "Что оставить",
+      "en": "What to keep"
+     },
+     "hint": {
+      "ru": "Целиком внутри - все вершины объекта внутри оболочки. Пересекает - хоть одна внутри: так ловятся скважины и выработки, проходящие тело насквозь. Снаружи - остаток, то есть всё, что не пересекает.",
+      "en": "Entirely inside - every vertex of the feature is inside the shell. Crosses - at least one is: that is how holes and workings going right through the body are caught. Outside - the remainder, everything that does not cross."
+     },
+     "default": 0,
+     "options": [
+      {
+       "ru": "Целиком внутри",
+       "en": "Entirely inside"
+      },
+      {
+       "ru": "Пересекает оболочку",
+       "en": "Crosses the shell"
+      },
+      {
+       "ru": "Снаружи",
+       "en": "Outside"
+      }
+     ]
+    },
+    {
+     "key": "STEP",
+     "kind": "number",
+     "label": {
+      "ru": "Шаг опроса вдоль линий, м (0 - вершины)",
+      "en": "Sampling step along lines, m (0 - vertices)"
+     },
+     "hint": {
+      "ru": "Шаг опроса вдоль линий и по краю полигонов. Без него смотрятся только вершины, и отрезок, прошивший тело насквозь между двумя своими вершинами, найден не будет. Ноль - только вершины.",
+      "en": "The sampling step along lines and around the edge of polygons. Without it only the vertices are looked at, and a segment that goes right through the body between two of its own vertices will not be found. Zero - vertices only."
+     },
+     "default": 0.0,
+     "minimum": 0.0,
+     "advanced": true
+    },
+    {
+     "key": "VOLUME",
+     "kind": "field",
+     "label": {
+      "ru": "Поле объёма блока",
+      "en": "Field of the block volume"
+     },
+     "hint": {
+      "ru": "Поле объёма блока, если отбирается блочная модель. С ним считается объём отобранного и сверяется с объёмом самой оболочки: расхождение показывает, насколько модель груба для этого тела.",
+      "en": "The field of the block volume, if a block model is being selected. With it the volume of the selection is computed and checked against the volume of the shell itself: the difference shows how coarse the model is for this body."
+     },
+     "parent": "INPUT",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "GRADE",
+     "kind": "field",
+     "label": {
+      "ru": "Поле содержания",
+      "en": "Field of the grade"
+     },
+     "hint": {
+      "ru": "Поле содержания. Среднее по отобранному считается взвешенным по объёму, а не простым: блоки бывают разного размера, и простое среднее завышает мелкие.",
+      "en": "The field of the grade. The mean over the selection is weighted by volume rather than plain: blocks come in different sizes, and a plain mean gives the small ones too much say."
+     },
+     "parent": "INPUT",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "DENSITY",
+     "kind": "number",
+     "label": {
+      "ru": "Плотность, т/м3 (0 - без тоннажа)",
+      "en": "Density, t/m3 (0 - no tonnage)"
+     },
+     "hint": {
+      "ru": "Плотность руды. С ней объём переводится в тонны, а содержание - в тоннаж металла.",
+      "en": "The density of the ore. With it the volume turns into tonnes and the grade into the tonnage of metal."
+     },
+     "default": 0.0,
+     "minimum": 0.0,
+     "advanced": true
+    },
+    {
+     "key": "OUTPUT",
+     "kind": "sink",
+     "label": {
+      "ru": "Отобранные объекты",
+      "en": "Selected features"
+     },
+     "hint": {
+      "ru": "Отобранные объекты со всеми своими полями. Сводка идёт в журнал.",
+      "en": "The selected features with all their own fields. The summary goes to the log."
+     },
+     "geometry": "source"
+    }
+   ],
+   "messages": [
+    {
+     "ru": "Оболочка: граней %d, объём %.1f м3.",
+     "en": "The shell: %d faces, volume %.1f m3."
+    },
+    {
+     "ru": "Объектов %d, точек опроса %d.",
+     "en": "Features: %d, sampling points: %d."
+    },
+    {
+     "ru": "Объектов всего %d, отобрано %d (%.1f процента).",
+     "en": "Features in all %d, selected %d (%.1f per cent)."
+    },
+    {
+     "ru": "Объём отобранного: %.1f м3.",
+     "en": "Volume of the selection: %.1f m3."
+    },
+    {
+     "ru": "Оболочка не замкнута, рваных рёбер %d. У незамкнутой внутренности нет.",
+     "en": "The shell is not closed, %d torn edges. A shell that is not closed has no inside."
+    },
+    {
+     "ru": "Объектов с высотой не нашлось: у геометрии должна быть Z.",
+     "en": "No features with height were found: the geometry must have Z."
+    },
+    {
+     "ru": "Поле объёма не задано: объём и тоннаж не считаются. У блочной модели из 2.03 и 1.03 это поле vol.",
+     "en": "The field of the volume is not set: the volume and the tonnage are not computed. In a block model from 2.03 and 1.03 that field is vol."
+    },
+    {
+     "ru": "Объём оболочки %.1f м3, расхождение с блоками %+.1f процента. Это грубость блочной модели для этого тела: блок либо целиком внутри, либо целиком снаружи.",
+     "en": "Volume of the shell %.1f m3, the difference against the blocks %+.1f per cent. That is how coarse the block model is for this body: a block is either wholly inside or wholly outside."
+    },
+    {
+     "ru": "Содержание, взвешенное по объёму: %.3f.",
+     "en": "Grade weighted by volume: %.3f."
+    },
+    {
+     "ru": "Тоннаж руды: %.0f т.",
+     "en": "Tonnage of ore: %.0f t."
+    },
+    {
+     "ru": "Тоннаж металла: %.0f т.",
+     "en": "Tonnage of metal: %.0f t."
+    }
+   ]
+  },
+  {
+   "code": "2.14",
+   "name": "zonal_shell_stats",
+   "title": {
+    "ru": "Зональная статистика оболочек",
+    "en": "Zonal statistics of shells"
+   },
+   "group": "2",
+   "help": {
+    "ru": "Считает по каждому телу, сколько объектов в него попало, и записывает числа в атрибуты тела.\n\nТочки: число внутри и сумма атрибута. Линии: число линий, задевших тело, и длина их частей внутри. Полигоны: число полигонов, у которых хоть одна вершина внутри.\n\nЛиния режется телом: отрезок пересекается с поверхностью, точки сортируются вдоль него, и в длину идёт только часть внутри. Отрезок, прошивший тело насквозь между своими вершинами, не пропадает.\n\nНоль и пусто - разные вещи. Тело, внутри которого ничего нет, получает ноль: это измеренный факт. Незамкнутое тело получает пусто и попадает в предупреждение: у него нет внутренности.\n\nПовторные прогоны по одному слою тел складываются: результат предыдущего подаётся как слой тел следующему, и каждый прогон добавляет свои поля. Столкновение имён - отказ, если не разрешена перезапись.\n\nПо атрибуту считается сумма, среднее, минимум, максимум, стандартное отклонение, медиана и квантили, на выбор. У точек и полигонов каждый объект весит одинаково, у линий вес - длина их части внутри тела: интервал опробования, вошедший в тело наполовину, весит половину. Пустые значения атрибута не участвуют.\n\nСумма по телам сходится: длина линий внутри всех тел плюс длина снаружи равна полной длине, и это печатается в журнал.\n\nВторой результат, необязательный, - сами объекты с телом, в которое они попали: поля zone, zone_ids и zone_n. Так видно, какие пробы дали итог тела.",
+    "en": "Counts for every body how many features fell into it and writes the numbers into the attributes of the body.\n\nPoints: the number inside and the sum of an attribute. Lines: the number of lines that touched the body and the length of their parts inside. Polygons: the number of polygons with at least one vertex inside.\n\nA line is cut by the body: a segment is intersected with the surface, the points are sorted along it, and only the part inside goes into the length. A segment that goes right through the body between its own vertices is not lost.\n\nZero and empty are different things. A body with nothing inside gets zero: that is a measured fact. A body that is not closed gets empty and goes into a warning: it has no inside.\n\nRepeated runs over one layer of bodies add up: the result of the previous run is given as the layer of bodies to the next, and every run adds its own fields. A clash of names is refused unless overwriting is allowed.\n\nThe attribute gets a sum, a mean, a minimum, a maximum, a standard deviation, a median and quantiles, as chosen. Points and polygons weigh one each, lines weigh the length of their part inside the body: a sample interval half inside the body weighs half. Empty attribute values take no part.\n\nThe sum over the bodies agrees: the length of lines inside all the bodies plus the length outside equals the total length, and that is printed to the log.\n\nThe second, optional result is the objects themselves with the body they fell into: the fields zone, zone_ids and zone_n. It shows which samples gave the total of a body."
+   },
+   "params": [
+    {
+     "key": "SHELLS",
+     "kind": "meshes",
+     "label": {
+      "ru": "Тела (полигоны с Z)",
+      "en": "Bodies (polygons with Z)"
+     },
+     "hint": {
+      "ru": "Слой тел: замкнутые оболочки, по одной на объект. У каждого тела появятся свои поля со счётом. Незамкнутое тело получает пусто, а не ноль: у него нет внутренности, и считать там нечего.",
+      "en": "A layer of bodies: closed shells, one per feature. Every body gets its own count fields. A body that is not closed gets empty rather than zero: it has no inside, and there is nothing to count."
+     }
+    },
+    {
+     "key": "INPUT",
+     "kind": "features",
+     "label": {
+      "ru": "Что считать (объекты с Z)",
+      "en": "What to count (features with Z)"
+     },
+     "hint": {
+      "ru": "Что считать: точки, линии или полигоны с высотой. Блочная модель, скважины, следы выработок, разломы.",
+      "en": "What to count: points, lines or polygons with height. A block model, holes, traces of workings, faults."
+     }
+    },
+    {
+     "key": "NAME",
+     "kind": "string",
+     "label": {
+      "ru": "Имя полей результата (пусто - от слоя)",
+      "en": "Name of the result fields (empty - from the layer)"
+     },
+     "hint": {
+      "ru": "Имя для полей результата. Пусто - от имени слоя, приведённого к латинице. К нему добавятся суффиксы: _n число объектов внутри, _len длина линий внутри, _sum, _mean, _std и другие по выбранной статистике. Задавайте своё, когда гоняете инструмент по одному слою тел несколько раз с разными данными.",
+      "en": "The name for the result fields. Empty - from the name of the layer, turned into Latin letters. Suffixes are added to it: _n the number of features inside, _len the length of lines inside, _sum, _mean, _std and others by the chosen statistics. Give your own when you run the tool over one layer of bodies several times with different data."
+     },
+     "default": "",
+     "optional": true
+    },
+    {
+     "key": "ATTR",
+     "kind": "field",
+     "label": {
+      "ru": "Атрибут для статистики",
+      "en": "Attribute for statistics"
+     },
+     "hint": {
+      "ru": "Числовой атрибут для статистики: металл или объём блока, мощность, содержание. Пусто - только счёт.",
+      "en": "A numeric attribute for statistics: the metal or the volume of a block, a thickness, a grade. Empty - count only."
+     },
+     "parent": "INPUT",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "STATS",
+     "kind": "enum",
+     "label": {
+      "ru": "Статистика по атрибуту",
+      "en": "Statistics of the attribute"
+     },
+     "hint": {
+      "ru": "Что считать по атрибуту. Сумма - запас, когда атрибут уже металл блока. Для содержания нужны среднее, разброс и квантили. У линий среднее и квантили взвешены по длине внутри тела, как при подсчёте по композитам.",
+      "en": "What to compute from the attribute. The sum is the reserve when the attribute is already the metal of a block. A grade needs the mean, the spread and quantiles. For lines the mean and quantiles are weighted by the length inside the body, as with composites."
+     },
+     "default": [
+      0
+     ],
+     "options": [
+      {
+       "ru": "Сумма",
+       "en": "Sum"
+      },
+      {
+       "ru": "Среднее",
+       "en": "Mean"
+      },
+      {
+       "ru": "Минимум",
+       "en": "Minimum"
+      },
+      {
+       "ru": "Максимум",
+       "en": "Maximum"
+      },
+      {
+       "ru": "Стандартное отклонение",
+       "en": "Standard deviation"
+      },
+      {
+       "ru": "Медиана",
+       "en": "Median"
+      },
+      {
+       "ru": "Квартили 25 и 75 %",
+       "en": "Quartiles 25 and 75 %"
+      },
+      {
+       "ru": "Квантили 10 и 90 %",
+       "en": "Quantiles 10 and 90 %"
+      }
+     ],
+     "optional": true,
+     "multiple": true
+    },
+    {
+     "key": "OVERWRITE",
+     "kind": "bool",
+     "label": {
+      "ru": "Разрешить перезапись полей",
+      "en": "Allow overwriting of fields"
+     },
+     "hint": {
+      "ru": "Разрешить перезапись полей с тем же именем. Без этого повторный прогон с тем же именем - отказ: иначе второй результат тихо затёр бы первый.",
+      "en": "Allow overwriting fields of the same name. Without it a repeated run with the same name is refused: otherwise the second result would silently wipe out the first."
+     },
+     "default": false
+    },
+    {
+     "key": "OUTPUT",
+     "kind": "sink",
+     "label": {
+      "ru": "Тела со статистикой",
+      "en": "Bodies with statistics"
+     },
+     "hint": {
+      "ru": "Тела со всеми прежними полями и новыми полями счёта. Чтобы накопить несколько прогонов, подавайте результат предыдущего как слой тел следующему.",
+      "en": "The bodies with all their previous fields and the new count fields. To accumulate several runs, give the result of the previous run as the layer of bodies to the next."
+     },
+     "geometry": "source"
+    },
+    {
+     "key": "ZONE_FIELD",
+     "kind": "field",
+     "label": {
+      "ru": "Поле тела для объектов (пусто - номер)",
+      "en": "Body field for the objects (empty - number)"
+     },
+     "hint": {
+      "ru": "Поле тела, которое пишется объектам: имя или код тела. Пусто - номер объекта тела в слое.",
+      "en": "The body field written to the objects: the name or code of the body. Empty - the number of the body feature in the layer."
+     },
+     "parent": "SHELLS",
+     "optional": true
+    },
+    {
+     "key": "OUTPUT_OBJECTS",
+     "kind": "sink",
+     "label": {
+      "ru": "Объекты с телом",
+      "en": "Objects with a body"
+     },
+     "hint": {
+      "ru": "Сами объекты с полем тела, в которое они попали: zone - первое тело, zone_ids - все через точку с запятой, zone_n - сколько тел. Объект вне тел получает пусто и ноль. Без этого слоя видно только итог по телу, но не какие пробы его дали.",
+      "en": "The objects themselves with the body they fell into: zone is the first body, zone_ids all of them separated by semicolons, zone_n how many bodies. An object outside the bodies gets empty and zero. Without this layer only the total per body is seen, not which samples gave it."
+     },
+     "geometry": "source",
+     "optional": true
+    }
+   ],
+   "messages": [
+    {
+     "ru": "Тел: %d, незамкнутых %d.",
+     "en": "Bodies: %d, not closed %d."
+    },
+    {
+     "ru": "Объектов: %d.",
+     "en": "Features: %d."
+    },
+    {
+     "ru": "Попаданий по всем телам: %d.",
+     "en": "Hits over all the bodies: %d."
+    },
+    {
+     "ru": "Поля %s уже есть у слоя тел. Задайте другое имя или разрешите перезапись.",
+     "en": "The fields %s already exist on the layer of bodies. Give another name or allow overwriting."
+    },
+    {
+     "ru": "Незамкнутых тел %d: им записано пусто, а не ноль. У незамкнутого тела нет внутренности.",
+     "en": "Bodies that are not closed: %d; they get empty, not zero. A body that is not closed has no inside."
+    },
+    {
+     "ru": "Объектов с высотой не нашлось: у геометрии должна быть Z.",
+     "en": "No features with height were found: the geometry must have Z."
+    },
+    {
+     "ru": "Объектов в телах: %d из %d.",
+     "en": "Objects in bodies: %d of %d."
+    },
+    {
+     "ru": "Длина линий: всего %.2f м, внутри тел %.2f м, снаружи %.2f м.",
+     "en": "Length of the lines: %.2f m in all, %.2f m inside the bodies, %.2f m outside."
+    }
+   ]
+  },
+  {
+   "code": "2.17",
+   "name": "desurvey_holes",
+   "title": {
+    "ru": "Стволы скважин по инклинометрии",
+    "en": "Borehole traces from downhole surveys"
+   },
+   "group": "2",
+   "help": {
+    "ru": "Строит стволы скважин по устьям и инклинометрии.\n\nМежду замерами ствол идёт дугой окружности, касательные к которой на концах совпадают с замерами: метод минимальной кривизны, им считают Micromine, Datamine, Surpac и Leapfrog. От устья до первого замера ствол идёт по направлению из паспорта скважины, если поля азимута и угла есть у устьев, иначе по первому замеру. За последним замером ствол идёт по нему же до забоя. Скважина без инклинометрии и паспорта отвесная, скважина вверх из выработки задаётся углом вверх.\n\nУгол записывают по-разному: от горизонта с минусом вниз (-90 отвесно вниз), от горизонта с плюсом вниз или зенитный угол от вертикали. Соглашение выбирается явно.\n\nНа выходе линии с Z, длина каждой равна глубине по стволу. Дальше 2.18 режет их на интервалы опробования или композиты, а сцена показывает трубами.",
+    "en": "Builds borehole traces from collars and downhole surveys.\n\nBetween stations the trace follows a circular arc whose end tangents match the surveys: the minimum curvature method, used by Micromine, Datamine, Surpac and Leapfrog. From the collar to the first station the trace follows the direction from the hole passport when the collars have azimuth and angle fields, otherwise the first station. Past the last station the trace goes along it to the end of hole. A hole without a survey and a passport is vertical, an upward hole from a working is set by an upward angle.\n\nThe angle is recorded in different ways: from the horizontal with down negative (-90 straight down), from the horizontal with down positive, or a zenith angle from the vertical. The convention is chosen explicitly.\n\nThe output is lines with Z, the length of each equals the depth along the hole. Then 2.18 cuts them into sample intervals or composites, and the scene shows them as tubes."
+   },
+   "params": [
+    {
+     "key": "COLLARS",
+     "kind": "table",
+     "label": {
+      "ru": "Устья скважин",
+      "en": "Collars"
+     },
+     "hint": {
+      "ru": "Устья скважин: точечный слой или таблица с координатами. У точечного слоя координаты берутся из геометрии, у таблицы - из полей X и Y.",
+      "en": "Collars: a point layer or a table with coordinates. A point layer gives the coordinates from the geometry, a table from the X and Y fields."
+     }
+    },
+    {
+     "key": "HOLE",
+     "kind": "field",
+     "label": {
+      "ru": "Поле номера скважины",
+      "en": "Hole ID field"
+     },
+     "hint": {
+      "ru": "Поле номера скважины в устьях. По нему устье сводится с инклинометрией. Пусто - узнаётся по имени: HOLE, HOLEID, BHID.",
+      "en": "The hole ID field in the collars. It matches a collar with its survey. Empty - recognised by name: HOLE, HOLEID, BHID."
+     },
+     "default": "hole",
+     "parent": "COLLARS",
+     "optional": true
+    },
+    {
+     "key": "XFIELD",
+     "kind": "field",
+     "label": {
+      "ru": "Поле X (если нет геометрии)",
+      "en": "X field (without geometry)"
+     },
+     "hint": {
+      "ru": "Поле X, если у слоя устьев нет геометрии. У точечного слоя не нужно.",
+      "en": "The X field when the collar layer has no geometry. Not needed for a point layer."
+     },
+     "parent": "COLLARS",
+     "optional": true,
+     "numeric": true,
+     "advanced": true
+    },
+    {
+     "key": "YFIELD",
+     "kind": "field",
+     "label": {
+      "ru": "Поле Y (если нет геометрии)",
+      "en": "Y field (without geometry)"
+     },
+     "hint": {
+      "ru": "Поле Y, если у слоя устьев нет геометрии. У точечного слоя не нужно.",
+      "en": "The Y field when the collar layer has no geometry. Not needed for a point layer."
+     },
+     "parent": "COLLARS",
+     "optional": true,
+     "numeric": true,
+     "advanced": true
+    },
+    {
+     "key": "ZFIELD",
+     "kind": "field",
+     "label": {
+      "ru": "Поле отметки устья (пусто - Z геометрии)",
+      "en": "Collar elevation field (empty - Z of the geometry)"
+     },
+     "hint": {
+      "ru": "Поле отметки устья. Пусто - отметка из Z геометрии. Без неё ствол встанет на ноль, о чём будет сказано.",
+      "en": "The collar elevation field. Empty - the elevation comes from the Z of the geometry. Without it the trace starts at zero, with a warning."
+     },
+     "parent": "COLLARS",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "EOH",
+     "kind": "field",
+     "label": {
+      "ru": "Поле глубины скважины",
+      "en": "Hole depth field"
+     },
+     "hint": {
+      "ru": "Поле глубины скважины (забоя). Пусто - узнаётся по имени (EOH, DEPTH), а без такого поля ствол кончается на последнем замере инклинометрии.",
+      "en": "The field of the hole depth (end of hole). Empty - recognised by name (EOH, DEPTH), and without such a field the trace ends at the last survey station."
+     },
+     "default": "eoh",
+     "parent": "COLLARS",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "C_AZI",
+     "kind": "field",
+     "label": {
+      "ru": "Поле азимута у устья (пусто - по имени)",
+      "en": "Collar azimuth field (empty - by name)"
+     },
+     "hint": {
+      "ru": "Азимут скважины у устья из паспорта. Наклонная скважина идёт под ним с устья до первого замера. Пусто - узнаётся по имени (AZIMUTH, AZI, BRG).",
+      "en": "The hole azimuth at the collar from the passport. An inclined hole follows it from the collar to the first station. Empty - recognised by name (AZIMUTH, AZI, BRG)."
+     },
+     "parent": "COLLARS",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "C_ANGLE",
+     "kind": "field",
+     "label": {
+      "ru": "Поле угла у устья (пусто - по имени)",
+      "en": "Collar angle field (empty - by name)"
+     },
+     "hint": {
+      "ru": "Угол скважины у устья из паспорта, в том же соглашении, что инклинометрия. Пусто - узнаётся по имени (DIP, ANGLE). Замер на глубине 0 важнее паспорта.",
+      "en": "The hole angle at the collar from the passport, in the same convention as the survey. Empty - recognised by name (DIP, ANGLE). A station at depth 0 takes precedence over the passport."
+     },
+     "parent": "COLLARS",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "SURVEY",
+     "kind": "table",
+     "label": {
+      "ru": "Инклинометрия (таблица)",
+      "en": "Downhole survey (table)"
+     },
+     "hint": {
+      "ru": "Таблица инклинометрии: скважина, глубина по стволу, азимут, угол. Поля, которые не выбраны, узнаются по именам Micromine, Datamine и Surpac. Пусто - все скважины отвесные.",
+      "en": "The survey table: hole, depth along the hole, azimuth, angle. Fields that are not chosen are recognised by Micromine, Datamine and Surpac names. Empty - all holes are vertical."
+     },
+     "optional": true
+    },
+    {
+     "key": "S_HOLE",
+     "kind": "field",
+     "label": {
+      "ru": "Поле номера скважины в инклинометрии",
+      "en": "Hole ID field in the survey"
+     },
+     "hint": {
+      "ru": "Поле номера скважины в инклинометрии. Номера сводятся с устьями как текст без пробелов по краям.",
+      "en": "The hole ID field in the survey. IDs are matched with the collars as text without leading and trailing spaces."
+     },
+     "default": "hole",
+     "parent": "SURVEY",
+     "optional": true
+    },
+    {
+     "key": "S_DEPTH",
+     "kind": "field",
+     "label": {
+      "ru": "Поле глубины замера",
+      "en": "Survey depth field"
+     },
+     "hint": {
+      "ru": "Поле глубины замера по стволу, метры от устья, не отметка и не глубина по вертикали.",
+      "en": "The field of the survey depth along the hole, metres from the collar, not an elevation and not a vertical depth."
+     },
+     "default": "depth",
+     "parent": "SURVEY",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "S_AZI",
+     "kind": "field",
+     "label": {
+      "ru": "Поле азимута",
+      "en": "Azimuth field"
+     },
+     "hint": {
+      "ru": "Поле азимута, градусы от севера сетки по часовой стрелке. Сближение меридианов не учитывается.",
+      "en": "The azimuth field, degrees clockwise from grid north. The meridian convergence is not applied."
+     },
+     "default": "azimuth",
+     "parent": "SURVEY",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "S_ANGLE",
+     "kind": "field",
+     "label": {
+      "ru": "Поле угла",
+      "en": "Angle field"
+     },
+     "hint": {
+      "ru": "Поле угла наклона, в соглашении, выбранном ниже.",
+      "en": "The inclination angle field, in the convention chosen below."
+     },
+     "default": "dip",
+     "parent": "SURVEY",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "CONVENTION",
+     "kind": "enum",
+     "label": {
+      "ru": "Как записан угол",
+      "en": "How the angle is recorded"
+     },
+     "hint": {
+      "ru": "Как записан угол. Перепутанное соглашение уводит ствол вверх или кладёт его горизонтально, поэтому проверьте по одной известной скважине.",
+      "en": "How the angle is recorded. A wrong convention sends the trace upwards or lays it flat, so check it on one known hole."
+     },
+     "default": 0,
+     "options": [
+      {
+       "ru": "От горизонта, вниз отрицательный (-90 - отвесно вниз)",
+       "en": "From the horizontal, down negative (-90 - straight down)"
+      },
+      {
+       "ru": "От горизонта, вниз положительный (90 - отвесно вниз)",
+       "en": "From the horizontal, down positive (90 - straight down)"
+      },
+      {
+       "ru": "Зенитный, от вертикали (0 - отвесно вниз)",
+       "en": "Zenith angle, from the vertical (0 - straight down)"
+      }
+     ]
+    },
+    {
+     "key": "STEP",
+     "kind": "number",
+     "label": {
+      "ru": "Шаг узлов ствола, м",
+      "en": "Trace node step, m"
+     },
+     "hint": {
+      "ru": "Шаг узлов ствола вдоль дуги, метры. По узлам ствол рисуется, и по ним же 2.18 находит точки на глубинах.",
+      "en": "The step of trace nodes along the arc, metres. The trace is drawn by the nodes, and 2.18 finds points at depths by them too."
+     },
+     "default": 1.0,
+     "minimum": 0.01,
+     "advanced": true
+    },
+    {
+     "key": "OUTPUT",
+     "kind": "sink",
+     "label": {
+      "ru": "Стволы скважин",
+      "en": "Borehole traces"
+     },
+     "hint": {
+      "ru": "Стволы скважин: линии с настоящими Z от устья до забоя. Длина линии равна глубине по стволу, поэтому 2.18 режет её на интервалы без таблицы глубин.",
+      "en": "Borehole traces: lines with true Z from the collar to the end of hole. The line length equals the depth along the hole, so 2.18 cuts it into intervals without a depth table."
+     },
+     "geometry": "lines"
+    }
+   ],
+   "messages": [
+    {
+     "ru": "точка",
+     "en": "point"
+    },
+    {
+     "ru": "Поля устьев: скважина %s, глубина %s, X %s, Y %s, Z %s. Инклинометрия: скважина %s, глубина %s, азимут %s, угол %s.",
+     "en": "Collar fields: hole %s, depth %s, X %s, Y %s, Z %s. Survey: hole %s, depth %s, azimuth %s, angle %s."
+    },
+    {
+     "ru": "Стволов: %d.",
+     "en": "Traces: %d."
+    },
+    {
+     "ru": "Не найдено поле номера скважины в устьях: выберите его.",
+     "en": "No hole ID field found in the collars: choose it."
+    },
+    {
+     "ru": "Направление у устья: азимут %s, угол %s.",
+     "en": "Direction at the collar: azimuth %s, angle %s."
+    },
+    {
+     "ru": "Скважин без инклинометрии: %d. Они построены отвесными, а без глубины забоя пропущены.",
+     "en": "Holes without a survey: %d. They are built vertical, and skipped without an end-of-hole depth."
+    },
+    {
+     "ru": "Устьев без отметки: %d. Они поставлены на ноль: выберите поле отметки или дайте устьям Z.",
+     "en": "Collars without an elevation: %d. They are placed at zero: choose the elevation field or give the collars Z."
+    },
+    {
+     "ru": "Пропущено устьев: %d (нет номера, координат или глубины).",
+     "en": "Collars skipped: %d (no ID, coordinates or depth)."
+    },
+    {
+     "ru": "Инклинометрия без устья: %d скважин, например %s.",
+     "en": "Survey without a collar: %d holes, for example %s."
+    },
+    {
+     "ru": "У инклинометрии не выбраны поля: скважина, глубина, азимут и угол.",
+     "en": "The survey fields are not chosen: hole, depth, azimuth and angle."
+    },
+    {
+     "ru": "Строк инклинометрии с пустыми или нечисловыми значениями: %d, они пропущены.",
+     "en": "Survey rows with empty or non-numeric values: %d, they are skipped."
+    }
+   ]
+  },
+  {
+   "code": "2.18",
+   "name": "hole_intervals",
+   "title": {
+    "ru": "Интервалы по стволу скважины",
+    "en": "Intervals along a borehole"
+   },
+   "group": "2",
+   "help": {
+    "ru": "Режет стволы скважин на интервалы.\n\nТри способа. Интервалы из таблицы: каждая строка опробования ложится на ствол от своей глубины до своей со всеми полями. Равные интервалы: ствол режется на пробы заданной длины от устья. Композиты: так же, но в каждом интервале считается среднее по таблице, взвешенное по длине пересечения. Простое среднее завысило бы короткую богатую пробу.\n\nКомпозит без единой пробы получает пустое значение, а не ноль, поле cover показывает опробованную долю его длины.\n\nНа выходе куски ствола с Z и середины интервалов точками. Куски показывают в сцене трубами, точки идут в интерполяцию 2.02, 2.06 и 2.07.",
+    "en": "Cuts borehole traces into intervals.\n\nThree modes. Intervals from the table: every sample row lands on the trace from its depth to its depth with all its fields. Equal intervals: the trace is cut into samples of the given length from the collar. Composites: the same, but each interval gets the mean of the table weighted by the length of overlap. A plain mean would overstate a short rich sample.\n\nA composite without a single sample gets an empty value, not a zero, and the cover field shows the sampled share of its length.\n\nThe outputs are pieces of the trace with Z and the interval midpoints as points. The pieces are shown in the scene as tubes, the points go into the interpolation of 2.02, 2.06 and 2.07."
+   },
+   "params": [
+    {
+     "key": "TRACES",
+     "kind": "lines",
+     "label": {
+      "ru": "Стволы скважин (линии с Z)",
+      "en": "Borehole traces (lines with Z)"
+     },
+     "hint": {
+      "ru": "Стволы скважин: линии с Z от устья к забою, например из 2.17. Глубина по стволу считается длиной линии от её начала.",
+      "en": "Borehole traces: lines with Z from the collar to the end of hole, for example from 2.17. The depth along the hole is the line length from its start."
+     }
+    },
+    {
+     "key": "T_HOLE",
+     "kind": "field",
+     "label": {
+      "ru": "Поле номера скважины в стволах",
+      "en": "Hole ID field in the traces"
+     },
+     "hint": {
+      "ru": "Поле номера скважины в стволах. По нему ствол сводится со строками таблицы интервалов.",
+      "en": "The hole ID field in the traces. It matches a trace with the rows of the interval table."
+     },
+     "default": "hole",
+     "parent": "TRACES",
+     "optional": true
+    },
+    {
+     "key": "MODE",
+     "kind": "enum",
+     "label": {
+      "ru": "Как резать",
+      "en": "How to cut"
+     },
+     "hint": {
+      "ru": "Интервалы из таблицы кладут каждую строку опробования на ствол как есть. Равные интервалы режут ствол на пробы заданной длины от устья до забоя. Композиты режут так же и считают в каждом среднее по таблице, взвешенное по длине.",
+      "en": "Intervals from the table put every sample row on the trace as it is. Equal intervals cut the trace into samples of the given length from the collar to the end of hole. Composites cut the same way and compute in each a length-weighted mean of the table."
+     },
+     "default": 0,
+     "options": [
+      {
+       "ru": "Интервалы из таблицы",
+       "en": "Intervals from the table"
+      },
+      {
+       "ru": "Равные интервалы заданной длины",
+       "en": "Equal intervals of the given length"
+      },
+      {
+       "ru": "Композиты по длине из таблицы",
+       "en": "Length-weighted composites from the table"
+      }
+     ]
+    },
+    {
+     "key": "TABLE",
+     "kind": "table",
+     "label": {
+      "ru": "Таблица интервалов",
+      "en": "Interval table"
+     },
+     "hint": {
+      "ru": "Таблица интервалов: скважина, от, до и значения. Нужна для интервалов из таблицы и для композитов.",
+      "en": "The interval table: hole, from, to and values. Needed for intervals from the table and for composites."
+     },
+     "optional": true
+    },
+    {
+     "key": "F_HOLE",
+     "kind": "field",
+     "label": {
+      "ru": "Поле номера скважины в таблице",
+      "en": "Hole ID field in the table"
+     },
+     "hint": {
+      "ru": "Поле номера скважины в таблице интервалов. Номера сводятся со стволами как текст.",
+      "en": "The hole ID field in the interval table. IDs are matched with the traces as text."
+     },
+     "default": "hole",
+     "parent": "TABLE",
+     "optional": true
+    },
+    {
+     "key": "F_FROM",
+     "kind": "field",
+     "label": {
+      "ru": "Поле начала интервала",
+      "en": "Interval from field"
+     },
+     "hint": {
+      "ru": "Поле начала интервала, метры по стволу от устья, не отметка.",
+      "en": "The field of the interval start, metres along the hole from the collar, not an elevation."
+     },
+     "default": "from_m",
+     "parent": "TABLE",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "F_TO",
+     "kind": "field",
+     "label": {
+      "ru": "Поле конца интервала",
+      "en": "Interval to field"
+     },
+     "hint": {
+      "ru": "Поле конца интервала, метры по стволу. Строка с концом не дальше начала пропускается.",
+      "en": "The field of the interval end, metres along the hole. A row whose end is not beyond its start is skipped."
+     },
+     "default": "to_m",
+     "parent": "TABLE",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "VALUES",
+     "kind": "field",
+     "label": {
+      "ru": "Поля для композитов (пусто - все числовые)",
+      "en": "Fields for composites (empty - all numeric)"
+     },
+     "hint": {
+      "ru": "Числовые поля для композитов. Пусто - все числовые, кроме начала и конца интервала.",
+      "en": "Numeric fields for composites. Empty - all numeric ones except the interval start and end."
+     },
+     "parent": "TABLE",
+     "optional": true,
+     "numeric": true,
+     "multiple": true
+    },
+    {
+     "key": "LENGTH",
+     "kind": "number",
+     "label": {
+      "ru": "Длина интервала, м",
+      "en": "Interval length, m"
+     },
+     "hint": {
+      "ru": "Длина равного интервала или композита, метры. Последний интервал до забоя короче, если длина не делится нацело.",
+      "en": "The length of an equal interval or a composite, metres. The last interval to the end of hole is shorter when the length does not divide evenly."
+     },
+     "default": 1.0,
+     "minimum": 0.01
+    },
+    {
+     "key": "OUTPUT",
+     "kind": "sink",
+     "label": {
+      "ru": "Интервалы",
+      "en": "Intervals"
+     },
+     "hint": {
+      "ru": "Интервалы: куски ствола с Z от начала до конца интервала, с полями от, до, длина и значениями. В сцене их показывают трубами с толщиной или цветом по содержанию.",
+      "en": "Intervals: pieces of the trace with Z from the start to the end of the interval, with the from, to, length and value fields. In the scene they are shown as tubes with the thickness or colour by grade."
+     },
+     "geometry": "lines"
+    },
+    {
+     "key": "OUTPUT_POINTS",
+     "kind": "sink",
+     "label": {
+      "ru": "Середины интервалов",
+      "en": "Interval midpoints"
+     },
+     "hint": {
+      "ru": "Середины интервалов: точки с Z и теми же полями. Это вход для 2.02, 2.06 и 2.07.",
+      "en": "Interval midpoints: points with Z and the same fields. This is the input for 2.02, 2.06 and 2.07."
+     },
+     "geometry": "points"
+    }
+   ],
+   "messages": [
+    {
+     "ru": "Стволов: %d, интервалов: %d.",
+     "en": "Traces: %d, intervals: %d."
+    },
+    {
+     "ru": "Не найдено поле номера скважины в стволах: выберите его.",
+     "en": "No hole ID field found in the traces: choose it."
+    },
+    {
+     "ru": "Поля таблицы: скважина %s, от %s, до %s.",
+     "en": "Table fields: hole %s, from %s, to %s."
+    },
+    {
+     "ru": "Для этого способа нужна таблица интервалов с полями скважины, начала и конца.",
+     "en": "This mode needs an interval table with the hole, from and to fields."
+    },
+    {
+     "ru": "Стволов с отметками не нашлось.",
+     "en": "No traces with elevations were found."
+    },
+    {
+     "ru": "Строк таблицы без начала и конца или с концом не дальше начала: %d, они пропущены.",
+     "en": "Table rows without a start and end or with the end not beyond the start: %d, they are skipped."
+    },
+    {
+     "ru": "Интервалов глубже забоя: %d. Они обрезаны по забою: проверьте глубину скважины в устьях.",
+     "en": "Intervals deeper than the end of hole: %d. They are cut at the end of hole: check the hole depth in the collars."
+    },
+    {
+     "ru": "Интервалы без ствола: %d скважин, например %s.",
+     "en": "Intervals without a trace: %d holes, for example %s."
+    }
+   ]
+  },
+  {
    "code": "2.23",
    "name": "fill_to_volume",
    "title": {

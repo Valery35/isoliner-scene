@@ -7,8 +7,8 @@
 use std::collections::BTreeMap;
 
 use tool_spec::{
-    Arg, Body, FieldType, Message, OutFeature, OutValue, Output, Report, ToolError, Value, Values,
-    attr_number,
+    Arg, Body, FieldType, Geom, Message, OutFeature, OutValue, Output, Report, ToolError, Value,
+    Values, attr_number,
 };
 
 use crate::{choice, field, int, num, or, shell, sweep};
@@ -95,10 +95,10 @@ pub fn run(
             let (holes, _pinch) = shell::defects(&sw.verts, &sw.faces);
             let vol = sweep::signed_volume(&sw.verts, &sw.faces);
             out.features.push(OutFeature {
-                body: Body {
+                geom: Geom::Mesh(Body {
                     verts: sw.verts,
                     faces: sw.faces,
-                },
+                }),
                 source: Some(ln.id),
                 values: vec![
                     OutValue::Double(sw.length),
@@ -106,6 +106,7 @@ pub fn run(
                     OutValue::Double(vol),
                     OutValue::Int(i64::from(holes == 0)),
                 ],
+                named: Vec::new(),
             });
             n_body += 1;
             vol_sum += vol;

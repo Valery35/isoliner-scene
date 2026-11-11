@@ -291,39 +291,90 @@ mod tests {
         let runs: J =
             serde_json::from_slice(&std::fs::read(fixture("tool_runs.json")).unwrap()).unwrap();
         let mut n = 0;
+        let mut want_n = 0;
         for r in runs["runs"].as_array().unwrap() {
             let name = r["tool"].as_str().unwrap();
             let tool = cat.tool(name).unwrap();
-            let layer = tool
-                .params
-                .iter()
-                .find(|p| {
-                    matches!(
-                        p.kind,
-                        tool_spec::ParamKind::Lines | tool_spec::ParamKind::Mesh
-                    )
-                })
-                .unwrap();
+            // инструмент без расчёта на Rust - его прогоны позже
+            if tools::run_fn(name).is_none() {
+                continue;
+            }
+            want_n += 1;
             let mut values = r["values"].clone();
-            values[&layer.key] = r["input"].clone();
+            // вход - по ключам полей, или один слой первого поля-слоя
+            let input = &r["input"];
+            let by_key = input
+                .as_object()
+                .is_some_and(|o| o.keys().all(|k| tool.param(k).is_some()));
+            if by_key {
+                for (k, v) in input.as_object().unwrap() {
+                    values[k] = v.clone();
+                }
+            } else {
+                let layer = tool
+                    .params
+                    .iter()
+                    .find(|p| {
+                        matches!(
+                            p.kind,
+                            tool_spec::ParamKind::Lines | tool_spec::ParamKind::Mesh
+                        )
+                    })
+                    .unwrap();
+                values[&layer.key] = input.clone();
+            }
             let got = ask(
                 &cat,
                 json!({"id": "run", "lang": "ru", "params": {"tool": name, "values": values}}),
             );
             let ok = &got["ok"];
             assert!(ok.is_object(), "{name}: {got}");
-            let out = &ok["outputs"]["OUTPUT"]["features"];
-            let want = r["output"]["features"].as_array().unwrap();
-            assert_eq!(out.as_array().unwrap().len(), want.len(), "{name}");
-            for (g, w) in out.as_array().unwrap().iter().zip(want) {
-                assert_eq!(g["source"], w["source"], "{name}");
-                if let Some(nv) = w["n_verts"].as_u64() {
-                    assert_eq!(g["verts"].as_array().unwrap().len() as u64, nv);
-                    assert_eq!(
-                        g["faces"].as_array().unwrap().len() as u64,
-                        w["n_faces"].as_u64().unwrap()
-                    );
-                }
+            // выход один - он и есть OUTPUT, иначе по ключам
+            let pairs: Vec<(&J, &J)> = if r["output"].get("features").is_some() {
+                vec![(&ok["outputs"]["OUTPUT"], &r["output"])]
+            } else {
+                r["output"]
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .map(|(k, w)| (&ok["outputs"][k], w))
+                    .collect()
+            };
+            for (got_out, want_out) in pairs {
+                check_output(name, r, got_out, want_out);
+            }
+            let report = ok["report"].as_array().unwrap();
+            assert_eq!(
+                report.len(),
+                r["report"].as_array().unwrap().len(),
+                "{name}"
+            );
+            if name != "fill_to_volume" {
+                assert_eq!(report, r["report"].as_array().unwrap(), "{name}");
+            }
+            n += 1;
+        }
+        assert_eq!(n, want_n);
+        assert!(n >= 10);
+    }
+
+    /// Выход расширения против выхода модуля: число объектов, тела,
+    /// строки слово в слово, числа - в допуске прогона.
+    fn check_output(name: &str, r: &J, got: &J, want: &J) {
+        let out = &got["features"];
+        let want = want["features"].as_array().unwrap();
+        assert_eq!(out.as_array().unwrap().len(), want.len(), "{name}");
+        for (g, w) in out.as_array().unwrap().iter().zip(want) {
+            assert_eq!(g["source"], w["source"], "{name}");
+            if let Some(nv) = w["n_verts"].as_u64() {
+                let geo = &g["geometry"];
+                assert_eq!(geo["verts"].as_array().unwrap().len() as u64, nv);
+                assert_eq!(
+                    geo["faces"].as_array().unwrap().len() as u64,
+                    w["n_faces"].as_u64().unwrap()
+                );
+            }
+            {
                 // строки слово в слово, числа - в допуске прогона
                 let tol = r["tolerance"]["volume_rel"].as_f64().unwrap_or(1e-9);
                 let lvl = r["tolerance"]["level"].as_f64();
@@ -347,18 +398,7 @@ mod tests {
                     }
                 }
             }
-            let report = ok["report"].as_array().unwrap();
-            assert_eq!(
-                report.len(),
-                r["report"].as_array().unwrap().len(),
-                "{name}"
-            );
-            if name == "sweep_body" {
-                assert_eq!(report, r["report"].as_array().unwrap(), "{name}");
-            }
-            n += 1;
         }
-        assert_eq!(n, 10);
     }
 
     #[test]

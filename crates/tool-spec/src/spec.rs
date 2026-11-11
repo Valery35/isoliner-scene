@@ -33,18 +33,28 @@ impl Text {
     }
 }
 
-/// Вид поля.
+/// Вид поля, как `KINDS` в `toolspec.py` модуля.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ParamKind {
     /// Слой полигонов с Z одним телом.
     Mesh,
+    /// Слой тел: тело на объект.
+    Meshes,
     /// Линии.
     Lines,
     /// Точки.
     Points,
+    /// Объекты любой геометрии.
+    Features,
+    /// Таблица или слой любой геометрии: строки с атрибутами.
+    Table,
     /// Поле родительского слоя.
     Field,
+    /// Строка.
+    String,
+    /// Да или нет.
+    Bool,
     /// Число с дробной частью.
     Number,
     /// Целое.
@@ -78,6 +88,12 @@ pub struct Param {
     pub numeric: bool,
     #[serde(default)]
     pub geometry: Option<String>,
+    /// Поле из дополнительных параметров.
+    #[serde(default)]
+    pub advanced: bool,
+    /// Несколько значений: номера пунктов или имена полей списком.
+    #[serde(default)]
+    pub multiple: bool,
 }
 
 /// Описание инструмента.
@@ -139,10 +155,33 @@ impl Tool {
             let v = match p.kind {
                 ParamKind::Number => d.and_then(serde_json::Value::as_f64).map(Value::Number),
                 ParamKind::Integer => d.and_then(serde_json::Value::as_i64).map(Value::Integer),
+                ParamKind::Enum if p.multiple => Some(Value::Enums(
+                    d.and_then(serde_json::Value::as_array)
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(serde_json::Value::as_u64)
+                                .map(|i| i as usize)
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                )),
                 ParamKind::Enum => d
                     .and_then(serde_json::Value::as_u64)
                     .map(|i| Value::Enum(i as usize)),
-                ParamKind::Field => Some(Value::Field(String::new())),
+                ParamKind::Field if p.multiple => Some(Value::Fields(Vec::new())),
+                ParamKind::Field => Some(Value::Field(
+                    d.and_then(serde_json::Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                )),
+                ParamKind::String => Some(Value::Str(
+                    d.and_then(serde_json::Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                )),
+                ParamKind::Bool => Some(Value::Bool(
+                    d.and_then(serde_json::Value::as_bool).unwrap_or(false),
+                )),
                 _ => None,
             };
             if let Some(v) = v {
@@ -183,21 +222,39 @@ impl Tool {
             {
                 bad.push(format!("{label}: {x} вне пределов"));
             }
-            if let Value::Enum(i) = v
-                && *i >= p.options.len()
-            {
-                bad.push(format!("{label}: пункта {i} нет"));
+            let picked: &[usize] = match v {
+                Value::Enum(i) => std::slice::from_ref(i),
+                Value::Enums(list) => list,
+                _ => &[],
+            };
+            for i in picked {
+                if *i >= p.options.len() {
+                    bad.push(format!("{label}: пункта {i} нет"));
+                }
             }
             let fits = matches!(
                 (p.kind, v),
                 (ParamKind::Mesh, Value::Mesh(_))
+                    | (ParamKind::Meshes, Value::Meshes(_))
                     | (ParamKind::Lines, Value::Lines(_))
                     | (ParamKind::Points, Value::Points(_))
-                    | (ParamKind::Field, Value::Field(_))
+                    | (ParamKind::Features, Value::Features(_))
+                    | (ParamKind::Table, Value::Table(_))
+                    | (ParamKind::String, Value::Str(_))
+                    | (ParamKind::Bool, Value::Bool(_))
                     | (ParamKind::Number, Value::Number(_))
                     | (ParamKind::Integer, Value::Integer(_))
-                    | (ParamKind::Enum, Value::Enum(_))
-            );
+            ) || match (p.kind, v) {
+                (ParamKind::Field, Value::Field(_)) | (ParamKind::Enum, Value::Enum(_)) => {
+                    !p.multiple
+                }
+                (ParamKind::Field, Value::Fields(_)) | (ParamKind::Enum, Value::Enums(_)) => {
+                    p.multiple
+                }
+                // необязательный выход приходит отметкой «заказан»
+                (ParamKind::Sink, Value::Bool(_)) => true,
+                _ => false,
+            };
             if !fits {
                 bad.push(format!("{label}: значение не того вида"));
             }

@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use tool_spec::{
-    Body, FieldType, Message, OutFeature, OutValue, Output, Report, ToolError, Value, Values,
+    Body, FieldType, Geom, Message, OutFeature, OutValue, Output, Report, ToolError, Value, Values,
 };
 
 use crate::{choice, fill, num, shell, sweep, voxel};
@@ -147,7 +147,7 @@ pub fn run(
         ));
     } else {
         out.features.push(OutFeature {
-            body,
+            geom: Geom::Mesh(body),
             source: None,
             values: vec![
                 OutValue::Str(if from_top { "top" } else { "bottom" }.into()),
@@ -156,6 +156,7 @@ pub fn run(
                 OutValue::Double(share),
                 OutValue::Double(full),
             ],
+            named: Vec::new(),
         });
     }
     Ok(BTreeMap::from([("OUTPUT".to_string(), out)]))

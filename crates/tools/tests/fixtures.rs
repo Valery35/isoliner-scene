@@ -156,13 +156,20 @@ fn sweep_body_runs_like_the_module() {
         assert_eq!(o.features.len(), want.len());
         for (g, w) in o.features.iter().zip(want) {
             assert_eq!(g.source, w["source"].as_i64());
-            assert_eq!(g.body.verts.len() as u64, w["n_verts"].as_u64().unwrap());
-            assert_eq!(g.body.faces.len() as u64, w["n_faces"].as_u64().unwrap());
+            assert_eq!(
+                g.body().unwrap().verts.len() as u64,
+                w["n_verts"].as_u64().unwrap()
+            );
+            assert_eq!(
+                g.body().unwrap().faces.len() as u64,
+                w["n_faces"].as_u64().unwrap()
+            );
             for (a, b) in g.values.iter().zip(w["values"].as_array().unwrap()) {
                 match a {
                     OutValue::Double(x) => assert!(rel(*x, b.as_f64().unwrap()) < 1e-9),
                     OutValue::Int(i) => assert_eq!(*i, b.as_i64().unwrap()),
                     OutValue::Str(s) => assert_eq!(s, b.as_str().unwrap()),
+                    OutValue::Null => assert!(b.is_null()),
                 }
             }
         }
@@ -217,8 +224,11 @@ fn fill_runs_like_the_module() {
             assert!(rel(num(i), w[i].as_f64().unwrap()) < tol["volume_rel"].as_f64().unwrap());
         }
         // заполненная часть - замкнутое тело с объёмом около заданного
-        assert_eq!(shell::defects(&g.body.verts, &g.body.faces).0, 0);
-        let vol = sweep::signed_volume(&g.body.verts, &g.body.faces);
+        assert_eq!(
+            shell::defects(&g.body().unwrap().verts, &g.body().unwrap().faces).0,
+            0
+        );
+        let vol = sweep::signed_volume(&g.body().unwrap().verts, &g.body().unwrap().faces);
         assert!(vol > 0.0 && rel(vol, num(2)) < 0.15, "{vol} {}", num(2));
         assert_eq!(rep.lines.len(), r["report"].as_array().unwrap().len());
         n += 1;

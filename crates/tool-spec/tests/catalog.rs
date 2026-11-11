@@ -35,6 +35,23 @@ fn reads_the_module_catalog() {
         "Open bodies: %d."
     );
     assert_eq!(sweep.translate("Круг", Lang::En), "Circle");
+    // новые виды полей модуля: слой тел, таблица, строка, да-нет,
+    // несколько пунктов
+    let zonal = cat.tool("zonal_shell_stats").unwrap();
+    assert_eq!(zonal.param("SHELLS").unwrap().kind, ParamKind::Meshes);
+    assert_eq!(zonal.param("INPUT").unwrap().kind, ParamKind::Features);
+    assert_eq!(zonal.param("NAME").unwrap().kind, ParamKind::String);
+    assert_eq!(zonal.param("OVERWRITE").unwrap().kind, ParamKind::Bool);
+    assert!(zonal.param("STATS").unwrap().multiple);
+    let holes = cat.tool("desurvey_holes").unwrap();
+    assert_eq!(holes.param("COLLARS").unwrap().kind, ParamKind::Table);
+    let d = zonal.defaults();
+    assert_eq!(d.get("OVERWRITE"), Some(&Value::Bool(false)));
+    assert!(matches!(d.get("STATS"), Some(Value::Enums(_))));
+    let codes: Vec<&str> = cat.tools.iter().map(|t| t.code.as_str()).collect();
+    for c in ["2.11", "2.12", "2.14", "2.17", "2.18", "2.23", "2.24"] {
+        assert!(codes.contains(&c), "{c}");
+    }
     for t in &cat.tools {
         for p in &t.params {
             assert!(!p.hint.ru.is_empty() && !p.hint.en.is_empty());
