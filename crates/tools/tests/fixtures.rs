@@ -236,6 +236,93 @@ fn fill_runs_like_the_module() {
     assert_eq!(n, 4);
 }
 
+fn body_of(v: &J) -> Body {
+    Body {
+        verts: pts(&v["verts"]),
+        faces: v["faces"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| [0, 1, 2].map(|k| f[k].as_u64().unwrap() as u32))
+            .collect(),
+    }
+}
+
+fn want_report(r: &J) -> Vec<(String, String)> {
+    r["report"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| (x[0].as_str().unwrap().into(), x[1].as_str().unwrap().into()))
+        .collect()
+}
+
+/// Значения объекта выхода против модуля: целые и строки точно,
+/// числа - в относительном допуске.
+fn same_values(got: &[OutValue], want: &J, tol: f64, tag: &str) {
+    let want = want.as_array().unwrap();
+    assert_eq!(got.len(), want.len(), "{tag}");
+    for (a, b) in got.iter().zip(want) {
+        match a {
+            OutValue::Double(x) => assert!(rel(*x, b.as_f64().unwrap()) < tol, "{tag}: {x} {b}"),
+            OutValue::Int(i) => assert_eq!(*i, b.as_i64().unwrap(), "{tag}"),
+            OutValue::Str(s) => assert_eq!(s, b.as_str().unwrap(), "{tag}"),
+            OutValue::Null => assert!(b.is_null(), "{tag}"),
+        }
+    }
+}
+
+#[test]
+fn boolean_runs_like_the_module() {
+    let runs = json("tool_runs.json");
+    let run = run_fn("boolean_shells").unwrap();
+    let mut n = 0;
+    for r in runs["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["tool"] == "boolean_shells")
+    {
+        let mut vals = values_of(&r["values"]);
+        vals.insert(
+            "OP".into(),
+            Value::Enum(r["values"]["OP"].as_u64().unwrap() as usize),
+        );
+        vals.insert(
+            "SHELL_A".into(),
+            Value::Mesh(body_of(&r["input"]["SHELL_A"])),
+        );
+        vals.insert(
+            "SHELL_B".into(),
+            Value::Mesh(body_of(&r["input"]["SHELL_B"])),
+        );
+        let mut rep = VecReport::default();
+        let out = run(&vals, &mut rep).unwrap();
+        let o = &out["OUTPUT"];
+        let want = r["output"]["features"].as_array().unwrap();
+        assert_eq!(o.features.len(), want.len());
+        for (g, w) in o.features.iter().zip(want) {
+            let b = g.body().unwrap();
+            let tag = format!("{} {}", r["values"]["OP"], w["values"]);
+            assert_eq!(
+                b.verts.len() as u64,
+                w["n_verts"].as_u64().unwrap(),
+                "{tag}"
+            );
+            assert_eq!(
+                b.faces.len() as u64,
+                w["n_faces"].as_u64().unwrap(),
+                "{tag}"
+            );
+            same_values(&g.values, &w["values"], 1e-9, &tag);
+            assert_eq!(shell::defects(&b.verts, &b.faces).0, 0);
+        }
+        assert_eq!(report_texts(&rep), want_report(r));
+        n += 1;
+    }
+    assert_eq!(n, 3);
+}
+
 #[test]
 fn open_shell_is_refused() {
     let prof = sweep::profile("rect", 10.0, Some(10.0), None, 16).unwrap();

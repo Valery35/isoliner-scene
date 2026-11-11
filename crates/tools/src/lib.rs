@@ -8,12 +8,16 @@
 //! полями, выходами и сообщениями. Сверка - `fixtures/tool_runs.json`
 //! (прогоны модуля) и `fixtures/sweep.json`.
 //!
+//! - [`boolean_shells`] - 2.11 Булевы операции с оболочками, ядро
+//!   в [`boolean`] и [`voxel`];
 //! - [`sweep_body`] - 2.24 Тело вдоль выработки, ядро в [`sweep`];
 //! - [`fill_volume`] - 2.23 Заполнение тела до объёма, ядро в [`fill`]
 //!   и [`voxel`].
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod boolean;
+pub mod boolean_shells;
 pub mod fill;
 pub mod fill_volume;
 pub mod shell;
@@ -30,6 +34,7 @@ pub type RunFn = fn(&Values, &mut dyn Report) -> Result<BTreeMap<String, Output>
 
 /// Расчёты по имени Processing.
 pub const RUNS: &[(&str, RunFn)] = &[
+    ("boolean_shells", boolean_shells::run),
     ("fill_to_volume", fill_volume::run),
     ("sweep_body", sweep_body::run),
 ];
