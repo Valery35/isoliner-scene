@@ -16,8 +16,8 @@
 | | Приложение | Папка | Язык, лицензия | Правила |
 |---|---|---|---|---|
 | 1 | Модуль QGIS Isoliner3D | `C:\Dev\qgis-isoliner3d` | Python, GPL-2.0-or-later | `AGENTS.md` и `ARCHITECTURE.md` там |
-| 2 | Isoliner Scene | `C:\Dev\isoliner-scene` | Rust, Apache 2.0 (ждёт подтверждения) | `AGENTS.md` здесь |
-| 3 | Isoliner3D для RustGIS | `C:\Dev\isoliner-scene`, `apps/isoliner-rustgis` | Rust, Apache 2.0 (ждёт подтверждения) | `AGENTS.md` здесь |
+| 2 | Isoliner Scene | `C:\Dev\isoliner-scene` | Rust, Apache 2.0 | `AGENTS.md` здесь |
+| 3 | Isoliner3D для RustGIS | `C:\Dev\isoliner-scene`, `apps/isoliner-rustgis` | Rust, Apache 2.0 | `AGENTS.md` здесь |
 
 Связь между ними - только файлы: пакет сцены `.i3dscene`
 и `tools.json`. Модуль их пишет, Rust читает. Образцы - `fixtures/`
@@ -115,8 +115,9 @@
 Следующий этап - по выбору автора: видео (этап 2) или обрезка
 и разрез (этап 3).
 
-Открытые решения автора - в `doc/PLAN.md`: лицензия, хранилище
-на GitHub, способ записи видео.
+Хранилище - `github.com/Valery35/isoliner-scene`, лицензия Apache 2.0
+(решения автора от 12 ноября 2026 года). Открытое решение автора -
+способ записи видео, `doc/PLAN.md`.
 
 ## 3. Isoliner3D для RustGIS
 
