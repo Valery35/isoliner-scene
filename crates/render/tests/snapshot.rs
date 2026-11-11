@@ -98,6 +98,21 @@ fn point_marks_render_in_screen_pixels() {
             .any(|p| (0..3).all(|k| p[k].abs_diff(want[k]) <= 2)),
         "нет цвета {want:?}"
     );
+
+    // кадр всей сцены с пробами - для сверки со снимком окна модуля
+    for p in scene.parts.iter_mut() {
+        p.visible = true;
+    }
+    look.background = BG_GRADIENT;
+    renderer.render(&device, &queue, &target, &scene, &look);
+    let rgba = read_rgba(&device, &queue, &target).unwrap();
+    let dir = format!("{}/../../target/snapshots", env!("CARGO_MANIFEST_DIR"));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut ppm = format!("P6\n{} {}\n255\n", target.width, target.height).into_bytes();
+    for p in rgba.as_chunks::<4>().0 {
+        ppm.extend_from_slice(&p[..3]);
+    }
+    std::fs::write(format!("{dir}/scene_points.ppm"), ppm).unwrap();
 }
 
 #[test]
