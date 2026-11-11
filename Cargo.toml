@@ -11,6 +11,7 @@ members = [
     "crates/tools",
     "crates/render",
     "apps/isoliner-scene",
+    "apps/isoliner-rustgis",
 ]
 
 [workspace.package]

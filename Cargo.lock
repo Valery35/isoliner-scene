@@ -1033,6 +1033,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "isoliner-rustgis"
+version = "0.1.0"
+dependencies = [
+ "scene-format",
+ "serde_json",
+ "tool-spec",
+ "tools",
+]
+
+[[package]]
 name = "isoliner-scene"
 version = "0.1.0"
 dependencies = [

@@ -19,9 +19,12 @@ Isoliner Scene - сцена модуля Isoliner3D без QGIS. Програм�
 пишет окно просмотра Isoliner3D, и показывает его той же камерой: тела,
 линии, прозрачность, преувеличение, виды облёта.
 
-Второе назначение - крейты для RustGIS. Сцена (`scene-format`,
-`scene-core`, `render`) и инструменты (`tool-spec`, `tools`)
-подключаются к приложению `planetx-rustgis` из `C:\Dev\planetx-lite`.
+Второе назначение - Isoliner3D для RustGIS, приложение
+`apps/isoliner-rustgis` этого хранилища, решение автора от 12 ноября
+2026 года. Это расширение-процесс RustGIS: сцена `.i3dscene` в окне
+Isoliner Scene, инструменты 2.23 и 2.24 по tools.json. В RustPlanetX
+(`planetx-rustgis` из `C:\Dev\planetx-lite`) Isoliner3D не встраивается:
+там глобус PlanetX, одна функция - один дом.
 
 Заведён 12 ноября 2026 года по решению автора. Устройство уровней -
 `ARCHITECTURE.md` модуля Isoliner3D.
@@ -55,6 +58,7 @@ Isoliner Scene - сцена модуля Isoliner3D без QGIS. Програм�
 | `crates/tool-spec` | описания инструментов из tools.json, значения, отчёт, результат | serde |
 | `crates/tools` | расчёты инструментов: 2.23, 2.24 | tool-spec |
 | `apps/isoliner-scene` | окно: eframe и egui | все выше |
+| `apps/isoliner-rustgis` | расширение RustGIS: `rustgis-plugin`, `plugin.json`, команды `scene`, `tools`, `run` | scene-format, tool-spec, tools |
 
 Нижний слой не зависит от верхнего. `tool-spec` и `tools` не знают
 сцены, `scene-format` не знает камеры.
@@ -112,6 +116,11 @@ Isoliner Scene - сцена модуля Isoliner3D без QGIS. Програм�
 - `render`: кадр демо без окна. Нужна видеокарта или программная
   отрисовка (lavapipe, пакет `mesa-vulkan-drivers`). Без них тест
   пропускается с записью в журнал. Кадр - `target/snapshots/scene_demo.ppm`.
+- `isoliner-rustgis`: команды `plugin.json` совпадают с кодом, у каждой
+  строки есть перевод. Все прогоны `tool_runs.json`, поданные запросом
+  JSON, дают те же объекты, значения и сообщения, что модуль. Пакет
+  сцены читается до запуска окна, ошибка уходит в RustGIS. Порченый
+  ввод даёт ошибку, а не падение.
 
 ## Приёмка работы
 

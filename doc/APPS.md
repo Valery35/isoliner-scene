@@ -17,7 +17,7 @@
 |---|---|---|---|---|
 | 1 | Модуль QGIS Isoliner3D | `C:\Dev\qgis-isoliner3d` | Python, GPL-2.0-or-later | `AGENTS.md` и `ARCHITECTURE.md` там |
 | 2 | Isoliner Scene | `C:\Dev\isoliner-scene` | Rust, Apache 2.0 (ждёт подтверждения) | `AGENTS.md` здесь |
-| 3 | RustGIS | `C:\Dev\planetx-lite`, `apps/planetx-rustgis` | Rust, Apache 2.0 | `AGENTS.md` и `doc/PLAN.md` там |
+| 3 | Isoliner3D для RustGIS | `C:\Dev\isoliner-scene`, `apps/isoliner-rustgis` | Rust, Apache 2.0 (ждёт подтверждения) | `AGENTS.md` здесь |
 
 Связь между ними - только файлы: пакет сцены `.i3dscene`
 и `tools.json`. Модуль их пишет, Rust читает. Образцы - `fixtures/`
@@ -118,20 +118,19 @@
 Открытые решения автора - в `doc/PLAN.md`: лицензия, хранилище
 на GitHub, способ записи видео.
 
-## 3. RustGIS
+## 3. Isoliner3D для RustGIS
 
-`C:\Dev\planetx-lite`, приложение `apps/planetx-rustgis`. Свои правила
-в `AGENTS.md` там, их не нарушать. В частности: «одна функция - один
-дом», коммит в `main` без спроса только в случаях, названных там.
+Приложение `apps/isoliner-rustgis` этого хранилища, решение автора
+от 12 ноября 2026 года. Расширение-процесс RustGIS по образцу
+RustPlanetX: `isoliner-rustgis rustgis-plugin`, манифест
+`apps/isoliner-rustgis/plugin.json`. В `planetx-lite` ничего
+не подключается: RustPlanetX - глобус PlanetX, одна функция - один дом.
+Образец протокола - `planetx-lite`, `crates/ui/src/rustgislink.rs`
+и `crates/desktop/src/lib.rs`, манифест - `C:\Dev\rustplanetx\plugin.json`.
 
-Что сделать (этап 4 `doc/PLAN.md` здесь):
-
-1. Подключить крейты сцены (`scene-format`, `scene-core`, `render`)
-   к рабочему пространству `planetx-lite` зависимостью по пути
-   или по git. Версии wgpu, eframe, glam, zip уже совпадают.
-2. Вид сцены в RustGIS: части собираются из слоёв RustGIS.
-3. Окно инструмента по `tools.json` (`tool-spec`), расчёт из `tools`.
-   Первые - 2.23 и 2.24, уже сверены с модулем.
+Заготовка (шаг 1 этапа 4 `doc/PLAN.md`) сделана 12 ноября 2026 года:
+команды `scene`, `tools`, `run`, проверено без RustGIS. Дальше по плану -
+проверка в RustGIS, сессия со слоями проекта, окно инструмента.
 
 Решение о составе этапа и момент начала - за автором.
 

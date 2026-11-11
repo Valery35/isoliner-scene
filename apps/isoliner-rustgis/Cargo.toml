@@ -1,0 +1,22 @@
+# Isoliner Scene - сцена Isoliner3D без QGIS.
+# Copyright (C) 2026 ООО «Информ++». Лицензия Apache 2.0.
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "isoliner-rustgis"
+description = "Isoliner3D для RustGIS: расширение-процесс, сцена .i3dscene и инструменты 2.23, 2.24"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+serde_json.workspace = true
+scene-format.workspace = true
+tool-spec.workspace = true
+tools.workspace = true
+
+[lints]
+workspace = true
