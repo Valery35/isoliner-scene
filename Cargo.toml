@@ -1,0 +1,55 @@
+# Isoliner Scene - сцена Isoliner3D без QGIS.
+# Copyright (C) 2026 ООО «Информ++». Лицензия Apache 2.0.
+# SPDX-License-Identifier: Apache-2.0
+
+[workspace]
+resolver = "3"
+members = [
+    "crates/scene-format",
+    "crates/scene-core",
+    "crates/tool-spec",
+    "crates/tools",
+    "crates/render",
+    "apps/isoliner-scene",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+authors = ["ООО «Информ++»"]
+repository = "https://github.com/Valery35/isoliner-scene"
+
+[workspace.dependencies]
+scene-format = { path = "crates/scene-format" }
+scene-core = { path = "crates/scene-core" }
+tool-spec = { path = "crates/tool-spec" }
+tools = { path = "crates/tools" }
+render = { path = "crates/render" }
+# Версии как в PlanetX Lite: крейты сцены потом подключаются к RustGIS
+# из того же рабочего пространства, расхождение версий там недопустимо.
+wgpu = "30"
+glam = "0.30"
+bytemuck = { version = "1", features = ["derive"] }
+eframe = { version = "0.37", default-features = false, features = ["default_fonts", "wgpu", "wayland", "x11", "persistence"] }
+egui-wgpu = "0.37"
+pollster = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rfd = "0.17"
+sys-locale = "0.3"
+# Сжатие только на Rust, как в PlanetX Lite: собирается и под wasm32.
+zip = { version = "9.0.5", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+
+[profile.dev.package."*"]
+opt-level = 2

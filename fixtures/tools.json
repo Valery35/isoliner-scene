@@ -1,0 +1,402 @@
+{
+ "format": 1,
+ "module": "isoliner3d",
+ "version": "1.4.13",
+ "tools": [
+  {
+   "code": "2.23",
+   "name": "fill_to_volume",
+   "title": {
+    "ru": "Заполнение тела до объёма",
+    "en": "Fill a body up to a volume"
+   },
+   "group": "2",
+   "help": {
+    "ru": "Находит горизонтальный уровень, ниже которого внутри тела заданный объём, и выдаёт заполненную часть отдельным телом. Режим «сверху» - наоборот: уровень, выше которого внутри тела заданный объём.\n\nВопросы такие. До какой отметки поднимется вода, если в выработку зайдёт столько кубометров? Сколько войдёт в камеру до этой отметки? Где пройдёт подошва, если снять сверху такой объём?\n\nТело режется на вертикальные колонки по плану. В каждой колонке берутся отрезки внутри тела, и объём ниже уровня складывается из их частей ниже него. Пустоты между этажами тела в объём не идут: две камеры одна над другой заполняются по очереди, нижняя первой.\n\nТочность объёма ограничена шагом колонок, отметка уровня по вертикали точная. В журнал идут уровень, объём по колонкам и точный объём оболочки: по их расхождению видно, хватает ли шага.",
+    "en": "Finds the horizontal level below which the body holds the given volume and gives the filled part as a separate body. The «from the top» mode is the reverse: the level above which the body holds the given volume.\n\nThe questions are such. Up to what elevation does the water rise if so many cubic metres come into a working? How much goes into a chamber up to this elevation? Where does the floor pass if such a volume is taken off the top?\n\nThe body is cut into vertical columns over the plan. In each column the segments inside the body are taken, and the volume below the level adds up from their parts below it. Voids between the floors of a body do not count: two chambers one above the other fill in turn, the lower first.\n\nThe volume accuracy is limited by the column step, the elevation of the level is exact vertically. The log gets the level, the volume by columns and the exact volume of the shell: their difference shows whether the step is fine enough."
+   },
+   "params": [
+    {
+     "key": "SHELL",
+     "kind": "mesh",
+     "label": {
+      "ru": "Тело (полигоны с Z)",
+      "en": "Body (polygons with Z)"
+     },
+     "hint": {
+      "ru": "Замкнутое тело: выработка, камера, ёмкость, чаша карьера. Слой целиком идёт одним телом, как в 2.11. Такие тела дают кнопка оболочек окна просмотра, 2.04, 2.11, 2.13 и 2.15.",
+      "en": "A closed body: a working, a chamber, a tank, a pit bowl. The whole layer goes as one body, as in 2.11. Such bodies come from the shells button of the viewer, 2.04, 2.11, 2.13 and 2.15."
+     }
+    },
+    {
+     "key": "MODE",
+     "kind": "enum",
+     "label": {
+      "ru": "Откуда заполнять",
+      "en": "Fill from"
+     },
+     "hint": {
+      "ru": "Снизу - заполнение: вода, закладка, рассол поднимаются от дна. Сверху - срезка: уровень, выше которого внутри заданный объём, например вынимаемая часть тела.",
+      "en": "From the bottom is filling: water, backfill, brine rise from the floor. From the top is a cut: the level above which the body holds the given volume, for example the part taken out."
+     },
+     "default": 0,
+     "options": [
+      {
+       "ru": "Снизу (заполнение)",
+       "en": "From the bottom (fill)"
+      },
+      {
+       "ru": "Сверху (срезка)",
+       "en": "From the top (cut)"
+      }
+     ]
+    },
+    {
+     "key": "TARGET",
+     "kind": "number",
+     "label": {
+      "ru": "Объём",
+      "en": "Volume"
+     },
+     "hint": {
+      "ru": "Сколько заполнить: кубометры или доля тела в процентах, по полю ниже. Больше всего тела - тело заполняется целиком, и это пишется в журнал.",
+      "en": "How much to fill: cubic metres or a share of the body in per cent, by the field below. More than the whole body fills the body whole, and the log says so."
+     },
+     "default": 50.0,
+     "minimum": 0.0
+    },
+    {
+     "key": "UNIT",
+     "kind": "enum",
+     "label": {
+      "ru": "Объём задан в",
+      "en": "Volume given in"
+     },
+     "hint": {
+      "ru": "В чём задан объём. Проценты удобны, когда сам объём тела заранее неизвестен.",
+      "en": "What the volume is given in. Per cent are handy when the volume of the body is not known in advance."
+     },
+     "default": 0,
+     "options": [
+      {
+       "ru": "процентах объёма тела",
+       "en": "per cent of the body volume"
+      },
+      {
+       "ru": "кубометрах",
+       "en": "cubic metres"
+      }
+     ]
+    },
+    {
+     "key": "CELL",
+     "kind": "number",
+     "label": {
+      "ru": "Шаг колонок, м (0 - по охвату)",
+      "en": "Column step, m (0 - by the extent)"
+     },
+     "hint": {
+      "ru": "Шаг колонок в плане, м. Ноль - около 400 тысяч колонок по охвату тела. Точность объёма ограничена этим шагом, а отметка уровня считается точно: по вертикали ступенек нет. Расхождение с точным объёмом оболочки печатается.",
+      "en": "Column step over the plan, m. Zero gives about 400 thousand columns over the body extent. The volume accuracy is limited by this step, and the elevation of the level is exact: no steps vertically. The difference from the exact shell volume is printed."
+     },
+     "default": 0.0,
+     "minimum": 0.0
+    },
+    {
+     "key": "OUTPUT",
+     "kind": "sink",
+     "label": {
+      "ru": "Заполненная часть (тело)",
+      "en": "Filled part (body)"
+     },
+     "hint": {
+      "ru": "Заполненная часть телом из ячеек: крышка ровная на уровне, стенки ступенчатые по шагу. В атрибутах уровень, объём и доля тела. Тело принимают 2.11, 2.12 и 2.14.",
+      "en": "The filled part as a body of cells: the lid is flat on the level, the walls are stepped by the column step. The attributes hold the level, the volume and the share of the body. The body is taken by 2.11, 2.12 and 2.14."
+     },
+     "geometry": "polygonz"
+    }
+   ],
+   "messages": [
+    {
+     "ru": "Колонок %d x %d, шаг %.3g м.",
+     "en": "Columns %d x %d, step %.3g m."
+    },
+    {
+     "ru": "Объём тела: по колонкам %.1f м3, точный по оболочке %.1f м3, расхождение %.2f %%.",
+     "en": "Body volume: %.1f m3 by columns, %.1f m3 exact by the shell, difference %.2f %%."
+    },
+    {
+     "ru": "Уровень %.3f м. Объём %s уровня %.1f м3, %.1f %% тела.",
+     "en": "Level %.3f m. Volume %s the level %.1f m3, %.1f %% of the body."
+    },
+    {
+     "ru": "В слое нет ни одного треугольника.",
+     "en": "The layer has no triangles."
+    },
+    {
+     "ru": "Оболочка не замкнута, рваных рёбер %d. У незамкнутой внутренности нет, и заполнять нечего.",
+     "en": "The shell is not closed, open edges: %d. An open shell has no inside, and there is nothing to fill."
+    },
+    {
+     "ru": "Шаг %.3g м дал бы слишком много колонок, взят %.3g м.",
+     "en": "The step %.3g m would give too many columns, %.3g m is taken."
+    },
+    {
+     "ru": "Колонки не задели тело: шаг крупнее самого тела.",
+     "en": "The columns missed the body: the step is larger than the body itself."
+    },
+    {
+     "ru": "Задано %.1f м3, а в теле только %.1f м3: тело заполняется целиком.",
+     "en": "%.1f m3 is asked, and the body holds only %.1f m3: the body is filled whole."
+    },
+    {
+     "ru": "выше",
+     "en": "above"
+    },
+    {
+     "ru": "ниже",
+     "en": "below"
+    },
+    {
+     "ru": "Ячеек слишком много: укрупните шаг колонок.",
+     "en": "Too many cells: make the column step coarser."
+    },
+    {
+     "ru": "Граней вышло слишком много: укрупните шаг колонок.",
+     "en": "Too many faces: make the column step coarser."
+    },
+    {
+     "ru": "Заполненная часть",
+     "en": "Filled part"
+    },
+    {
+     "ru": "Заполненная часть пуста: объём меньше одной ячейки.",
+     "en": "The filled part is empty: the volume is less than one cell."
+    }
+   ]
+  },
+  {
+   "code": "2.24",
+   "name": "sweep_body",
+   "title": {
+    "ru": "Тело вдоль выработки",
+    "en": "Body along a mine working"
+   },
+   "group": "2",
+   "help": {
+    "ru": "Строит замкнутое тело вдоль линии: сечение ставится поперёк оси в каждой её вершине и протягивается по ней, торцы закрываются. Штрек, камера, уклон, ствол, канава.\n\nСечение - прямоугольник со сводом, прямоугольник или круг. Ширина и высота задаются числом или полем линии, так у каждой выработки может быть своё сечение.\n\nПоперечник сечения всегда горизонтален: у наклонной выработки стенки остаются вертикальными, как у настоящего уклона. На изломе оси сечение ставится по биссектрисе и расширяется так, чтобы стенка не сужалась на повороте. Излом круче 100° даёт самопересечение тела, и об этом предупреждение в журнале.\n\nТела замкнуты: объём, пробы внутри, заполнение водой считают 2.11, 2.12, 2.14 и 2.23.",
+    "en": "Builds a closed body along a line: the section is set across the axis at each of its vertices and swept along it, the ends are closed. A drift, a chamber, a decline, a shaft, a trench.\n\nThe section is a rectangle with an arch, a rectangle or a circle. The width and the height are given by a number or by a field of the line, so each working can have its own section.\n\nThe cross axis of the section is always horizontal: an inclined working keeps vertical walls, as a real decline does. At a bend of the axis the section stands on the bisector and is widened so that the wall does not narrow on the turn. A bend sharper than 100° makes the body intersect itself, and the log warns about it.\n\nThe bodies are closed: the volume, the samples inside and filling with water are counted by 2.11, 2.12, 2.14 and 2.23."
+   },
+   "params": [
+    {
+     "key": "INPUT",
+     "kind": "lines",
+     "label": {
+      "ru": "Оси выработок (линии)",
+      "en": "Working axes (lines)"
+     },
+     "hint": {
+      "ru": "Оси выработок: линии. С высотой в геометрии берутся свои отметки, без высоты - отметка из поля или постоянная ниже. Маркшейдерская съёмка по почве, осевая линия проекта, трасса канавы.",
+      "en": "Working axes: lines. With a height in the geometry their own elevations are taken, without it the elevation comes from a field or the constant below. A survey along the floor, a design axis, a trench line."
+     }
+    },
+    {
+     "key": "ELEV_FIELD",
+     "kind": "field",
+     "label": {
+      "ru": "Поле отметки оси (для линий без Z)",
+      "en": "Axis elevation field (for lines without Z)"
+     },
+     "hint": {
+      "ru": "Поле отметки оси для линий без Z. Пусто - постоянная отметка из следующего поля.",
+      "en": "Axis elevation field for lines without Z. Empty takes the constant elevation from the next field."
+     },
+     "parent": "INPUT",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "ELEV",
+     "kind": "number",
+     "label": {
+      "ru": "Отметка оси для линий без Z, м",
+      "en": "Axis elevation for lines without Z, m"
+     },
+     "hint": {
+      "ru": "Отметка оси для линий без Z, м. У линий с Z не нужна.",
+      "en": "Axis elevation for lines without Z, m. Lines with Z do not need it."
+     },
+     "default": 0.0
+    },
+    {
+     "key": "PROFILE",
+     "kind": "enum",
+     "label": {
+      "ru": "Сечение",
+      "en": "Section"
+     },
+     "hint": {
+      "ru": "Форма сечения. Прямоугольник со сводом - штрек и камера калийного рудника. Прямоугольник - канава, траншея, камера с плоской кровлей. Круг - ствол, тоннель комбайнового проходческого щита.",
+      "en": "Shape of the section. A rectangle with an arch is a drift and a chamber of a potash mine. A rectangle is a trench, a cut, a chamber with a flat roof. A circle is a shaft or a tunnel of a boring machine."
+     },
+     "default": 0,
+     "options": [
+      {
+       "ru": "Прямоугольник со сводом",
+       "en": "Rectangle with an arch"
+      },
+      {
+       "ru": "Прямоугольник",
+       "en": "Rectangle"
+      },
+      {
+       "ru": "Круг",
+       "en": "Circle"
+      }
+     ]
+    },
+    {
+     "key": "WIDTH",
+     "kind": "number",
+     "label": {
+      "ru": "Ширина (у круга - диаметр), м",
+      "en": "Width (diameter for a circle), m"
+     },
+     "hint": {
+      "ru": "Ширина сечения, м, у круга - диаметр. Берётся проектная или средняя по съёмке: объём растёт вместе с ней в той же доле.",
+      "en": "Section width, m, the diameter for a circle. Take the design width or the surveyed mean: the volume grows in direct proportion to it."
+     },
+     "default": 5.0,
+     "minimum": 0.01
+    },
+    {
+     "key": "WIDTH_FIELD",
+     "kind": "field",
+     "label": {
+      "ru": "Поле ширины",
+      "en": "Width field"
+     },
+     "hint": {
+      "ru": "Поле ширины, если сечения разные. Пусто или пустое значение - ширина из поля выше.",
+      "en": "Width field, when the sections differ. An empty field or value takes the width from the field above."
+     },
+     "parent": "INPUT",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "HEIGHT",
+     "kind": "number",
+     "label": {
+      "ru": "Высота стенок, м",
+      "en": "Wall height, m"
+     },
+     "hint": {
+      "ru": "Высота стенок, м. У прямоугольника - вся высота. У круга не нужна.",
+      "en": "Wall height, m. For a rectangle it is the whole height. A circle does not need it."
+     },
+     "default": 3.0,
+     "minimum": 0.01
+    },
+    {
+     "key": "HEIGHT_FIELD",
+     "kind": "field",
+     "label": {
+      "ru": "Поле высоты стенок",
+      "en": "Wall height field"
+     },
+     "hint": {
+      "ru": "Поле высоты стенок. Пусто - высота из поля выше.",
+      "en": "Wall height field. Empty takes the height from the field above."
+     },
+     "parent": "INPUT",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "RISE",
+     "kind": "number",
+     "label": {
+      "ru": "Подъём свода, м (0 - полуциркульный)",
+      "en": "Arch rise, m (0 - semicircular)"
+     },
+     "hint": {
+      "ru": "Подъём свода над стенками, м. Ноль - полуциркульный свод, подъём в половину ширины. Меньший подъём - пологий свод.",
+      "en": "Rise of the arch above the walls, m. Zero gives a semicircular arch, the rise is half the width. A smaller rise gives a flat arch."
+     },
+     "default": 1.0,
+     "minimum": 0.0
+    },
+    {
+     "key": "ANCHOR",
+     "kind": "enum",
+     "label": {
+      "ru": "Ось в сечении",
+      "en": "Axis in the section"
+     },
+     "hint": {
+      "ru": "Где лежит ось в сечении. По почве - как снимают выработки по почве. По центру - осевая линия проекта, ось ствола.",
+      "en": "Where the axis lies in the section. On the floor is how workings are surveyed along the floor. In the centre is a design axis line or a shaft axis."
+     },
+     "default": 0,
+     "options": [
+      {
+       "ru": "По почве",
+       "en": "On the floor"
+      },
+      {
+       "ru": "По центру",
+       "en": "In the centre"
+      }
+     ]
+    },
+    {
+     "key": "SEGMENTS",
+     "kind": "integer",
+     "label": {
+      "ru": "Граней на круге и своде",
+      "en": "Faces on a circle and an arch"
+     },
+     "hint": {
+      "ru": "Число граней на круге и на своде. Больше - глаже, но тяжелее сцена.",
+      "en": "Number of faces on a circle and an arch. More is smoother but makes the scene heavier."
+     },
+     "default": 16,
+     "minimum": 6,
+     "maximum": 128
+    },
+    {
+     "key": "OUTPUT",
+     "kind": "sink",
+     "label": {
+      "ru": "Тела выработок",
+      "en": "Working bodies"
+     },
+     "hint": {
+      "ru": "Тела выработок, по телу на линию, со всеми полями оси и полями длины, площади сечения и объёма. Тела замкнуты, их принимают 2.11, 2.12, 2.14 и 2.23.",
+      "en": "Working bodies, one per line, with all the fields of the axis and the fields of length, section area and volume. The bodies are closed, they are taken by 2.11, 2.12, 2.14 and 2.23."
+     },
+     "geometry": "polygonz"
+    }
+   ],
+   "messages": [
+    {
+     "ru": "Тел: %d, объём всех %.1f м3.",
+     "en": "Bodies: %d, total volume %.1f m3."
+    },
+    {
+     "ru": "Пропущено линий без двух разных вершин: %d.",
+     "en": "Lines without two distinct vertices skipped: %d."
+    },
+    {
+     "ru": "Излом оси круче 100° у объектов %s: тело там самопересекается, объём завышен. Разбейте линию на излом.",
+     "en": "An axis bend sharper than 100° at features %s: the body intersects itself there, the volume is overstated. Split the line at the bend."
+    },
+    {
+     "ru": "Незамкнутых тел: %d.",
+     "en": "Open bodies: %d."
+    }
+   ]
+  }
+ ]
+}

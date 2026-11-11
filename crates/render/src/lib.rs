@@ -1,0 +1,494 @@
+// Isoliner Scene - сцена Isoliner3D без QGIS.
+// Copyright (C) 2026 ООО «Информ++». Лицензия Apache 2.0.
+// SPDX-License-Identifier: Apache-2.0
+
+//! Отрисовка сцены на wgpu.
+//!
+//! Кадр рисуется в свою текстуру ([`Target`]), а не прямо в окно:
+//! ту же текстуру показывает окно (egui), с неё же снимается кадр
+//! для снимка и видео, и она же рисуется без окна в тестах.
+//!
+//! Порядок кадра: непрозрачные тела с записью глубины, линии,
+//! прозрачные тела от дальних к ближним без записи глубины.
+//! Мировые координаты в видеокарту не попадают: вершины выгружаются
+//! сдвинутыми на центр сцены ([`scene_core::Frame`]).
+
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+
+use bytemuck::{Pod, Zeroable};
+use glam::DVec3;
+use wgpu::util::DeviceExt;
+
+use scene_core::camera::{View, eye};
+use scene_core::{Camera, Frame};
+use scene_format::{Indices, Part};
+
+/// Формат кадра.
+pub const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+/// Сглаживание краёв: отсчётов на пиксель.
+pub const SAMPLES: u32 = 4;
+/// Цвет части без своего цвета.
+pub const DEFAULT_COLOR: [f32; 4] = [0.70, 0.72, 0.75, 1.0];
+/// Фон кадра.
+pub const BACKGROUND: [f64; 4] = [0.955, 0.960, 0.950, 1.0];
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct Vertex {
+    pos: [f32; 3],
+    color: [f32; 4],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct Uniforms {
+    view_proj: [[f32; 4]; 4],
+    light: [f32; 4],
+    params: [f32; 4],
+}
+
+/// Часть сцены в видеокарте.
+pub struct GpuPart {
+    pub name: String,
+    pub lines: bool,
+    pub transparent: bool,
+    pub visible: bool,
+    /// Середина части в координатах сцены без преувеличения.
+    pub center: [f64; 3],
+    vbuf: wgpu::Buffer,
+    ibuf: wgpu::Buffer,
+    count: u32,
+}
+
+/// Сцена в видеокарте.
+pub struct GpuScene {
+    pub parts: Vec<GpuPart>,
+    /// Центр, на который сдвинуты вершины (без преувеличения).
+    pub frame: Frame,
+}
+
+impl GpuScene {
+    /// Выгрузить части. Вершины сдвигаются на центр `frame`
+    /// в double и только потом сводятся к float32.
+    pub fn upload(device: &wgpu::Device, parts: &[Part], frame: Frame) -> Self {
+        let mut out = Vec::with_capacity(parts.len());
+        for part in parts {
+            if part.verts.is_empty() || part.indices.is_empty() {
+                continue;
+            }
+            let mut sum = [0.0f64; 3];
+            let verts: Vec<Vertex> = part
+                .verts
+                .iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    let p = [v[0] - frame.cx, v[1] - frame.cy, v[2] - frame.cz];
+                    for k in 0..3 {
+                        sum[k] += p[k];
+                    }
+                    let color = part
+                        .colors
+                        .as_ref()
+                        .and_then(|c| c.get(i).copied())
+                        .unwrap_or(DEFAULT_COLOR);
+                    Vertex {
+                        pos: [p[0] as f32, p[1] as f32, p[2] as f32],
+                        color,
+                    }
+                })
+                .collect();
+            let n = verts.len() as f64;
+            let (flat, lines): (Vec<u32>, bool) = match &part.indices {
+                Indices::Triangles(t) => (t.iter().flatten().copied().collect(), false),
+                Indices::Lines(l) => (l.iter().flatten().copied().collect(), true),
+            };
+            let transparent = part
+                .colors
+                .as_ref()
+                .is_some_and(|c| c.iter().any(|c| c[3] < 0.999));
+            let vbuf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("вершины части"),
+                contents: bytemuck::cast_slice(&verts),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+            let ibuf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("номера вершин части"),
+                contents: bytemuck::cast_slice(&flat),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+            out.push(GpuPart {
+                name: part.name.clone(),
+                lines,
+                transparent,
+                visible: true,
+                center: [sum[0] / n, sum[1] / n, sum[2] / n],
+                vbuf,
+                ibuf,
+                count: flat.len() as u32,
+            });
+        }
+        Self { parts: out, frame }
+    }
+}
+
+/// Текстура кадра с глубиной и сглаживанием.
+pub struct Target {
+    pub width: u32,
+    pub height: u32,
+    pub color: wgpu::Texture,
+    pub color_view: wgpu::TextureView,
+    msaa_view: wgpu::TextureView,
+    depth_view: wgpu::TextureView,
+}
+
+impl Target {
+    pub fn new(device: &wgpu::Device, width: u32, height: u32) -> Self {
+        let (width, height) = (width.max(1), height.max(1));
+        let size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        let make = |label, format, samples, usage| {
+            device.create_texture(&wgpu::TextureDescriptor {
+                label: Some(label),
+                size,
+                mip_level_count: 1,
+                sample_count: samples,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage,
+                view_formats: &[],
+            })
+        };
+        let color = make(
+            "кадр",
+            COLOR_FORMAT,
+            1,
+            wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
+        );
+        let msaa = make(
+            "кадр со сглаживанием",
+            COLOR_FORMAT,
+            SAMPLES,
+            wgpu::TextureUsages::RENDER_ATTACHMENT,
+        );
+        let depth = make(
+            "глубина",
+            DEPTH_FORMAT,
+            SAMPLES,
+            wgpu::TextureUsages::RENDER_ATTACHMENT,
+        );
+        Self {
+            width,
+            height,
+            color_view: color.create_view(&wgpu::TextureViewDescriptor::default()),
+            color,
+            msaa_view: msaa.create_view(&wgpu::TextureViewDescriptor::default()),
+            depth_view: depth.create_view(&wgpu::TextureViewDescriptor::default()),
+        }
+    }
+}
+
+/// Настройки кадра.
+#[derive(Debug, Clone, Copy)]
+pub struct Look {
+    /// Камера в координатах просмотра (сдвиг и преувеличение кадра сцены).
+    pub camera: Camera,
+    /// Преувеличение по вертикали.
+    pub vex: f64,
+    /// Общая непрозрачность тел, 0..1.
+    pub opacity: f32,
+}
+
+/// Конвейеры и общие буферы.
+pub struct Renderer {
+    mesh_solid: wgpu::RenderPipeline,
+    mesh_blend: wgpu::RenderPipeline,
+    lines: wgpu::RenderPipeline,
+    uniforms: wgpu::Buffer,
+    bind: wgpu::BindGroup,
+}
+
+impl Renderer {
+    pub fn new(device: &wgpu::Device) -> Self {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("сцена"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+        });
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("кадр"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+        let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("кадр"),
+            size: std::mem::size_of::<Uniforms>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("кадр"),
+            layout: &layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniforms.as_entire_binding(),
+            }],
+        });
+        let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("сцена"),
+            bind_group_layouts: &[Some(&layout)],
+            immediate_size: 0,
+        });
+        let attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x4];
+        let buffers = [Some(wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as u64,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &attrs,
+        })];
+        let make = |label: &str, fs: &str, topo, blend: bool, write: bool| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(&pl),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs"),
+                    compilation_options: Default::default(),
+                    buffers: &buffers,
+                },
+                primitive: wgpu::PrimitiveState {
+                    topology: topo,
+                    cull_mode: None,
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: DEPTH_FORMAT,
+                    depth_write_enabled: Some(write),
+                    depth_compare: Some(wgpu::CompareFunction::LessEqual),
+                    stencil: Default::default(),
+                    bias: Default::default(),
+                }),
+                multisample: wgpu::MultisampleState {
+                    count: SAMPLES,
+                    ..Default::default()
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some(fs),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: COLOR_FORMAT,
+                        blend: blend.then_some(wgpu::BlendState::ALPHA_BLENDING),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                multiview_mask: None,
+                cache: None,
+            })
+        };
+        Self {
+            mesh_solid: make(
+                "тела",
+                "fs_mesh",
+                wgpu::PrimitiveTopology::TriangleList,
+                false,
+                true,
+            ),
+            mesh_blend: make(
+                "тела прозрачные",
+                "fs_mesh",
+                wgpu::PrimitiveTopology::TriangleList,
+                true,
+                false,
+            ),
+            lines: make(
+                "линии",
+                "fs_line",
+                wgpu::PrimitiveTopology::LineList,
+                true,
+                true,
+            ),
+            uniforms,
+            bind,
+        }
+    }
+
+    /// Нарисовать кадр в `target`.
+    pub fn render(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        target: &Target,
+        scene: &GpuScene,
+        look: &Look,
+    ) {
+        let cam = look.camera;
+        let view = View::new(&cam, f64::from(target.width), f64::from(target.height));
+        // свет из-за плеча наблюдателя и немного сверху
+        let e = DVec3::from(eye(&cam));
+        let c = DVec3::from(cam.center);
+        let to_eye = (e - c).normalize_or_zero();
+        let light = (to_eye + DVec3::Z * 0.6).normalize_or_zero();
+        let u = Uniforms {
+            view_proj: view.view_proj().as_mat4().to_cols_array_2d(),
+            light: [light.x as f32, light.y as f32, light.z as f32, 0.0],
+            params: [look.vex as f32, look.opacity.clamp(0.0, 1.0), 0.0, 0.0],
+        };
+        queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&u));
+
+        // прозрачные - от дальних к ближним
+        let vex = look.vex;
+        let dist = |p: &GpuPart| {
+            let q = DVec3::new(p.center[0], p.center[1], p.center[2] * vex);
+            (q - e).length()
+        };
+        let mut soft: Vec<&GpuPart> = scene
+            .parts
+            .iter()
+            .filter(|p| p.visible && !p.lines && (p.transparent || look.opacity < 0.999))
+            .collect();
+        soft.sort_by(|a, b| dist(b).total_cmp(&dist(a)));
+
+        let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("кадр"),
+        });
+        {
+            let [r, g, b, a] = BACKGROUND;
+            let mut pass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("сцена"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &target.msaa_view,
+                    depth_slice: None,
+                    resolve_target: Some(&target.color_view),
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color { r, g, b, a }),
+                        store: wgpu::StoreOp::Discard,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &target.depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Discard,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            pass.set_bind_group(0, &self.bind, &[]);
+            let draw = |pass: &mut wgpu::RenderPass<'_>, p: &GpuPart| {
+                pass.set_vertex_buffer(0, p.vbuf.slice(..));
+                pass.set_index_buffer(p.ibuf.slice(..), wgpu::IndexFormat::Uint32);
+                pass.draw_indexed(0..p.count, 0, 0..1);
+            };
+            pass.set_pipeline(&self.mesh_solid);
+            for p in scene
+                .parts
+                .iter()
+                .filter(|p| p.visible && !p.lines && !p.transparent && look.opacity >= 0.999)
+            {
+                draw(&mut pass, p);
+            }
+            pass.set_pipeline(&self.lines);
+            for p in scene.parts.iter().filter(|p| p.visible && p.lines) {
+                draw(&mut pass, p);
+            }
+            pass.set_pipeline(&self.mesh_blend);
+            for p in soft {
+                draw(&mut pass, p);
+            }
+        }
+        queue.submit(Some(enc.finish()));
+    }
+}
+
+/// Снять кадр в RGBA (sRGB), строки сверху вниз.
+pub fn read_rgba(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    target: &Target,
+) -> Result<Vec<u8>, String> {
+    let row = target.width * 4;
+    let padded =
+        row.div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT) * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+    let buf = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("снимок"),
+        size: u64::from(padded) * u64::from(target.height),
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("снимок"),
+    });
+    enc.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &target.color,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &buf,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(padded),
+                rows_per_image: Some(target.height),
+            },
+        },
+        wgpu::Extent3d {
+            width: target.width,
+            height: target.height,
+            depth_or_array_layers: 1,
+        },
+    );
+    queue.submit(Some(enc.finish()));
+    let slice = buf.slice(..);
+    let (tx, rx) = std::sync::mpsc::channel();
+    slice.map_async(wgpu::MapMode::Read, move |r| {
+        let _ = tx.send(r);
+    });
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .map_err(|e| e.to_string())?;
+    rx.recv()
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+    let data = slice.get_mapped_range().map_err(|e| format!("{e:?}"))?;
+    let mut out = Vec::with_capacity((row * target.height) as usize);
+    for y in 0..target.height as usize {
+        let s = y * padded as usize;
+        out.extend_from_slice(&data[s..s + row as usize]);
+    }
+    drop(data);
+    buf.unmap();
+    Ok(out)
+}
+
+/// Камера пакета в координатах просмотра для кадра `frame`.
+pub fn view_camera(frame: &Frame, cam: &Camera) -> Camera {
+    frame.camera_to_view(cam)
+}
+
+/// Видеокарта без окна: для тестов, снимков и видео.
+pub fn headless() -> Result<(wgpu::Device, wgpu::Queue), String> {
+    let instance =
+        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+    let adapter =
+        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+            .map_err(|e| e.to_string())?;
+    pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+        .map_err(|e| e.to_string())
+}

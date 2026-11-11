@@ -1,0 +1,18 @@
+[package]
+name = "scene-core"
+description = "Сцена Isoliner3D без окна: камера, облёт, охват, объём тел"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+glam.workspace = true
+scene-format.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

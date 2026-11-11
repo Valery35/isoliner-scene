@@ -1,0 +1,1382 @@
+{
+ "frame_count": [
+  [
+   0.5,
+   25,
+   12
+  ],
+  [
+   0.02,
+   25,
+   1
+  ],
+  [
+   12,
+   25,
+   300
+  ],
+  [
+   1.5,
+   25,
+   38
+  ],
+  [
+   0.1,
+   25,
+   2
+  ],
+  [
+   2.5,
+   1,
+   2
+  ],
+  [
+   3.5,
+   1,
+   4
+  ],
+  [
+   0.0,
+   25,
+   1
+  ]
+ ],
+ "turn": [
+  [
+   350,
+   10,
+   20.0
+  ],
+  [
+   10,
+   350,
+   -20.0
+  ],
+  [
+   0,
+   180,
+   180.0
+  ],
+  [
+   0,
+   181,
+   -179.0
+  ],
+  [
+   -60,
+   200,
+   -100.0
+  ],
+  [
+   720,
+   5,
+   5.0
+  ]
+ ],
+ "smoothstep": [
+  [
+   -1,
+   0.0
+  ],
+  [
+   0,
+   0.0
+  ],
+  [
+   0.25,
+   0.15625
+  ],
+  [
+   0.5,
+   0.5
+  ],
+  [
+   0.75,
+   0.84375
+  ],
+  [
+   1,
+   1.0
+  ],
+  [
+   2,
+   1.0
+  ]
+ ],
+ "orbit": [
+  {
+   "cam": {
+    "center": [
+     0.0,
+     0.0,
+     -150.0
+    ],
+    "distance": 650.0,
+    "azimuth": -60.0,
+    "elevation": 25.0,
+    "fov": 60.0,
+    "ortho": false
+   },
+   "degrees": 360.0,
+   "seconds": 1.0,
+   "fps": 25,
+   "frames": [
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 300.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 314.4,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 328.8,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 343.2,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 357.6,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 12.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 26.400000000000006,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 40.8,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 55.2,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 69.6,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 84.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 98.4,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 112.80000000000001,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 127.19999999999999,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 141.6,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 156.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 170.4,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 184.8,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 199.2,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 213.60000000000002,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 228.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 242.39999999999998,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 256.8,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 271.2,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 285.6,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    }
+   ]
+  },
+  {
+   "cam": {
+    "center": [
+     0.0,
+     0.0,
+     -150.0
+    ],
+    "distance": 650.0,
+    "azimuth": -60.0,
+    "elevation": 25.0,
+    "fov": 60.0,
+    "ortho": false
+   },
+   "degrees": 90.0,
+   "seconds": 0.4,
+   "fps": 25,
+   "frames": [
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 300.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 310.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 320.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 330.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 340.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 350.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 0.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 10.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 20.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 30.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    }
+   ]
+  },
+  {
+   "cam": {
+    "center": [
+     0.0,
+     0.0,
+     -150.0
+    ],
+    "distance": 650.0,
+    "azimuth": -60.0,
+    "elevation": 25.0,
+    "fov": 60.0,
+    "ortho": false
+   },
+   "degrees": -45.0,
+   "seconds": 0.2,
+   "fps": 25,
+   "frames": [
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 300.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 288.75,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 277.5,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 266.25,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": 255.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    }
+   ]
+  }
+ ],
+ "tour": [
+  {
+   "views": [
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": -60.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 420.0,
+     "azimuth": 30.0,
+     "elevation": 15.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      60.0,
+      -35.0,
+      -280.0
+     ],
+     "distance": 120.0,
+     "azimuth": 200.0,
+     "elevation": 5.0,
+     "fov": 60.0,
+     "ortho": false
+    }
+   ],
+   "leg": 0.4,
+   "pause": 0.2,
+   "fps": 25,
+   "frames": [
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": -60.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": -60.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": -60.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": -60.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": -60.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 642.1001373095916,
+     "azimuth": 302.52,
+     "elevation": 24.72,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 621.1382780549767,
+     "azimuth": 309.36,
+     "elevation": 23.96,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 591.4879729889241,
+     "azimuth": 319.44,
+     "elevation": 22.84,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 557.3802876045553,
+     "azimuth": 331.68,
+     "elevation": 21.48,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 522.4940191045249,
+     "azimuth": 345.0,
+     "elevation": 20.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 489.79127190390574,
+     "azimuth": 358.32,
+     "elevation": 18.52,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 461.5478462232605,
+     "azimuth": 10.559999999999988,
+     "elevation": 17.16,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 439.5156596287515,
+     "azimuth": 20.640000000000015,
+     "elevation": 16.04,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 425.167328485357,
+     "azimuth": 27.480000000000004,
+     "elevation": 15.280000000000001,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 419.99999999999994,
+     "azimuth": 30.0,
+     "elevation": 15.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 420.0,
+     "azimuth": 30.0,
+     "elevation": 15.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 420.0,
+     "azimuth": 30.0,
+     "elevation": 15.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 420.0,
+     "azimuth": 30.0,
+     "elevation": 15.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 420.0,
+     "azimuth": 30.0,
+     "elevation": 15.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 420.0,
+     "azimuth": 30.0,
+     "elevation": 15.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      1.6800000000000002,
+      -0.9800000000000001,
+      -153.64
+     ],
+     "distance": 405.52290109861195,
+     "azimuth": 34.76,
+     "elevation": 14.72,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      6.240000000000001,
+      -3.640000000000001,
+      -163.52
+     ],
+     "distance": 368.69412197845264,
+     "azimuth": 47.68000000000001,
+     "elevation": 13.959999999999999,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      12.959999999999999,
+      -7.56,
+      -178.07999999999998
+     ],
+     "distance": 320.4280986742196,
+     "azimuth": 66.72,
+     "elevation": 12.84,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      21.120000000000005,
+      -12.320000000000004,
+      -195.76000000000002
+     ],
+     "distance": 270.23235050769995,
+     "azimuth": 89.84000000000002,
+     "elevation": 11.479999999999999,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      30.0,
+      -17.5,
+      -215.0
+     ],
+     "distance": 224.49944320643644,
+     "azimuth": 115.0,
+     "elevation": 10.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      38.88,
+      -22.68,
+      -234.24
+     ],
+     "distance": 186.50616739746673,
+     "azimuth": 140.16,
+     "elevation": 8.52,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      47.03999999999999,
+      -27.439999999999998,
+      -251.92
+     ],
+     "distance": 157.28957668984532,
+     "azimuth": 163.27999999999997,
+     "elevation": 7.160000000000001,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      53.760000000000005,
+      -31.360000000000003,
+      -266.48
+     ],
+     "distance": 136.6986805473005,
+     "azimuth": 182.32000000000002,
+     "elevation": 6.039999999999999,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      58.32,
+      -34.019999999999996,
+      -276.36
+     ],
+     "distance": 124.2839796802107,
+     "azimuth": 195.24,
+     "elevation": 5.280000000000001,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      60.0,
+      -35.0,
+      -280.0
+     ],
+     "distance": 119.99999999999997,
+     "azimuth": 200.0,
+     "elevation": 5.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      60.0,
+      -35.0,
+      -280.0
+     ],
+     "distance": 120.0,
+     "azimuth": 200.0,
+     "elevation": 5.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      60.0,
+      -35.0,
+      -280.0
+     ],
+     "distance": 120.0,
+     "azimuth": 200.0,
+     "elevation": 5.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      60.0,
+      -35.0,
+      -280.0
+     ],
+     "distance": 120.0,
+     "azimuth": 200.0,
+     "elevation": 5.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      60.0,
+      -35.0,
+      -280.0
+     ],
+     "distance": 120.0,
+     "azimuth": 200.0,
+     "elevation": 5.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      60.0,
+      -35.0,
+      -280.0
+     ],
+     "distance": 120.0,
+     "azimuth": 200.0,
+     "elevation": 5.0,
+     "fov": 60.0,
+     "ortho": false
+    }
+   ]
+  },
+  {
+   "views": [
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": -60.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 420.0,
+     "azimuth": 30.0,
+     "elevation": 15.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      60.0,
+      -35.0,
+      -280.0
+     ],
+     "distance": 120.0,
+     "azimuth": 200.0,
+     "elevation": 5.0,
+     "fov": 60.0,
+     "ortho": false
+    }
+   ],
+   "leg": 0.3,
+   "pause": 0.0,
+   "fps": 25,
+   "frames": [
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 637.9163432386505,
+     "azimuth": 303.8671875,
+     "elevation": 24.5703125,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 607.1253212659594,
+     "azimuth": 314.0625,
+     "elevation": 23.4375,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 566.1121301763567,
+     "azimuth": 328.4765625,
+     "elevation": 21.8359375,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 522.4940191045249,
+     "azimuth": 345.0,
+     "elevation": 20.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 482.2366196515773,
+     "azimuth": 1.5234375,
+     "elevation": 18.1640625,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 449.6600461841199,
+     "azimuth": 15.9375,
+     "elevation": 16.5625,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 427.9558015616917,
+     "azimuth": 26.1328125,
+     "elevation": 15.4296875,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 419.99999999999994,
+     "azimuth": 30.0,
+     "elevation": 15.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      2.578125,
+      -1.50390625,
+      -155.5859375
+     ],
+     "distance": 397.9892729263584,
+     "azimuth": 37.3046875,
+     "elevation": 14.5703125,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      9.375,
+      -5.46875,
+      -170.3125
+     ],
+     "distance": 345.33345879250504,
+     "azimuth": 56.5625,
+     "elevation": 13.4375,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      18.984375,
+      -11.07421875,
+      -191.1328125
+     ],
+     "distance": 282.5548463959765,
+     "azimuth": 83.7890625,
+     "elevation": 11.8359375,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      30.0,
+      -17.5,
+      -215.0
+     ],
+     "distance": 224.49944320643644,
+     "azimuth": 115.0,
+     "elevation": 10.0,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      41.015625,
+      -23.92578125,
+      -238.8671875
+     ],
+     "distance": 178.37244925315736,
+     "azimuth": 146.2109375,
+     "elevation": 8.1640625,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      50.625,
+      -29.53125,
+      -259.6875
+     ],
+     "distance": 145.94589292398402,
+     "azimuth": 173.4375,
+     "elevation": 6.5625,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      57.421875,
+      -33.49609375,
+      -274.4140625
+     ],
+     "distance": 126.63657899474518,
+     "azimuth": 192.6953125,
+     "elevation": 5.4296875,
+     "fov": 60.0,
+     "ortho": false
+    },
+    {
+     "center": [
+      60.0,
+      -35.0,
+      -280.0
+     ],
+     "distance": 119.99999999999997,
+     "azimuth": 200.0,
+     "elevation": 5.0,
+     "fov": 60.0,
+     "ortho": false
+    }
+   ]
+  },
+  {
+   "views": [
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": -60.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    }
+   ],
+   "leg": 1.0,
+   "pause": 0.0,
+   "fps": 25,
+   "frames": [
+    {
+     "center": [
+      0.0,
+      0.0,
+      -150.0
+     ],
+     "distance": 650.0,
+     "azimuth": -60.0,
+     "elevation": 25.0,
+     "fov": 60.0,
+     "ortho": false
+    }
+   ]
+  }
+ ]
+}

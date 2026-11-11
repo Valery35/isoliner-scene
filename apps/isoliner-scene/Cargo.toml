@@ -1,0 +1,22 @@
+[package]
+name = "isoliner-scene"
+description = "Сцена Isoliner3D без QGIS: открыть пакет .i3dscene и смотреть"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+eframe.workspace = true
+egui-wgpu.workspace = true
+wgpu.workspace = true
+glam.workspace = true
+rfd.workspace = true
+sys-locale.workspace = true
+scene-format.workspace = true
+scene-core.workspace = true
+render.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,19 @@
+[package]
+name = "scene-format"
+description = "Пакет сцены Isoliner3D (.i3dscene): scene.json и GLB, чтение и запись"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+zip.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+zip.workspace = true
