@@ -8,8 +8,8 @@
 //! просмотра она переводится на каждом кадре через [`Frame`]: так
 //! смена преувеличения не сдвигает точку взгляда.
 
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use eframe::egui;
 use eframe::egui_wgpu;
@@ -78,6 +78,16 @@ struct Anim {
     fps: u32,
 }
 
+/// Файл, пришедший в окно: имя и содержимое. В браузере пакет приходит
+/// так из выбора файла, который отвечает позже, на одном из кадров.
+pub struct Incoming {
+    pub name: String,
+    pub bytes: Vec<u8>,
+}
+
+/// Файл, выбранный в браузере, ждёт здесь ближайшего кадра.
+type Inbox = Arc<Mutex<Option<Incoming>>>;
+
 /// Строка списка частей.
 struct Row {
     info: Option<PartInfo>,
@@ -88,7 +98,9 @@ struct Row {
 pub struct SceneApp {
     lang: Lang,
     gpu: Option<Gpu>,
-    path: Option<PathBuf>,
+    /// Путь или имя открытого пакета.
+    name: Option<String>,
+    inbox: Inbox,
     pkg: Option<Package>,
     rows: Vec<Row>,
     scene: Option<GpuScene>,
@@ -106,7 +118,7 @@ pub struct SceneApp {
 }
 
 impl SceneApp {
-    pub fn new(cc: &eframe::CreationContext<'_>, path: Option<PathBuf>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let lang = cc
             .storage
             .and_then(|s| s.get_string("lang"))
@@ -117,10 +129,11 @@ impl SceneApp {
             renderer: Renderer::new(&rs.device),
             egui: rs.renderer.clone(),
         });
-        let mut app = Self {
+        Self {
             lang,
             gpu,
-            path: None,
+            name: None,
+            inbox: Arc::new(Mutex::new(None)),
             pkg: None,
             rows: Vec::new(),
             scene: None,
@@ -134,28 +147,64 @@ impl SceneApp {
             tex: None,
             dirty: true,
             status: String::new(),
-        };
-        if let Some(p) = path {
-            app.open(&p);
         }
-        app
     }
 
     fn t(&self, ru: &'static str) -> &'static str {
         tr(self.lang, ru)
     }
 
-    fn open(&mut self, path: &Path) {
-        let res = std::fs::read(path)
-            .map_err(|e| e.to_string())
-            .and_then(|b| read_package(&b).map_err(|e| e.to_string()));
-        match res {
-            Ok(pkg) => self.load(pkg, path),
-            Err(e) => self.status = fill(self.t("Не открылось: %s"), &[e]),
+    /// Открыть пакет с диска.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn open(&mut self, path: &Path) {
+        match std::fs::read(path) {
+            Ok(b) => self.open_bytes(path.display().to_string(), &b),
+            Err(e) => self.status = fill(self.t("Не открылось: %s"), &[e.to_string()]),
         }
     }
 
-    fn load(&mut self, mut pkg: Package, path: &Path) {
+    /// Открыть пакет из байтов: перетаскивание и выбор файла в браузере.
+    pub fn open_bytes(&mut self, name: String, bytes: &[u8]) {
+        match read_package(bytes) {
+            Ok(pkg) => self.load(pkg, name),
+            Err(e) => self.status = fill(self.t("Не открылось: %s"), &[e.to_string()]),
+        }
+    }
+
+    /// Выбор файла. В браузере ответ приходит позже, через `inbox`.
+    fn pick(&mut self, ctx: &egui::Context) {
+        let filter = self.t("Пакет сцены Isoliner3D");
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = ctx;
+            if let Some(p) = rfd::FileDialog::new()
+                .add_filter(filter, &["i3dscene"])
+                .pick_file()
+            {
+                self.open(&p);
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let dialog = rfd::AsyncFileDialog::new().add_filter(filter, &["i3dscene"]);
+            let inbox = self.inbox.clone();
+            let ctx = ctx.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                if let Some(f) = dialog.pick_file().await {
+                    let file = Incoming {
+                        name: f.file_name(),
+                        bytes: f.read().await,
+                    };
+                    if let Ok(mut slot) = inbox.lock() {
+                        *slot = Some(file);
+                    }
+                    ctx.request_repaint();
+                }
+            });
+        }
+    }
+
+    fn load(&mut self, mut pkg: Package, name: String) {
         // пустые части в видеокарту не идут: список строк и части
         // в видеокарте должны совпадать по номерам
         let infos = pkg.meta.parts.clone();
@@ -198,10 +247,10 @@ impl SceneApp {
             }
         }
         self.pkg = Some(pkg);
-        self.path = Some(path.to_path_buf());
+        self.status.clone_from(&name);
+        self.name = Some(name);
         self.reset_camera(1280.0, 800.0);
         self.anim = None;
-        self.status = path.display().to_string();
         self.dirty = true;
     }
 
@@ -242,26 +291,43 @@ impl SceneApp {
 
     fn save_as(&mut self) {
         let Some(pkg) = &self.pkg else { return };
-        let name = self.path.as_ref().and_then(|p| p.file_name()).map_or_else(
-            || "scene.i3dscene".to_string(),
-            |n| n.to_string_lossy().into_owned(),
-        );
-        let Some(dest) = rfd::FileDialog::new()
-            .add_filter(self.t("Пакет сцены Isoliner3D"), &["i3dscene"])
-            .set_file_name(name)
-            .save_file()
-        else {
-            return;
-        };
+        let name = self
+            .name
+            .as_deref()
+            .and_then(|n| Path::new(n).file_name())
+            .map_or_else(
+                || "scene.i3dscene".to_string(),
+                |n| n.to_string_lossy().into_owned(),
+            );
         let mut out = pkg.clone();
         out.meta.camera = Some(self.cam);
         out.meta.views = self.views.clone();
         out.meta.vex = self.vex;
-        let res = write_package(&out)
-            .map_err(|e| e.to_string())
-            .and_then(|b| std::fs::write(&dest, b).map_err(|e| e.to_string()));
+        let bytes = match write_package(&out) {
+            Ok(b) => b,
+            Err(e) => {
+                self.status = fill(self.t("Не записалось: %s"), &[e.to_string()]);
+                return;
+            }
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let res = {
+            let Some(dest) = rfd::FileDialog::new()
+                .add_filter(self.t("Пакет сцены Isoliner3D"), &["i3dscene"])
+                .set_file_name(name)
+                .save_file()
+            else {
+                return;
+            };
+            std::fs::write(&dest, bytes)
+                .map(|()| dest.display().to_string())
+                .map_err(|e| e.to_string())
+        };
+        // в браузере пакет скачивается в папку загрузок
+        #[cfg(target_arch = "wasm32")]
+        let res = crate::web::download(&name, &bytes).map(|()| name);
         self.status = match res {
-            Ok(()) => fill(self.t("Записано: %s"), &[dest.display().to_string()]),
+            Ok(dest) => fill(self.t("Записано: %s"), &[dest]),
             Err(e) => fill(self.t("Не записалось: %s"), &[e]),
         };
     }
@@ -284,12 +350,8 @@ impl SceneApp {
     fn panel(&mut self, ui: &mut egui::Ui, now: f64, size: egui::Vec2) {
         let (w, h) = (f64::from(size.x.max(1.0)), f64::from(size.y.max(1.0)));
         ui.horizontal(|ui| {
-            if ui.button(self.t("Открыть")).clicked()
-                && let Some(p) = rfd::FileDialog::new()
-                    .add_filter(self.t("Пакет сцены Isoliner3D"), &["i3dscene"])
-                    .pick_file()
-            {
-                self.open(&p);
+            if ui.button(self.t("Открыть")).clicked() {
+                self.pick(ui.ctx());
             }
             if ui
                 .add_enabled(
@@ -602,14 +664,43 @@ impl SceneApp {
 impl eframe::App for SceneApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let now = ui.ctx().input(|i| i.time);
-        let dropped: Option<PathBuf> = ui.ctx().input(|i| {
-            i.raw.dropped_files.iter().find_map(|f| {
+        // перетащенный файл: на диске - путь, в браузере - байты
+        let dropped = ui.ctx().input(|i| i.raw.dropped_files.first().cloned());
+        if let Some(f) = dropped {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
                 let p = f.path();
-                (!p.as_os_str().is_empty()).then(|| p.to_path_buf())
-            })
-        });
-        if let Some(p) = dropped {
-            self.open(&p);
+                if !p.as_os_str().is_empty() {
+                    let p = p.to_path_buf();
+                    self.open(&p);
+                }
+            }
+            // браузер читает файл не сразу: ответ приходит через inbox
+            #[cfg(target_arch = "wasm32")]
+            {
+                let inbox = self.inbox.clone();
+                let ctx = ui.ctx().clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    let name = f.path().display().to_string();
+                    let read = f.bytes_async().await;
+                    let file = match read {
+                        Ok(bytes) => Incoming { name, bytes },
+                        // пустой файл - пакет не прочтётся, и окно скажет об этом
+                        Err(_) => Incoming {
+                            name,
+                            bytes: Vec::new(),
+                        },
+                    };
+                    if let Ok(mut slot) = inbox.lock() {
+                        *slot = Some(file);
+                    }
+                    ctx.request_repaint();
+                });
+            }
+        }
+        let picked = self.inbox.lock().ok().and_then(|mut slot| slot.take());
+        if let Some(file) = picked {
+            self.open_bytes(file.name, &file.bytes);
         }
         let view_size = self.target.as_ref().map_or(egui::vec2(1280.0, 800.0), |t| {
             egui::vec2(t.width as f32, t.height as f32)

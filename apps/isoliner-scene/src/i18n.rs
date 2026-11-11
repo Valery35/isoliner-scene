@@ -13,7 +13,12 @@ pub enum Lang {
 impl Lang {
     /// Язык системы: русский для ru, иначе английский.
     pub fn system() -> Self {
-        match sys_locale::get_locale() {
+        #[cfg(not(target_arch = "wasm32"))]
+        let locale = sys_locale::get_locale();
+        // в браузере - язык браузера
+        #[cfg(target_arch = "wasm32")]
+        let locale = web_sys::window().and_then(|w| w.navigator().language());
+        match locale {
             Some(l) if l.to_lowercase().starts_with("ru") => Lang::Ru,
             Some(_) => Lang::En,
             None => Lang::Ru,

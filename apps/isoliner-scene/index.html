@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<!-- Isoliner Scene - сцена Isoliner3D без QGIS.
+     Copyright (C) 2026 ООО «Информ++». Лицензия Apache 2.0.
+     SPDX-License-Identifier: Apache-2.0 -->
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Isoliner Scene</title>
+  <meta name="description" content="Сцена модуля QGIS Isoliner3D в браузере: пакет .i3dscene с камерой из QGIS.">
+  <meta name="theme-color" content="#1b1b1b">
+  <link data-trunk rel="rust" data-bin="isoliner-scene" data-wasm-opt="0">
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #1b1b1b; }
+    #scene { width: 100%; height: 100%; display: block; touch-action: none; }
+    #report { position: fixed; left: 8px; bottom: 8px; margin: 0; color: #f88; font: 12px monospace; white-space: pre-wrap; }
+    /* Значок загрузки: виден, пока скачивается программа страницы.
+       Его убирает web.rs после запуска. */
+    #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #1b1b1b; color: #c8ccd2; font: 15px system-ui, sans-serif; }
+    #loading .ring { width: 44px; height: 44px; border: 4px solid #3a4048; border-top-color: #e08a6f; border-radius: 50%; animation: spin 0.9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { #loading .ring { animation: none; } }
+  </style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <div id="loading"><div class="ring"></div><div id="loading-text">Isoliner Scene</div></div>
+  <pre id="report"></pre>
+  <script>
+    // Подпись значка на языке браузера: русский или английский.
+    document.getElementById('loading-text').textContent =
+      (navigator.language || '').startsWith('ru') ? 'Isoliner Scene загружается…' : 'Isoliner Scene is loading…';
+  </script>
+</body>
+</html>

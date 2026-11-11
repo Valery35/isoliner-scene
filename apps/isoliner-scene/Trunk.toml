@@ -1,0 +1,16 @@
+# Isoliner Scene - сцена Isoliner3D без QGIS.
+# Copyright (C) 2026 ООО «Информ++». Лицензия Apache 2.0.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Страница в браузере: `trunk build --release` в этой папке. Образец -
+# apps/planetx-web PlanetX Lite. На сайте программа живёт в папке app/,
+# главная страница сайта - site/index.html.
+
+[build]
+target = "index.html"
+dist = "../../dist/app"
+# Trunk ничего не скачивает: wasm-bindgen стоит из исходников crates.io.
+offline = true
+
+[tools]
+wasm_bindgen = "0.2.129"

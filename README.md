@@ -18,6 +18,11 @@ cargo run -p isoliner-scene --release -- fixtures/scene_demo.i3dscene
 Левая кнопка мыши вращает сцену, правая сдвигает, колесо приближает.
 Двойной щелчок вписывает сцену в окно.
 
+Та же программа работает в браузере:
+https://valery35.github.io/isoliner-scene/app/. Сборка страницы -
+`trunk build --release` в папке `apps/isoliner-scene`, сайт целиком
+собирает `.github/workflows/pages.yml`.
+
 ## Устройство
 
 | Крейт | Что |

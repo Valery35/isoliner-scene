@@ -5,14 +5,18 @@
 //! Isoliner Scene: открыть пакет сцены .i3dscene и смотреть его так,
 //! как он выглядел в окне Isoliner3D.
 //!
-//! Запуск: `isoliner-scene [файл.i3dscene]`.
+//! Запуск: `isoliner-scene [файл.i3dscene]`. Та же программа собирается
+//! страницей для браузера: `trunk build` в этой папке, `index.html`.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 mod app;
 mod i18n;
+#[cfg(target_arch = "wasm32")]
+mod web;
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     let path = std::env::args_os().nth(1).map(std::path::PathBuf::from);
     let options = eframe::NativeOptions {
@@ -25,6 +29,17 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "isoliner-scene",
         options,
-        Box::new(move |cc| Ok(Box::new(app::SceneApp::new(cc, path)))),
+        Box::new(move |cc| {
+            let mut app = app::SceneApp::new(cc);
+            if let Some(p) = path {
+                app.open(&p);
+            }
+            Ok(Box::new(app))
+        }),
     )
+}
+
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    web::start();
 }

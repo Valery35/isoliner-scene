@@ -57,7 +57,7 @@ Isoliner Scene, инструменты 2.23 и 2.24 по tools.json. В RustPlan
 | `crates/render` | отрисовка на wgpu в текстуру, снимок кадра | scene-core, wgpu |
 | `crates/tool-spec` | описания инструментов из tools.json, значения, отчёт, результат | serde |
 | `crates/tools` | расчёты инструментов: 2.23, 2.24 | tool-spec |
-| `apps/isoliner-scene` | окно: eframe и egui | все выше |
+| `apps/isoliner-scene` | окно: eframe и egui, та же программа страницей в браузере (Trunk, `web.rs`) | все выше |
 | `apps/isoliner-rustgis` | расширение RustGIS: `rustgis-plugin`, `plugin.json`, команды `scene`, `tools`, `run` | scene-format, tool-spec, tools |
 
 Нижний слой не зависит от верхнего. `tool-spec` и `tools` не знают
