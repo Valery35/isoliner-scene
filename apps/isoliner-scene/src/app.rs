@@ -112,6 +112,14 @@ struct Probe {
     point: [f64; 3],
 }
 
+/// Точки измерения в настоящих координатах.
+#[derive(Default)]
+struct Ruler {
+    pts: Vec<[f64; 3]>,
+    /// Контур замкнут двойным щелчком.
+    closed: bool,
+}
+
 /// Строка списка частей.
 struct Row {
     info: Option<PartInfo>,
@@ -156,6 +164,8 @@ pub struct SceneApp {
     check: Option<Check>,
     /// Снимок кадра, который ещё читается из видеокарты.
     shot: Option<render::Readback>,
+    /// Измерение: включено, если есть.
+    ruler: Option<Ruler>,
 }
 
 impl SceneApp {
@@ -197,7 +207,135 @@ impl SceneApp {
             share_open: false,
             check: None,
             shot: None,
+            ruler: None,
         }
+    }
+
+    /// Точка измерения под курсором. Контур замкнут - новый щелчок
+    /// начинает новое измерение.
+    fn ruler_add(&mut self, px: f64, py: f64, w: f64, h: f64) {
+        let Some(hit) = self.hit_at(px, py, w, h) else {
+            self.status = self.t("Мимо объекта: точка не поставлена.").to_string();
+            return;
+        };
+        let p = self.frame_now().to_world(hit.point);
+        if let Some(r) = self.ruler.as_mut() {
+            if r.closed {
+                *r = Ruler::default();
+            }
+            r.pts.push(p);
+        }
+        self.ruler_status();
+    }
+
+    /// Снять последнюю точку. Замкнутый контур сначала размыкается.
+    fn ruler_undo(&mut self) {
+        if let Some(r) = self.ruler.as_mut() {
+            if r.closed {
+                r.closed = false;
+            } else {
+                r.pts.pop();
+            }
+        }
+        self.ruler_status();
+    }
+
+    /// Двойной щелчок: второй щелчок уже поставил точку там же,
+    /// она снимается, контур замыкается.
+    fn ruler_close(&mut self) {
+        if let Some(r) = self.ruler.as_mut() {
+            let n = r.pts.len();
+            if n >= 2 {
+                let (a, b) = (r.pts[n - 2], r.pts[n - 1]);
+                if (0..3).all(|k| (a[k] - b[k]).abs() < 1e-6) {
+                    r.pts.pop();
+                }
+            }
+            r.closed = r.pts.len() >= 3;
+        }
+        self.ruler_status();
+    }
+
+    /// Backspace снимает точку, Esc начинает измерение заново.
+    fn ruler_keys(&mut self, ui: &egui::Ui) {
+        if self.ruler.is_none() || ui.ctx().egui_wants_keyboard_input() {
+            return;
+        }
+        let (back, esc) = ui.input(|i| {
+            (
+                i.key_pressed(egui::Key::Backspace),
+                i.key_pressed(egui::Key::Escape),
+            )
+        });
+        if back {
+            self.ruler_undo();
+        }
+        if esc && let Some(r) = self.ruler.as_mut() {
+            *r = Ruler::default();
+            self.ruler_status();
+        }
+    }
+
+    /// Итог измерения строкой состояния.
+    fn ruler_status(&mut self) {
+        let Some(r) = &self.ruler else { return };
+        let v = scene_core::measure::values(&r.pts, r.closed);
+        self.status = match (v.area, v.length) {
+            (Some(a), Some(_)) => fill(
+                self.t("Площадь в плане %s м2, периметр %s м"),
+                &[grouped(a, 1), grouped(v.plan.unwrap_or(0.0), 2)],
+            ),
+            (None, Some(l)) => fill(
+                self.t("Длина %s м, проложение %s м, превышение %s м"),
+                &[
+                    grouped(l, 2),
+                    grouped(v.plan.unwrap_or(0.0), 2),
+                    format!("{:+.2}", v.rise.unwrap_or(0.0)),
+                ],
+            ),
+            _ => fill(self.t("Точек: %s"), &[r.pts.len().to_string()]),
+        };
+    }
+
+    /// Величины измерения в панели.
+    fn ruler_panel(&self, ui: &mut egui::Ui) {
+        let Some(r) = &self.ruler else { return };
+        let v = scene_core::measure::values(&r.pts, r.closed);
+        ui.weak(self.t(
+            "Щелчок - точка, двойной щелчок - замкнуть контур, правая кнопка или Backspace - убрать точку, Esc - начать заново.",
+        ));
+        let m = |x: f64| format!("{} м", grouped(x, 2));
+        let mut rows: Vec<(&str, String)> = vec![(self.t("Точек"), r.pts.len().to_string())];
+        if let Some(a) = v.area {
+            rows.push((self.t("Площадь в плане"), format!("{} м2", grouped(a, 1))));
+            if let Some(p) = v.plan {
+                rows.push((self.t("Периметр в плане"), m(p)));
+            }
+            if let Some(l) = v.length {
+                rows.push((self.t("Периметр по наклону"), m(l)));
+            }
+        } else {
+            if let Some(l) = v.length {
+                rows.push((self.t("Длина по наклону"), m(l)));
+            }
+            if let Some(p) = v.plan {
+                rows.push((self.t("Проложение"), m(p)));
+            }
+            if let Some(d) = v.rise {
+                rows.push((self.t("Превышение"), format!("{d:+.2} м")));
+            }
+            if let Some(a) = v.angle {
+                let slope = v.slope.map_or(String::new(), |s| format!("{s:+.1} ‰, "));
+                rows.push((self.t("Уклон"), format!("{slope}{a:+.2}°")));
+            }
+        }
+        egui::Grid::new("ruler").num_columns(2).show(ui, |ui| {
+            for (k, val) in rows {
+                ui.label(k);
+                ui.label(val);
+                ui.end_row();
+            }
+        });
     }
 
     /// Начать снимок кадра: текстура кадра уже держит последний кадр.
@@ -743,7 +881,7 @@ impl SceneApp {
 
     fn panel(&mut self, ui: &mut egui::Ui, now: f64, size: egui::Vec2) {
         let (w, h) = (f64::from(size.x.max(1.0)), f64::from(size.y.max(1.0)));
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             if ui.button(self.t("Открыть")).clicked() {
                 self.pick(ui.ctx());
             }
@@ -771,7 +909,7 @@ impl SceneApp {
             return;
         }
         ui.separator();
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             if ui.button(self.t("Вписать")).clicked() {
                 self.fit(w, h);
             }
@@ -782,7 +920,7 @@ impl SceneApp {
             }
         });
         // кнопки плашки окна модуля
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             if ui.button(self.t("Вид сверху")).clicked() {
                 let v = camera::top(&self.view_camera());
                 self.set_view_camera(v);
@@ -806,7 +944,17 @@ impl SceneApp {
             {
                 self.take_shot(ui.ctx());
             }
+            let label = self.t("Измерение");
+            if ui.selectable_label(self.ruler.is_some(), label).clicked() {
+                self.ruler = match self.ruler {
+                    Some(_) => None,
+                    None => Some(Ruler::default()),
+                };
+                self.probe = None;
+                self.status.clear();
+            }
         });
+        self.ruler_panel(ui);
         let mut ortho = self.cam.ortho;
         if ui
             .checkbox(&mut ortho, self.t("Параллельная проекция"))
@@ -914,7 +1062,7 @@ impl SceneApp {
         if let Some(i) = drop {
             self.views.remove(i);
         }
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             if ui.button(self.t("Добавить вид")).clicked() {
                 self.views.push(self.cam);
             }
@@ -1089,15 +1237,29 @@ impl SceneApp {
         }
         if let Some(pos) = resp.interact_pointer_pos() {
             let (px, py) = (f64::from(pos.x - rect.min.x), f64::from(pos.y - rect.min.y));
+            let measuring = self.ruler.is_some();
             if resp.secondary_clicked() {
-                self.pivot_at(px, py, wpt, hpt);
+                // в измерении правая кнопка снимает точку, как в режиме
+                // рисования окна модуля
+                if measuring {
+                    self.ruler_undo();
+                } else {
+                    self.pivot_at(px, py, wpt, hpt);
+                }
+            } else if resp.double_clicked() && measuring {
+                self.ruler_close();
             } else if resp.clicked() {
-                self.probe_at(px, py, wpt, hpt);
+                if measuring {
+                    self.ruler_add(px, py, wpt, hpt);
+                } else {
+                    self.probe_at(px, py, wpt, hpt);
+                }
             }
         }
-        if resp.double_clicked() {
+        if resp.double_clicked() && self.ruler.is_none() {
             self.fit(w, h);
         }
+        self.ruler_keys(ui);
 
         if let Some(anim) = &self.anim {
             let k = ((now - anim.start) * f64::from(anim.fps)).floor().max(0.0) as usize;
@@ -1142,6 +1304,35 @@ impl SceneApp {
                 egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                 egui::Color32::WHITE,
             );
+        }
+        // линия измерения: отрезки и точки поверх кадра
+        if let Some(r) = &self.ruler {
+            let view = self.view_camera();
+            let frame = self.frame_now();
+            let screen: Vec<Option<egui::Pos2>> = r
+                .pts
+                .iter()
+                .map(|p| {
+                    camera::to_screen(&view, wpt, hpt, frame.to_view(*p))
+                        .map(|[x, y]| rect.min + egui::vec2(x as f32, y as f32))
+                })
+                .collect();
+            let painter = ui.painter_at(rect);
+            let ink = egui::Color32::from_rgb(230, 120, 20);
+            let mut pairs: Vec<(usize, usize)> = (1..screen.len()).map(|i| (i - 1, i)).collect();
+            if r.closed && screen.len() >= 3 {
+                pairs.push((screen.len() - 1, 0));
+            }
+            for (a, b) in pairs {
+                if let (Some(a), Some(b)) = (screen[a], screen[b]) {
+                    painter.line_segment([a, b], egui::Stroke::new(2.5, egui::Color32::WHITE));
+                    painter.line_segment([a, b], egui::Stroke::new(1.5, ink));
+                }
+            }
+            for p in screen.iter().flatten() {
+                painter.circle_filled(*p, 4.0, ink);
+                painter.circle_stroke(*p, 4.0, egui::Stroke::new(1.0, egui::Color32::WHITE));
+            }
         }
         // маркер опроса - красная точка, как шарик окна модуля
         if let Some(p) = &self.probe {

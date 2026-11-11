@@ -80,6 +80,32 @@ const TABLE: &[(&str, &str)] = &[
     ("Градиентный фон", "Gradient background"),
     ("Поделиться", "Share"),
     ("Снимок PNG", "PNG snapshot"),
+    ("Измерение", "Measure"),
+    (
+        "Щелчок - точка, двойной щелчок - замкнуть контур, правая кнопка или Backspace - убрать точку, Esc - начать заново.",
+        "Click adds a point, double click closes the contour, right button or Backspace removes a point, Esc starts over.",
+    ),
+    (
+        "Мимо объекта: точка не поставлена.",
+        "Missed the objects: no point added.",
+    ),
+    ("Точек", "Points"),
+    ("Точек: %s", "Points: %s"),
+    ("Длина по наклону", "Slope length"),
+    ("Проложение", "Plan length"),
+    ("Превышение", "Rise"),
+    ("Уклон", "Gradient"),
+    ("Площадь в плане", "Plan area"),
+    ("Периметр в плане", "Plan perimeter"),
+    ("Периметр по наклону", "Slope perimeter"),
+    (
+        "Площадь в плане %s м2, периметр %s м",
+        "Plan area %s m2, perimeter %s m",
+    ),
+    (
+        "Длина %s м, проложение %s м, превышение %s м",
+        "Length %s m, plan length %s m, rise %s m",
+    ),
     ("Снимок %s x %s: %s", "Snapshot %s x %s: %s"),
     ("Копировать", "Copy"),
     (
@@ -134,8 +160,9 @@ pub fn tr(lang: Lang, ru: &'static str) -> &'static str {
 mod tests {
     use super::*;
 
-    /// Значки окна без перевода. Новый значок вписывается сюда.
-    const ICONS: &[&str] = &[ICON_REMOVE];
+    /// Значки и знаки окна без перевода. Новый значок вписывается сюда.
+    /// Промилле - уклон в измерении.
+    const ICONS: &[&str] = &[ICON_REMOVE, "‰", "°"];
 
     #[test]
     fn every_key_is_unique_and_translated() {
