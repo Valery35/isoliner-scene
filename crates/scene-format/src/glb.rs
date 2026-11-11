@@ -165,8 +165,10 @@ impl Doc<'_> {
         if ctype != FLOAT || comp != want {
             return Err(bad("ожидались числа float"));
         }
-        Ok(b.chunks_exact(4)
-            .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        Ok(b.as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| f32::from_le_bytes(*c))
             .collect())
     }
 
@@ -177,12 +179,16 @@ impl Doc<'_> {
         }
         Ok(match ctype {
             UINT => b
-                .chunks_exact(4)
-                .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|c| u32::from_le_bytes(*c))
                 .collect(),
             USHORT => b
-                .chunks_exact(2)
-                .map(|c| u32::from(u16::from_le_bytes([c[0], c[1]])))
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|c| u32::from(u16::from_le_bytes(*c)))
                 .collect(),
             UBYTE => b.iter().map(|&x| u32::from(x)).collect(),
             _ => return Err(bad("номера вершин не целые")),
@@ -221,7 +227,9 @@ pub fn read(glb: &[u8]) -> Result<(Vec<Part>, Georef), Error> {
         let attrs = &prim["attributes"];
         let pos = doc.floats(num(attrs, "POSITION")?, 3)?;
         let verts: Vec<[f64; 3]> = pos
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|p| {
                 [
                     f64::from(p[0]) + o[0],
@@ -239,10 +247,8 @@ pub fn read(glb: &[u8]) -> Result<(Vec<Part>, Georef), Error> {
             .and_then(Value::as_u64)
             .unwrap_or(TRIANGLES);
         let indices = match mode {
-            TRIANGLES => {
-                Indices::Triangles(idx.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect())
-            }
-            LINES => Indices::Lines(idx.chunks_exact(2).map(|c| [c[0], c[1]]).collect()),
+            TRIANGLES => Indices::Triangles(idx.as_chunks::<3>().0.to_vec()),
+            LINES => Indices::Lines(idx.as_chunks::<2>().0.to_vec()),
             m => return Err(bad(format!("вид примитива {m}"))),
         };
         let colors = match attrs.get("COLOR_0").and_then(Value::as_u64) {
@@ -250,11 +256,13 @@ pub fn read(glb: &[u8]) -> Result<(Vec<Part>, Georef), Error> {
                 let (_b, _n, comp, _t) = doc.accessor(ci)?;
                 let c = doc.floats(ci, comp)?;
                 let cols: Vec<[f32; 4]> = if comp == 4 {
-                    c.chunks_exact(4)
-                        .map(|c| [c[0], c[1], c[2], c[3]])
-                        .collect()
+                    c.as_chunks::<4>().0.to_vec()
                 } else {
-                    c.chunks_exact(3).map(|c| [c[0], c[1], c[2], 1.0]).collect()
+                    c.as_chunks::<3>()
+                        .0
+                        .iter()
+                        .map(|&[r, g, b]| [r, g, b, 1.0])
+                        .collect()
                 };
                 if cols.len() != verts.len() {
                     return Err(bad("цветов не столько, сколько вершин"));

@@ -80,6 +80,11 @@ const TABLE: &[(&str, &str)] = &[
     ),
 ];
 
+/// Значок кнопки «Убрать вид» - знак умножения U+00D7. Знаков U+2715,
+/// U+2716 и U+1F5D9 в шрифтах egui сборки нет, на их месте рисуется
+/// пустой квадрат.
+pub const ICON_REMOVE: &str = "×";
+
 /// Перевод строки окна.
 pub fn tr(lang: Lang, ru: &'static str) -> &'static str {
     match lang {
@@ -92,6 +97,9 @@ pub fn tr(lang: Lang, ru: &'static str) -> &'static str {
 mod tests {
     use super::*;
 
+    /// Значки окна без перевода. Новый значок вписывается сюда.
+    const ICONS: &[&str] = &[ICON_REMOVE];
+
     #[test]
     fn every_key_is_unique_and_translated() {
         for (i, (ru, en)) in TABLE.iter().enumerate() {
@@ -100,5 +108,28 @@ mod tests {
         }
         assert_eq!(tr(Lang::En, "Открыть"), "Open");
         assert_eq!(tr(Lang::En, "нет в таблице"), "нет в таблице");
+    }
+
+    /// Каждый знак текстов и значков окна есть в шрифтах egui.
+    /// Знак без глифа рисуется пустым квадратом.
+    #[test]
+    fn every_char_has_a_glyph() {
+        use eframe::egui::epaint::text::{Fonts, TextOptions};
+        use eframe::egui::{FontDefinitions, FontId};
+        let mut fonts = Fonts::new(TextOptions::default(), FontDefinitions::default());
+        let font = FontId::proportional(14.0);
+        let texts = TABLE
+            .iter()
+            .flat_map(|(ru, en)| [*ru, *en])
+            .chain(ICONS.iter().copied());
+        for text in texts {
+            for c in text.chars() {
+                assert!(
+                    fonts.has_glyph(&font, c),
+                    "нет глифа U+{:04X} в «{text}»",
+                    u32::from(c)
+                );
+            }
+        }
     }
 }

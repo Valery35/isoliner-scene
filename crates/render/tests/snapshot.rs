@@ -28,7 +28,9 @@ fn background_share(rgba: &[u8]) -> f64 {
         .collect();
     let n = rgba.len() / 4;
     let same = rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .filter(|p| (0..3).all(|k| (i16::from(p[k]) - i16::from(bg[k])).abs() <= 2))
         .count();
     same as f64 / n as f64
@@ -72,7 +74,7 @@ fn demo_scene_renders_with_its_camera() {
     let dir = format!("{}/../../target/snapshots", env!("CARGO_MANIFEST_DIR"));
     std::fs::create_dir_all(&dir).unwrap();
     let mut ppm = format!("P6\n{} {}\n255\n", target.width, target.height).into_bytes();
-    for p in rgba.chunks_exact(4) {
+    for p in rgba.as_chunks::<4>().0 {
         ppm.extend_from_slice(&p[..3]);
     }
     std::fs::write(format!("{dir}/scene_demo.ppm"), ppm).unwrap();

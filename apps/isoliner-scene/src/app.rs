@@ -403,7 +403,7 @@ impl SceneApp {
                     go = Some(*v);
                 }
                 if ui
-                    .small_button("✕")
+                    .small_button(crate::i18n::ICON_REMOVE)
                     .on_hover_text(tr(lang, "Убрать вид"))
                     .clicked()
                 {
