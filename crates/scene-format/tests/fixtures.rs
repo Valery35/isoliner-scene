@@ -126,6 +126,34 @@ fn hostile_input_is_refused_not_panicking() {
     assert!(scene_format::glb::read(&glb).is_err());
 }
 
+/// Короб в пакете есть всегда, а в окне QGIS он виден только при
+/// `axes_on`. Пакет из окна с выключенным коробом открывается
+/// без короба и подписей, тела показаны.
+#[test]
+fn decor_follows_the_box_switch_of_the_window() {
+    let mut pkg = read_package(&fixture("scene_demo.i3dscene")).unwrap();
+    assert_eq!(pkg.meta.state["axes_on"], Value::Bool(true));
+    assert!(pkg.meta.box_shown());
+    assert!(pkg.meta.parts.iter().all(|i| pkg.meta.part_shown(Some(i))));
+
+    pkg.meta.state["axes_on"] = Value::Bool(false);
+    assert!(!pkg.meta.box_shown());
+    for info in &pkg.meta.parts {
+        assert_eq!(
+            pkg.meta.part_shown(Some(info)),
+            !info.decor,
+            "{}",
+            info.name
+        );
+    }
+    // часть без описания в scene.json - не оформление
+    assert!(pkg.meta.part_shown(None));
+
+    // состояния нет - короб показан
+    pkg.meta.state = Value::Null;
+    assert!(pkg.meta.box_shown());
+}
+
 #[test]
 fn newer_format_is_refused() {
     let mut pkg = read_package(&fixture("scene_demo.i3dscene")).unwrap();

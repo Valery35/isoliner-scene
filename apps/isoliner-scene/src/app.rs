@@ -191,6 +191,12 @@ impl SceneApp {
             .gpu
             .as_ref()
             .map(|g| GpuScene::upload(&g.device, &pkg.parts, self.frame));
+        // показ частей как в окне QGIS: короб выключен - оформление скрыто
+        if let Some(scene) = self.scene.as_mut() {
+            for (p, row) in scene.parts.iter_mut().zip(&self.rows) {
+                p.visible = pkg.meta.part_shown(row.info.as_ref());
+            }
+        }
         self.pkg = Some(pkg);
         self.path = Some(path.to_path_buf());
         self.reset_camera(1280.0, 800.0);

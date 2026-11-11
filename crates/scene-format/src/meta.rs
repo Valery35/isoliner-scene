@@ -128,6 +128,26 @@ pub struct SceneMeta {
     pub state: serde_json::Value,
 }
 
+impl SceneMeta {
+    /// Показан ли короб в окне QGIS при записи (`state.axes_on`).
+    ///
+    /// Модуль кладёт короб и его подписи в пакет всегда, а в окне
+    /// рисует их только при включённом коробе. Без флага в состоянии
+    /// короб считается показанным.
+    pub fn box_shown(&self) -> bool {
+        self.state
+            .get("axes_on")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(true)
+    }
+
+    /// Показана ли часть при открытии пакета, как в окне QGIS:
+    /// оформление скрыто, если короб в окне был выключен.
+    pub fn part_shown(&self, info: Option<&PartInfo>) -> bool {
+        !info.is_some_and(|i| i.decor) || self.box_shown()
+    }
+}
+
 impl Default for SceneMeta {
     fn default() -> Self {
         Self {
