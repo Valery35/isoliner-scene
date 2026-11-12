@@ -546,6 +546,137 @@ fn zonal_runs_like_the_module() {
     assert_eq!(n, 3);
 }
 
+fn rows_of(v: &J) -> Vec<tool_spec::Row> {
+    v.as_array()
+        .unwrap()
+        .iter()
+        .map(|r| tool_spec::Row {
+            id: r["id"].as_i64().unwrap(),
+            attrs: r["attrs"]
+                .as_object()
+                .map(|o| o.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+                .unwrap_or_default(),
+            xyz: (!r["xyz"].is_null()).then(|| {
+                let c = |k: usize| r["xyz"][k].as_f64().unwrap_or(f64::NAN);
+                [c(0), c(1), c(2)]
+            }),
+        })
+        .collect()
+}
+
+/// Линия выхода против образца: число точек и каждая точка.
+fn same_line(g: &tool_spec::Geom, w: &J, tag: &str) {
+    let tool_spec::Geom::Line(p) = g else {
+        panic!("{tag}: не линия");
+    };
+    let want = pts(&w["points"]);
+    assert_eq!(p.len(), want.len(), "{tag}");
+    for (a, b) in p.iter().zip(&want) {
+        for k in 0..3 {
+            assert!(
+                (a[k] - b[k]).abs() < 1e-9 * b[k].abs().max(1.0),
+                "{tag}: {a:?} {b:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn desurvey_runs_like_the_module() {
+    let runs = json("tool_runs.json");
+    let run = run_fn("desurvey_holes").unwrap();
+    let mut n = 0;
+    for r in runs["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["tool"] == "desurvey_holes")
+    {
+        let tag = r["values"]["CONVENTION"].to_string();
+        let mut vals = typed_values("desurvey_holes", &r["values"]);
+        for k in ["COLLARS", "SURVEY"] {
+            if !r["input"][k].is_null() {
+                vals.insert(k.into(), Value::Table(rows_of(&r["input"][k])));
+            }
+        }
+        let mut rep = VecReport::default();
+        let out = run(&vals, &mut rep).unwrap();
+        let o = &out["OUTPUT"];
+        let wf = r["output"]["features"].as_array().unwrap();
+        assert_eq!(o.features.len(), wf.len(), "{tag}");
+        for (g, w) in o.features.iter().zip(wf) {
+            same_line(&g.geom, w, &tag);
+            same_values(&g.values, &w["values"], 1e-9, &tag);
+        }
+        assert_eq!(report_texts(&rep), want_report(r), "{tag}");
+        n += 1;
+    }
+    assert_eq!(n, 3);
+}
+
+#[test]
+fn intervals_run_like_the_module() {
+    let runs = json("tool_runs.json");
+    let run = run_fn("hole_intervals").unwrap();
+    let mut n = 0;
+    for r in runs["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["tool"] == "hole_intervals")
+    {
+        let tag = r["values"]["MODE"].to_string();
+        let mut vals = typed_values("hole_intervals", &r["values"]);
+        vals.insert(
+            "TRACES".into(),
+            Value::Lines(features_of(&r["input"]["TRACES"])),
+        );
+        if !r["input"]["TABLE"].is_null() {
+            vals.insert("TABLE".into(), Value::Table(rows_of(&r["input"]["TABLE"])));
+        }
+        let mut rep = VecReport::default();
+        let out = run(&vals, &mut rep).unwrap();
+        for (key, want) in r["output"].as_object().unwrap() {
+            let o = &out[key];
+            let fields: Vec<(String, String)> = o
+                .fields
+                .iter()
+                .map(|(n, t)| (n.clone(), t.name()))
+                .collect();
+            let want_fields: Vec<(String, String)> = want["fields"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|f| (f[0].as_str().unwrap().into(), f[1].as_str().unwrap().into()))
+                .collect();
+            assert_eq!(fields, want_fields, "{tag} {key}");
+            let wf = want["features"].as_array().unwrap();
+            assert_eq!(o.features.len(), wf.len(), "{tag} {key}");
+            for (g, w) in o.features.iter().zip(wf) {
+                let geo = &w["geometry"];
+                match &g.geom {
+                    tool_spec::Geom::Line(_) => same_line(&g.geom, geo, &tag),
+                    tool_spec::Geom::Point(p) => {
+                        let q = pts(&J::Array(vec![geo["xyz"].clone()]))[0];
+                        for k in 0..3 {
+                            assert!((p[k] - q[k]).abs() < 1e-9, "{tag}: {p:?} {q:?}");
+                        }
+                    }
+                    other => panic!("{tag}: {other:?}"),
+                }
+                let wv = w["values"].as_array().unwrap();
+                assert_eq!(g.values.len(), wv.len(), "{tag}");
+                for (a, b) in g.values.iter().zip(wv) {
+                    same_json(&out_json(a), b, &tag);
+                }
+            }
+        }
+        assert_eq!(report_texts(&rep), want_report(r), "{tag}");
+        n += 1;
+    }
+    assert_eq!(n, 3);
+}
+
 #[test]
 fn open_shell_is_refused() {
     let prof = sweep::profile("rect", 10.0, Some(10.0), None, 16).unwrap();

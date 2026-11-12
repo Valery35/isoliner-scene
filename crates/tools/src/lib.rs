@@ -14,6 +14,9 @@
 //!   из [`boolean`];
 //! - [`zonal_shell_stats`] - 2.14 Зональная статистика оболочек,
 //!   показатели в [`zonal`];
+//! - [`desurvey_holes`] - 2.17 Стволы скважин по инклинометрии,
+//!   минимальная кривизна в [`wells`], поля по именам в [`colnames`];
+//! - [`hole_intervals`] - 2.18 Интервалы по стволу скважины;
 //! - [`sweep_body`] - 2.24 Тело вдоль выработки, ядро в [`sweep`];
 //! - [`fill_volume`] - 2.23 Заполнение тела до объёма, ядро в [`fill`]
 //!   и [`voxel`].
@@ -22,13 +25,17 @@
 
 pub mod boolean;
 pub mod boolean_shells;
+pub mod colnames;
+pub mod desurvey_holes;
 pub mod fill;
 pub mod fill_volume;
+pub mod hole_intervals;
 pub mod select_by_shell;
 pub mod shell;
 pub mod sweep;
 pub mod sweep_body;
 pub mod voxel;
+pub mod wells;
 pub mod zonal;
 pub mod zonal_shell_stats;
 
@@ -42,7 +49,9 @@ pub type RunFn = fn(&Values, &mut dyn Report) -> Result<BTreeMap<String, Output>
 /// Расчёты по имени Processing.
 pub const RUNS: &[(&str, RunFn)] = &[
     ("boolean_shells", boolean_shells::run),
+    ("desurvey_holes", desurvey_holes::run),
     ("fill_to_volume", fill_volume::run),
+    ("hole_intervals", hole_intervals::run),
     ("select_by_shell", select_by_shell::run),
     ("sweep_body", sweep_body::run),
     ("zonal_shell_stats", zonal_shell_stats::run),
@@ -79,6 +88,30 @@ pub(crate) fn choice(values: &Values, key: &str) -> usize {
 pub(crate) fn field(values: &Values, key: &str) -> String {
     match values.get(key) {
         Some(tool_spec::Value::Field(s)) => s.clone(),
+        _ => String::new(),
+    }
+}
+
+/// Значение атрибута строкой, как `str()` в Python; пусто - "".
+pub(crate) fn py_str(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::Null => String::new(),
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Bool(b) => if *b { "True" } else { "False" }.into(),
+        serde_json::Value::Number(n) => match (n.as_i64(), n.as_f64()) {
+            (Some(i), _) => i.to_string(),
+            (None, Some(x)) if x.fract() == 0.0 && x.abs() < 1e16 => format!("{x:.1}"),
+            (None, Some(x)) => x.to_string(),
+            _ => n.to_string(),
+        },
+        other => other.to_string(),
+    }
+}
+
+/// Строковое значение поля вида string.
+pub(crate) fn text(values: &Values, key: &str) -> String {
+    match values.get(key) {
+        Some(tool_spec::Value::Str(s) | tool_spec::Value::Field(s)) => s.clone(),
         _ => String::new(),
     }
 }

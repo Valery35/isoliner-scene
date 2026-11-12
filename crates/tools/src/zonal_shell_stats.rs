@@ -16,7 +16,7 @@ use tool_spec::{
     OutValue, Output, Report, ToolError, Value, Values, attr_number,
 };
 
-use crate::{boolean, field, shell, zonal};
+use crate::{boolean, field, py_str, shell, zonal};
 
 /// Поля объектов во втором выходе; занятое имя получает номер: zone_2.
 const ZONE_FIELDS: [(&str, FieldType); 3] = [
@@ -86,22 +86,6 @@ pub fn slug(name: &str) -> String {
         s = format!("l_{s}");
     }
     s.chars().take(20).collect()
-}
-
-/// Значение атрибута строкой, как `str()` в Python.
-fn py_str(v: &serde_json::Value) -> String {
-    match v {
-        serde_json::Value::Null => String::new(),
-        serde_json::Value::String(s) => s.clone(),
-        serde_json::Value::Bool(b) => if *b { "True" } else { "False" }.into(),
-        serde_json::Value::Number(n) => match (n.as_i64(), n.as_f64()) {
-            (Some(i), _) => i.to_string(),
-            (None, Some(x)) if x.fract() == 0.0 && x.abs() < 1e16 => format!("{x:.1}"),
-            (None, Some(x)) => x.to_string(),
-            _ => n.to_string(),
-        },
-        other => other.to_string(),
-    }
 }
 
 fn unique(key: &str, have: &HashSet<String>) -> String {

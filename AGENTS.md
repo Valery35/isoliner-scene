@@ -22,7 +22,8 @@ Isoliner Scene - сцена модуля Isoliner3D без QGIS. Програм�
 Второе назначение - Isoliner3D для RustGIS, приложение
 `apps/isoliner-rustgis` этого хранилища, решение автора от 12 ноября
 2026 года. Это расширение-процесс RustGIS: сцена `.i3dscene` в окне
-Isoliner Scene, инструменты 2.23 и 2.24 по tools.json. В RustPlanetX
+Isoliner Scene, инструменты по tools.json (2.11, 2.12, 2.14, 2.17, 2.18,
+2.23, 2.24). В RustPlanetX
 (`planetx-rustgis` из `C:\Dev\planetx-lite`) Isoliner3D не встраивается:
 там глобус PlanetX, одна функция - один дом.
 
@@ -56,7 +57,7 @@ Isoliner Scene, инструменты 2.23 и 2.24 по tools.json. В RustPlan
 | `crates/scene-core` | камера окна Isoliner3D, облёт, охват и объём тел | scene-format, glam |
 | `crates/render` | отрисовка на wgpu в текстуру, снимок кадра | scene-core, wgpu |
 | `crates/tool-spec` | описания инструментов из tools.json, значения, отчёт, результат | serde |
-| `crates/tools` | расчёты инструментов: 2.23, 2.24 | tool-spec |
+| `crates/tools` | расчёты инструментов: 2.11, 2.12, 2.14, 2.17, 2.18, 2.23, 2.24 | tool-spec |
 | `apps/isoliner-scene` | окно: eframe и egui, та же программа страницей в браузере (Trunk, `web.rs`) | все выше |
 | `apps/isoliner-rustgis` | расширение RustGIS: `rustgis-plugin`, `plugin.json`, команды `scene`, `tools`, `run` | scene-format, tool-spec, tools |
 
