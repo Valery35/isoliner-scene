@@ -65,6 +65,13 @@ impl Watch {
         }
     }
 
+    /// Перечитать при следующем опросе, даже если файл не менялся:
+    /// кнопка «Перечитать пакет».
+    pub fn force(&mut self) {
+        self.seen = None;
+        self.last = f64::NEG_INFINITY;
+    }
+
     /// Пакет прочитан: его отпечаток теперь свой.
     pub fn read_ok(&mut self) {
         self.seen = stamp(&self.path);

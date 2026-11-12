@@ -25,13 +25,14 @@
   <link data-trunk rel="copy-file" href="apple-touch-icon.png">
   <link data-trunk rel="rust" data-bin="isoliner-scene" data-wasm-opt="0">
   <style>
-    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #1b1b1b; }
+    /* светлая тема по умолчанию, как у окна сцены */
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #f8f8f6; }
     #scene { width: 100%; height: 100%; display: block; touch-action: none; }
     #report { position: fixed; left: 8px; bottom: 8px; margin: 0; color: #f88; font: 12px monospace; white-space: pre-wrap; }
     /* Значок загрузки: виден, пока скачивается программа страницы.
        Его убирает web.rs после запуска. */
-    #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #1b1b1b; color: #c8ccd2; font: 15px system-ui, sans-serif; }
-    #loading .ring { width: 44px; height: 44px; border: 4px solid #3a4048; border-top-color: #e08a6f; border-radius: 50%; animation: spin 0.9s linear infinite; }
+    #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #f8f8f6; color: #44505a; font: 15px system-ui, sans-serif; }
+    #loading .ring { width: 44px; height: 44px; border: 4px solid #d6dbe0; border-top-color: #e08a6f; border-radius: 50%; animation: spin 0.9s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) { #loading .ring { animation: none; } }
   </style>

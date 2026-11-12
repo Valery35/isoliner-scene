@@ -16,6 +16,7 @@ mod app;
 mod i18n;
 mod share;
 mod shot;
+mod toolbar;
 #[cfg(not(target_arch = "wasm32"))]
 mod video;
 #[cfg(not(target_arch = "wasm32"))]

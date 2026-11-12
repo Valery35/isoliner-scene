@@ -125,6 +125,80 @@ const TABLE: &[(&str, &str)] = &[
         "ffmpeg could not make the video: %s. The PNG frames are kept in %s",
     ),
     ("поток склейки оборвался", "the joining thread broke off"),
+    ("Перечитать пакет с диска", "Reload the package from disk"),
+    ("Вид сверху, план", "Top view, plan"),
+    (
+        "Сбросить вид: угол обзора, ракурс и кадр по сцене",
+        "Reset the view: field of view, angle and framing to the scene",
+    ),
+    (
+        "Вид по разрезу: камера поперёк линии обрезки, поворот заперт, остаются сдвиг и масштаб",
+        "Section view: the camera looks across the clip line, rotation is locked, pan and zoom remain",
+    ),
+    (
+        "Параллельная проекция вместо перспективной",
+        "Parallel projection instead of perspective",
+    ),
+    (
+        "Координатный короб: деления и подписи по осям",
+        "Coordinate box: ticks and labels on the axes",
+    ),
+    (
+        "Рисовать контур по поверхности: щелчок ставит вершину",
+        "Draw a contour on the surface: a click places a vertex",
+    ),
+    ("Снять последнюю вершину", "Remove the last vertex"),
+    (
+        "Замкнуть контур и обрезать сцену",
+        "Close the contour and clip the scene",
+    ),
+    (
+        "Завершить линию и резать по ней",
+        "Finish the line and cut along it",
+    ),
+    (
+        "Показывать разметку: контур и линию разреза",
+        "Show the markup: contour and section line",
+    ),
+    (
+        "Снять обрезку, наброски и точку опроса",
+        "Remove the clip, the sketches and the probe point",
+    ),
+    (
+        "Сохранить пакет сцены (.i3dscene)",
+        "Save the scene package (.i3dscene)",
+    ),
+    (
+        "Вращать сцену (ещё раз - остановить)",
+        "Spin the scene (again to stop)",
+    ),
+    (
+        "Виды облёта: запомнить текущий вид, убрать, перейти к виду",
+        "Fly-through views: remember the current view, remove, go to a view",
+    ),
+    (
+        "Записать видео: оборот вокруг сцены или облёт по видам, файлом MP4 или кадрами PNG",
+        "Record a video: orbit around the scene or a fly-through, as an MP4 file or PNG frames",
+    ),
+    (
+        "Положить кадр сцены в буфер обмена (Ctrl+C)",
+        "Copy the scene frame to the clipboard (Ctrl+C)",
+    ),
+    (
+        "Сохранить кадр сцены в файл PNG",
+        "Save the scene frame to a PNG file",
+    ),
+    (
+        "Вертикальное преувеличение. Единица - натуральный масштаб.",
+        "Vertical exaggeration. One is true scale.",
+    ),
+    ("Светлая тема", "Light theme"),
+    ("Тёмная тема", "Dark theme"),
+    ("Запомнить текущий вид", "Remember the current view"),
+    (
+        "Кадр %s x %s в буфере обмена.",
+        "Frame %s x %s copied to the clipboard.",
+    ),
     (
         "Пакет обновился, камера на месте: %s",
         "The package was updated, the camera stays: %s",

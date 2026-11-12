@@ -251,6 +251,12 @@ pub struct SceneApp {
     /// Вид по разрезу: начало и конец линии в плане. Есть - поворот
     /// заперт, на кадре шкалы отметок и глубин.
     section: Option<([f64; 2], [f64; 2])>,
+    /// Тёмная тема. По умолчанию светлая, выбор запоминается.
+    dark: bool,
+    /// Показывать разметку: линию и контур измерения.
+    marks: bool,
+    /// Снимок идёт в буфер обмена, а не в файл.
+    shot_copy: bool,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     film: Film,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -276,6 +282,16 @@ impl SceneApp {
             .storage
             .and_then(|s| s.get_string("lang"))
             .map_or_else(Lang::system, |c| Lang::from_code(&c));
+        // светлая тема по умолчанию, тёмная - если выбрана раньше
+        let dark = cc
+            .storage
+            .and_then(|s| s.get_string("theme"))
+            .is_some_and(|t| t == "dark");
+        cc.egui_ctx.set_theme(if dark {
+            egui::Theme::Dark
+        } else {
+            egui::Theme::Light
+        });
         let gpu = cc.wgpu_render_state.as_ref().map(|rs| Gpu {
             device: rs.device.clone(),
             queue: rs.queue.clone(),
@@ -313,6 +329,9 @@ impl SceneApp {
             clip: ClipUi::default(),
             full: None,
             section: None,
+            dark,
+            marks: true,
+            shot_copy: false,
             film: Film::default(),
             film_open: false,
             #[cfg(not(target_arch = "wasm32"))]
@@ -461,10 +480,11 @@ impl SceneApp {
             camera,
             vex: self.vex,
             opacity: self.opacity,
-            background: if self.gradient {
-                render::BG_GRADIENT
-            } else {
-                render::BG_PLAIN
+            background: match (self.gradient, self.dark) {
+                (true, false) => render::BG_GRADIENT,
+                (false, false) => render::BG_PLAIN,
+                (true, true) => render::BG_GRADIENT_DARK,
+                (false, true) => render::BG_PLAIN_DARK,
             },
             pixels_per_point: ppp,
         }
@@ -749,6 +769,23 @@ impl SceneApp {
         };
         let (w, h) = rb.size();
         self.shot = None;
+        // кадр в буфер обмена, как Ctrl+C окна модуля
+        if std::mem::take(&mut self.shot_copy) {
+            self.status = match got {
+                Ok(rgba) => {
+                    ctx.copy_image(egui::ColorImage::from_rgba_unmultiplied(
+                        [w as usize, h as usize],
+                        &rgba,
+                    ));
+                    fill(
+                        self.t("Кадр %s x %s в буфере обмена."),
+                        &[w.to_string(), h.to_string()],
+                    )
+                }
+                Err(e) => fill(self.t("Не записалось: %s"), &[e]),
+            };
+            return;
+        }
         let png = got.and_then(|rgba| shot::encode_png(w, h, &rgba));
         let bytes = match png {
             Ok(b) => b,
@@ -1662,78 +1699,13 @@ impl SceneApp {
             {
                 self.fly_to(c, now);
             }
-        });
-        // кнопки плашки окна модуля
-        ui.horizontal_wrapped(|ui| {
-            if ui.button(self.t("Вид сверху")).clicked() {
-                self.section = None;
-                let v = camera::top(&self.view_camera());
-                self.set_view_camera(v);
-                self.anim = None;
-            }
-            if ui.button(self.t("Сбросить вид")).clicked() {
-                self.section = None;
-                let v = camera::reset(&self.view_camera(), self.span());
-                self.set_view_camera(v);
-                self.anim = None;
-            }
-            let label = self.t("Вращение");
-            if ui.toggle_value(&mut self.spin, label).changed() && self.spin {
-                self.section = None;
-            }
             let label = self.t("Поделиться");
             ui.toggle_value(&mut self.share_open, label);
-            if ui
-                .add_enabled(
-                    self.target.is_some() && self.shot.is_none(),
-                    egui::Button::new(self.t("Снимок PNG")),
-                )
-                .clicked()
-            {
-                self.take_shot(ui.ctx());
-            }
-            let label = self.t("Измерение");
-            if ui.selectable_label(self.ruler.is_some(), label).clicked() {
-                self.ruler = match self.ruler {
-                    Some(_) => None,
-                    None => Some(Ruler::default()),
-                };
-                self.probe = None;
-                self.status.clear();
-            }
         });
+        // кнопки окна модуля - на плашке поверх сцены (`toolbar`),
+        // здесь только то, чего на плашке нет
         self.ruler_panel(ui);
         self.clip_panel(ui);
-        let label = self.t("Вид по разрезу");
-        if ui.selectable_label(self.section.is_some(), label).clicked() {
-            if self.section.is_some() {
-                self.section = None;
-                self.status.clear();
-            } else {
-                self.section_view(w, h);
-            }
-        }
-        let mut ortho = self.cam.ortho;
-        if ui
-            .checkbox(&mut ortho, self.t("Параллельная проекция"))
-            .changed()
-        {
-            self.cam.ortho = ortho;
-            self.dirty = true;
-        }
-        let mut vex = self.vex;
-        if ui
-            .add(
-                egui::Slider::new(&mut vex, 0.1..=50.0)
-                    .logarithmic(true)
-                    .text(self.t("Преувеличение")),
-            )
-            .changed()
-        {
-            // точка взгляда остаётся на месте в настоящих координатах
-            self.vex = vex;
-            self.dirty = true;
-        }
         let label = self.t("Градиентный фон");
         if ui.checkbox(&mut self.gradient, label).changed() {
             self.dirty = true;
@@ -1842,8 +1814,8 @@ impl SceneApp {
                 self.anim = None;
             }
         });
-        // запись кадров - на диске: в браузере ролик в сотни кадров
-        // в память не поместится
+        // запись кадров - значком плашки; здесь видно, что идёт
+        // запись или склейка, и её можно прервать
         #[cfg(not(target_arch = "wasm32"))]
         ui.horizontal_wrapped(|ui| {
             if self.recording.is_some() {
@@ -1852,8 +1824,6 @@ impl SceneApp {
                 }
             } else if self.joining.is_some() {
                 ui.spinner();
-            } else if ui.button(self.t("Кадры PNG…")).clicked() {
-                self.film_open = true;
             }
         });
 
@@ -2075,8 +2045,9 @@ impl SceneApp {
             );
         }
         self.section_marks(ui, rect);
-        // линия измерения: отрезки и точки поверх кадра
-        if let Some(r) = &self.ruler {
+        // линия измерения: отрезки и точки поверх кадра, если разметка
+        // не скрыта значком «глаз»
+        if let Some(r) = self.ruler.as_ref().filter(|_| self.marks) {
             let view = self.view_camera();
             let frame = self.frame_now();
             let screen: Vec<Option<egui::Pos2>> = r
@@ -2117,13 +2088,351 @@ impl SceneApp {
             }
         }
         if self.pkg.is_none() {
+            // сцены нет - кадр не рисуется: фон темы вместо чёрного
+            let bg = self.look(self.view_camera(), ppp).background;
+            let c = |k: usize| (bg.bottom[k] * 255.0) as u8;
+            ui.painter()
+                .rect_filled(rect, 0.0, egui::Color32::from_rgb(c(0), c(1), c(2)));
             ui.painter().text(
                 rect.center(),
                 egui::Align2::CENTER_CENTER,
                 self.t("Перетащите пакет .i3dscene в окно или нажмите «Открыть»."),
                 egui::FontId::proportional(16.0),
-                egui::Color32::from_gray(90),
+                ui.visuals().weak_text_color(),
             );
+        }
+        let ctx = ui.ctx().clone();
+        self.toolbar(&ctx, rect, w, h, now);
+    }
+
+    /// Плашка значков в левом верхнем углу сцены, в порядке плашки
+    /// окна модуля: перечитать | вид сверху, сброс, вид по разрезу,
+    /// параллельная проекция, короб, рисование (и его снять, замкнуть,
+    /// резать по линии), разметка, снять обрезку, сохранить, вращение,
+    /// виды, видео, буфер, PNG, преувеличение. В конце - тема.
+    fn toolbar(&mut self, ctx: &egui::Context, rect: egui::Rect, w: f64, h: f64, now: f64) {
+        use crate::toolbar::{Icon, button, separator};
+        let lang = self.lang;
+        let t = |s: &'static str| tr(lang, s);
+        let loaded = self.pkg.is_some();
+        // Ctrl+C - кадр в буфер, как в окне модуля; поле ввода
+        // в фокусе забирает его себе
+        let copy_key = loaded
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Copy)));
+        // одна плашка на окно: id глобально единственный
+        egui::Area::new(egui::Id::unique("isoliner-tools"))
+            .fixed_pos(rect.min + egui::vec2(8.0, 8.0))
+            .order(egui::Order::Middle)
+            .show(ctx, |ui| {
+                crate::toolbar::frame(self.dark).show(ui, |ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(2.0, 2.0);
+                    ui.set_max_width((rect.width() - 16.0).max(120.0));
+                    ui.horizontal_wrapped(|ui| {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            let can = self.watch.is_some();
+                            if button(ui, Icon::Reload, t("Перечитать пакет с диска"), false, can)
+                                .clicked()
+                                && let Some(wt) = self.watch.as_mut()
+                            {
+                                wt.force();
+                            }
+                            separator(ui);
+                        }
+                        if button(ui, Icon::Top, t("Вид сверху, план"), false, loaded).clicked() {
+                            self.section = None;
+                            let v = camera::top(&self.view_camera());
+                            self.set_view_camera(v);
+                            self.anim = None;
+                        }
+                        if button(
+                            ui,
+                            Icon::Home,
+                            t("Сбросить вид: угол обзора, ракурс и кадр по сцене"),
+                            false,
+                            loaded,
+                        )
+                        .clicked()
+                        {
+                            self.section = None;
+                            let v = camera::reset(&self.view_camera(), self.span());
+                            self.set_view_camera(v);
+                            self.anim = None;
+                        }
+                        if button(
+                            ui,
+                            Icon::Section,
+                            t("Вид по разрезу: камера поперёк линии обрезки, поворот заперт, остаются сдвиг и масштаб"),
+                            self.section.is_some(),
+                            loaded,
+                        )
+                        .clicked()
+                        {
+                            if self.section.is_some() {
+                                self.section = None;
+                                self.status.clear();
+                            } else {
+                                self.section_view(w, h);
+                            }
+                        }
+                        if button(
+                            ui,
+                            Icon::Ortho,
+                            t("Параллельная проекция вместо перспективной"),
+                            self.cam.ortho,
+                            loaded,
+                        )
+                        .clicked()
+                        {
+                            self.cam.ortho = !self.cam.ortho;
+                            self.dirty = true;
+                        }
+                        let decor: Vec<usize> =
+                            (0..self.rows.len()).filter(|&i| self.is_decor(i)).collect();
+                        let shown = self.scene.as_ref().is_some_and(|s| {
+                            decor
+                                .iter()
+                                .any(|&i| s.parts.get(i).is_some_and(|p| p.visible))
+                        });
+                        if button(
+                            ui,
+                            Icon::Grid,
+                            t("Координатный короб: деления и подписи по осям"),
+                            shown,
+                            !decor.is_empty(),
+                        )
+                        .clicked()
+                            && let Some(s) = self.scene.as_mut()
+                        {
+                            for &i in &decor {
+                                if let Some(p) = s.parts.get_mut(i) {
+                                    p.visible = !shown;
+                                }
+                            }
+                            self.dirty = true;
+                        }
+                        let drawing = self.ruler.is_some();
+                        if button(
+                            ui,
+                            Icon::Draw,
+                            t("Рисовать контур по поверхности: щелчок ставит вершину"),
+                            drawing,
+                            loaded,
+                        )
+                        .clicked()
+                        {
+                            self.ruler = if drawing {
+                                None
+                            } else {
+                                Some(Ruler::default())
+                            };
+                            self.probe = None;
+                            self.status.clear();
+                        }
+                        if drawing {
+                            if button(ui, Icon::Undo, t("Снять последнюю вершину"), false, true)
+                                .clicked()
+                            {
+                                self.ruler_undo();
+                            }
+                            if button(ui, Icon::Done, t("Замкнуть контур и обрезать сцену"), false, true)
+                                .clicked()
+                            {
+                                self.ruler_close();
+                                if !matches!(self.clip.side, Some(Side::In | Side::Out)) {
+                                    self.clip.side = Some(Side::In);
+                                }
+                                self.apply_clip();
+                            }
+                            if button(ui, Icon::Line, t("Завершить линию и резать по ней"), false, true)
+                                .clicked()
+                            {
+                                if !matches!(
+                                    self.clip.side,
+                                    Some(Side::Left | Side::Right | Side::Corridor)
+                                ) {
+                                    self.clip.side = Some(Side::Corridor);
+                                }
+                                self.apply_clip();
+                            }
+                        }
+                        if button(
+                            ui,
+                            Icon::Eye,
+                            t("Показывать разметку: контур и линию разреза"),
+                            self.marks,
+                            true,
+                        )
+                        .clicked()
+                        {
+                            self.marks = !self.marks;
+                        }
+                        if button(
+                            ui,
+                            Icon::Clear,
+                            t("Снять обрезку, наброски и точку опроса"),
+                            false,
+                            loaded,
+                        )
+                        .clicked()
+                        {
+                            self.clear_clip();
+                            if let Some(r) = self.ruler.as_mut() {
+                                r.pts.clear();
+                                r.closed = false;
+                            }
+                            self.probe = None;
+                        }
+                        if button(
+                            ui,
+                            Icon::Export,
+                            t("Сохранить пакет сцены (.i3dscene)"),
+                            false,
+                            loaded,
+                        )
+                        .clicked()
+                        {
+                            self.save_as();
+                        }
+                        if button(
+                            ui,
+                            Icon::Spin,
+                            t("Вращать сцену (ещё раз - остановить)"),
+                            self.spin,
+                            loaded,
+                        )
+                        .clicked()
+                        {
+                            self.spin = !self.spin;
+                            if self.spin {
+                                self.section = None;
+                            }
+                        }
+                        let views = button(
+                            ui,
+                            Icon::Views,
+                            t("Виды облёта: запомнить текущий вид, убрать, перейти к виду"),
+                            false,
+                            loaded,
+                        );
+                        egui::Popup::menu(&views).show(|ui| self.views_menu(ui, now));
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            let rec = self.recording.is_some();
+                            if button(
+                                ui,
+                                Icon::Frames,
+                                t("Записать видео: оборот вокруг сцены или облёт по видам, файлом MP4 или кадрами PNG"),
+                                rec,
+                                loaded && self.joining.is_none(),
+                            )
+                            .clicked()
+                            {
+                                if rec {
+                                    self.finish_film(None, ui.ctx());
+                                } else {
+                                    self.film_open = true;
+                                }
+                            }
+                        }
+                        let can_shot = self.target.is_some() && self.shot.is_none() && loaded;
+                        let copy = button(
+                            ui,
+                            Icon::Copy,
+                            t("Положить кадр сцены в буфер обмена (Ctrl+C)"),
+                            false,
+                            can_shot,
+                        )
+                        .clicked();
+                        if copy || (copy_key && can_shot) {
+                            self.shot_copy = true;
+                            self.take_shot(ui.ctx());
+                        }
+                        if button(ui, Icon::Png, t("Сохранить кадр сцены в файл PNG"), false, can_shot)
+                            .clicked()
+                        {
+                            self.shot_copy = false;
+                            self.take_shot(ui.ctx());
+                        }
+                        ui.label("Z ×").on_hover_text(t(
+                            "Вертикальное преувеличение. Единица - натуральный масштаб.",
+                        ));
+                        let mut vex = self.vex;
+                        if ui
+                            .add_enabled(
+                                loaded,
+                                egui::DragValue::new(&mut vex)
+                                    .range(0.01..=10000.0)
+                                    .speed(0.05)
+                                    .max_decimals(2),
+                            )
+                            .changed()
+                        {
+                            self.vex = vex;
+                            self.dirty = true;
+                        }
+                        separator(ui);
+                        let (icon, tip) = if self.dark {
+                            (Icon::Sun, t("Светлая тема"))
+                        } else {
+                            (Icon::Moon, t("Тёмная тема"))
+                        };
+                        if button(ui, icon, tip, false, true).clicked() {
+                            self.dark = !self.dark;
+                            ui.ctx().set_theme(if self.dark {
+                                egui::Theme::Dark
+                            } else {
+                                egui::Theme::Light
+                            });
+                            self.dirty = true;
+                        }
+                    });
+                });
+            });
+    }
+
+    /// Меню видов облёта: запомнить, перейти, убрать, облететь.
+    fn views_menu(&mut self, ui: &mut egui::Ui, now: f64) {
+        let lang = self.lang;
+        if ui.button(tr(lang, "Запомнить текущий вид")).clicked() {
+            self.views.push(self.cam);
+        }
+        let mut go: Option<Camera> = None;
+        let mut drop: Option<usize> = None;
+        for (i, v) in self.views.iter().enumerate() {
+            ui.horizontal(|ui| {
+                if ui
+                    .button(fill(tr(lang, "Вид %d"), &[(i + 1).to_string()]))
+                    .clicked()
+                {
+                    go = Some(*v);
+                }
+                if ui
+                    .small_button(crate::i18n::ICON_REMOVE)
+                    .on_hover_text(tr(lang, "Убрать вид"))
+                    .clicked()
+                {
+                    drop = Some(i);
+                }
+            });
+        }
+        if let Some(v) = go {
+            self.fly_to(v, now);
+        }
+        if let Some(i) = drop {
+            self.views.remove(i);
+        }
+        ui.separator();
+        if ui
+            .add_enabled(
+                self.views.len() > 1,
+                egui::Button::new(tr(lang, "Облёт по видам")),
+            )
+            .clicked()
+        {
+            let frames = flight::tour(&self.views, 4.0, 1.0, flight::FPS);
+            self.start(frames, now);
         }
     }
 }
@@ -2227,6 +2536,7 @@ impl eframe::App for SceneApp {
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         storage.set_string("lang", self.lang.code().to_string());
+        storage.set_string("theme", if self.dark { "dark" } else { "light" }.into());
     }
 }
 
