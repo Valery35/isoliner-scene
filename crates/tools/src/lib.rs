@@ -12,6 +12,8 @@
 //!   в [`boolean`] и [`voxel`];
 //! - [`select_by_shell`] - 2.12 Выборка оболочкой, луч вверх
 //!   из [`boolean`];
+//! - [`zonal_shell_stats`] - 2.14 Зональная статистика оболочек,
+//!   показатели в [`zonal`];
 //! - [`sweep_body`] - 2.24 Тело вдоль выработки, ядро в [`sweep`];
 //! - [`fill_volume`] - 2.23 Заполнение тела до объёма, ядро в [`fill`]
 //!   и [`voxel`].
@@ -27,6 +29,8 @@ pub mod shell;
 pub mod sweep;
 pub mod sweep_body;
 pub mod voxel;
+pub mod zonal;
+pub mod zonal_shell_stats;
 
 use std::collections::BTreeMap;
 
@@ -41,6 +45,7 @@ pub const RUNS: &[(&str, RunFn)] = &[
     ("fill_to_volume", fill_volume::run),
     ("select_by_shell", select_by_shell::run),
     ("sweep_body", sweep_body::run),
+    ("zonal_shell_stats", zonal_shell_stats::run),
 ];
 
 /// Расчёт инструмента по имени.

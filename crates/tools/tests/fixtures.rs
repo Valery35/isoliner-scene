@@ -377,6 +377,175 @@ fn select_runs_like_the_module() {
     assert_eq!(n, 6);
 }
 
+/// Значения прогона по видам полей из описания инструмента в tools.json:
+/// так не надо помнить, какой ключ какого вида.
+fn typed_values(tool: &str, v: &J) -> Values {
+    let cat = json("tools.json");
+    let spec = cat["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == tool)
+        .unwrap();
+    let mut out = Values::new();
+    for (k, x) in v.as_object().unwrap().iter().filter(|(_, x)| !x.is_null()) {
+        if let Some(meta) = k.strip_prefix('@') {
+            let _ = meta;
+            let s = |f: &str| x[f].as_str().unwrap_or_default().to_string();
+            let list = |f: &str| {
+                x[f].as_array()
+                    .map(|a| a.iter().map(|s| s.as_str().unwrap().to_string()).collect())
+                    .unwrap_or_default()
+            };
+            out.insert(
+                k.clone(),
+                Value::Layer(tool_spec::LayerInfo {
+                    name: s("name"),
+                    geometry: s("geometry"),
+                    hasz: x["hasz"].as_bool().unwrap_or(false),
+                    fields: list("fields"),
+                    numeric: list("numeric"),
+                }),
+            );
+            continue;
+        }
+        let p = spec["params"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["key"] == k.as_str())
+            .unwrap_or_else(|| panic!("{tool}: нет поля {k}"));
+        let multiple = p["multiple"].as_bool().unwrap_or(false);
+        let val = match p["kind"].as_str().unwrap() {
+            "enum" if multiple => Value::Enums(
+                x.as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|i| i.as_u64().unwrap() as usize)
+                    .collect(),
+            ),
+            "enum" => Value::Enum(x.as_u64().unwrap() as usize),
+            "field" if multiple => Value::Fields(
+                x.as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|s| s.as_str().unwrap().to_string())
+                    .collect(),
+            ),
+            "field" => Value::Field(x.as_str().unwrap().to_string()),
+            "string" => Value::Str(x.as_str().unwrap().to_string()),
+            "bool" | "sink" => Value::Bool(x.as_bool().unwrap()),
+            "integer" => Value::Integer(x.as_i64().unwrap()),
+            "number" => Value::Number(x.as_f64().unwrap()),
+            other => panic!("{tool}: {k} вида {other} задаётся входом"),
+        };
+        out.insert(k.clone(), val);
+    }
+    out
+}
+
+fn mesh_features_of(v: &J) -> Vec<tool_spec::MeshFeature> {
+    v.as_array()
+        .unwrap()
+        .iter()
+        .map(|m| tool_spec::MeshFeature {
+            id: m["id"].as_i64().unwrap(),
+            attrs: m["attrs"]
+                .as_object()
+                .map(|o| o.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+                .unwrap_or_default(),
+            body: (!m["verts"].is_null() && !m["faces"].is_null()).then(|| body_of(m)),
+        })
+        .collect()
+}
+
+fn out_json(v: &OutValue) -> J {
+    match v {
+        OutValue::Double(x) => serde_json::json!(x),
+        OutValue::Int(i) => serde_json::json!(i),
+        OutValue::Str(s) => serde_json::json!(s),
+        OutValue::Null => J::Null,
+    }
+}
+
+/// Значение против образца: числа в относительном допуске.
+fn same_json(a: &J, b: &J, tag: &str) {
+    match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => assert!(rel(x, y) < 1e-9, "{tag}: {x} {y}"),
+        _ => assert_eq!(a, b, "{tag}"),
+    }
+}
+
+#[test]
+fn zonal_runs_like_the_module() {
+    let runs = json("tool_runs.json");
+    let run = run_fn("zonal_shell_stats").unwrap();
+    let mut n = 0;
+    for r in runs["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["tool"] == "zonal_shell_stats")
+    {
+        let tag = r["values"].to_string();
+        let mut vals = typed_values("zonal_shell_stats", &r["values"]);
+        vals.insert(
+            "SHELLS".into(),
+            Value::Meshes(mesh_features_of(&r["input"]["SHELLS"])),
+        );
+        vals.insert(
+            "INPUT".into(),
+            Value::Features(features_of(&r["input"]["INPUT"])),
+        );
+        let mut rep = VecReport::default();
+        let out = run(&vals, &mut rep).unwrap();
+        for (key, want) in r["output"].as_object().unwrap() {
+            let o = &out[key];
+            let fields: Vec<(String, String)> = o
+                .fields
+                .iter()
+                .map(|(n, t)| (n.clone(), t.name()))
+                .collect();
+            let want_fields: Vec<(String, String)> = want["fields"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|f| (f[0].as_str().unwrap().into(), f[1].as_str().unwrap().into()))
+                .collect();
+            assert_eq!(fields, want_fields, "{tag} {key}");
+            assert_eq!(o.replace, want["replace"].as_bool().unwrap(), "{tag}");
+            let wf = want["features"].as_array().unwrap();
+            assert_eq!(o.features.len(), wf.len(), "{tag} {key}");
+            for (g, w) in o.features.iter().zip(wf) {
+                assert_eq!(g.source, w["source"].as_i64(), "{tag}");
+                if o.replace {
+                    let want_named = w["values"].as_object().unwrap();
+                    let names: Vec<&String> = g.named.iter().map(|(k, _)| k).collect();
+                    let want_names: Vec<&String> = want_named.keys().collect();
+                    let mut a = names.clone();
+                    let mut b = want_names.clone();
+                    a.sort();
+                    b.sort();
+                    assert_eq!(a, b, "{tag}");
+                    for (k, v) in &g.named {
+                        same_json(&out_json(v), &want_named[k], &format!("{tag} {k}"));
+                    }
+                } else {
+                    let wv = w["values"].as_array().unwrap();
+                    assert_eq!(g.values.len(), wv.len(), "{tag}");
+                    for (a, b) in g.values.iter().zip(wv) {
+                        same_json(&out_json(a), b, &tag);
+                    }
+                }
+            }
+        }
+        assert_eq!(out.len(), r["output"].as_object().unwrap().len(), "{tag}");
+        assert_eq!(report_texts(&rep), want_report(r), "{tag}");
+        n += 1;
+    }
+    assert_eq!(n, 3);
+}
+
 #[test]
 fn open_shell_is_refused() {
     let prof = sweep::profile("rect", 10.0, Some(10.0), None, 16).unwrap();
