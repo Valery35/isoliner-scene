@@ -18,6 +18,19 @@ cargo run -p isoliner-scene --release -- fixtures/scene_demo.i3dscene
 Левая кнопка мыши вращает сцену, правая сдвигает, колесо приближает.
 Двойной щелчок вписывает сцену в окно.
 
+Над сценой плашка значков в порядке окна модуля: вид сверху, сброс,
+вид по разрезу, проекция, короб, контур и обрезка, вращение, виды,
+видео, кадр в буфер и в PNG, преувеличение. Тема светлая, тёмная
+включается на плашке. Обрезка контуром, коридором и по отметкам
+оставляет тела замкнутыми. Видео пишется кадрами PNG и склеивается
+в MP4, если в PATH есть ffmpeg.
+
+Открытый пакет перечитывается сам, когда его переписывает модуль
+QGIS: кнопка «Открыть в Isoliner Scene» окна Isoliner3D (с версии
+1.5.1) запускает программу и потом только обновляет пакет. Модуль
+ищет программу в `%LOCALAPPDATA%\Programs\Isoliner Scene` и в PATH,
+поэтому архив для Windows распаковывается в эту папку.
+
 Та же программа работает в браузере:
 https://valery35.github.io/isoliner-scene/app/. Сборка страницы -
 `trunk build --release` в папке `apps/isoliner-scene`, сайт целиком
@@ -42,8 +55,15 @@ https://valery35.github.io/isoliner-scene/app/. Сборка страницы -
 A viewer for Isoliner3D scene packages (`.i3dscene`) without QGIS.
 It shows the scene with the camera saved in QGIS: mine workings, ore
 bodies, surfaces, lines, transparency, vertical exaggeration and
-fly-through views. The crates also bring the scene and the Isoliner3D
-tools to RustGIS.
+fly-through views. A toolbar follows the QGIS viewer, with a light
+theme by default and a dark one on request. Clipping keeps bodies
+closed, the section view shows elevation and depth scales, videos
+are joined into MP4 when ffmpeg is in PATH. An open package reloads
+itself when the QGIS plugin rewrites it (the «Open in Isoliner
+Scene» button of Isoliner3D 1.5.1). Unpack the Windows archive into
+`%LOCALAPPDATA%\Programs\Isoliner Scene` so that the plugin finds
+it. The crates also bring the scene and the Isoliner3D tools to
+RustGIS.
 
 ## Лицензия
 
