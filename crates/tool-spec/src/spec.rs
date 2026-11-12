@@ -61,6 +61,10 @@ pub enum ParamKind {
     Integer,
     /// Пункт списка.
     Enum,
+    /// Растр: сетка значений по каналам.
+    Raster,
+    /// Номер канала растра с единицы, `parent` - ключ растра.
+    Band,
     /// Выход.
     Sink,
 }
@@ -154,7 +158,9 @@ impl Tool {
             let d = p.default.as_ref();
             let v = match p.kind {
                 ParamKind::Number => d.and_then(serde_json::Value::as_f64).map(Value::Number),
-                ParamKind::Integer => d.and_then(serde_json::Value::as_i64).map(Value::Integer),
+                ParamKind::Integer | ParamKind::Band => {
+                    d.and_then(serde_json::Value::as_i64).map(Value::Integer)
+                }
                 ParamKind::Enum if p.multiple => Some(Value::Enums(
                     d.and_then(serde_json::Value::as_array)
                         .map(|a| {
@@ -243,7 +249,7 @@ impl Tool {
                     | (ParamKind::String, Value::Str(_))
                     | (ParamKind::Bool, Value::Bool(_))
                     | (ParamKind::Number, Value::Number(_))
-                    | (ParamKind::Integer, Value::Integer(_))
+                    | (ParamKind::Integer | ParamKind::Band, Value::Integer(_))
             ) || match (p.kind, v) {
                 (ParamKind::Field, Value::Field(_)) | (ParamKind::Enum, Value::Enum(_)) => {
                     !p.multiple

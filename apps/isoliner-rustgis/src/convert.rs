@@ -178,7 +178,7 @@ fn layer(v: &J) -> Option<LayerInfo> {
 fn value(p: &Param, v: &J) -> Option<Value> {
     Some(match p.kind {
         ParamKind::Number => Value::Number(v.as_f64()?),
-        ParamKind::Integer => Value::Integer(v.as_i64()?),
+        ParamKind::Integer | ParamKind::Band => Value::Integer(v.as_i64()?),
         ParamKind::Enum if p.multiple => Value::Enums(
             v.as_array()?
                 .iter()
@@ -196,6 +196,8 @@ fn value(p: &Param, v: &J) -> Option<Value> {
         ParamKind::Mesh => Value::Mesh(body(v)?),
         ParamKind::Meshes => Value::Meshes(mesh_features(v)?),
         ParamKind::Table => Value::Table(rows(v)?),
+        // растра среди значений пока нет: ждёт переноса 2.13
+        ParamKind::Raster => return None,
         // необязательный выход: заказан или нет
         ParamKind::Sink if p.optional => Value::Bool(v.as_bool()?),
         ParamKind::Sink => return None,

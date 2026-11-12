@@ -328,6 +328,109 @@
    ]
   },
   {
+   "code": "2.13",
+   "name": "grid_to_shell",
+   "title": {
+    "ru": "Оболочка грида пласта",
+    "en": "A shell from a bed grid"
+   },
+   "group": "2",
+   "help": {
+    "ru": "Строит замкнутую оболочку тела пласта по гриду: кровля, подошва и бортик между ними.\n\nТо же самое делает кнопка оболочек в окне просмотра, но там это ручной шаг. Инструментом он становится частью модели обработки, и цепочка «поверхность - тело - вычитание отработанного - подсчёт запаса» запускается целиком.\n\nОболочка замкнута, поэтому её принимают 2.11 и 2.12, а объём считается точной формулой по самой оболочке.\n\nОбъём здесь и объём из 1.02 расходятся примерно на процент: оболочка идёт по центрам ячеек, а 1.02 считает ячейки целиком. Это разные границы одной области, а не спор методов.",
+    "en": "Builds a closed shell of a bed body from a grid: the roof, the floor and the skirt between them.\n\nThe shells button in the viewer does the same, but there it is a manual step. As a tool it becomes part of a processing model, and the chain \"surface - body - subtract what is mined out - count the reserves\" runs as a whole.\n\nThe shell is closed, so 2.11 and 2.12 take it, and the volume is computed by an exact formula over the shell itself.\n\nThe volume here and the volume from 1.02 differ by about one per cent: the shell runs through the centres of the cells, while 1.02 counts whole cells. These are different boundaries of one area, not a dispute of methods."
+   },
+   "params": [
+    {
+     "key": "INPUT",
+     "kind": "raster",
+     "label": {
+      "ru": "Грид пласта",
+      "en": "Bed grid"
+     },
+     "hint": {
+      "ru": "Грид пласта: канал кровли и канал подошвы. Такой даёт 1.01 из двух поверхностей или из одной, достроенной вниз, и 2.08 по зарисовкам на разрезах.",
+      "en": "A bed grid: a roof band and a floor band. 1.01 gives one from two surfaces or from a single one built downwards, and 2.08 from the drawings on sections."
+     }
+    },
+    {
+     "key": "BAND",
+     "kind": "band",
+     "label": {
+      "ru": "Канал кровли",
+      "en": "Roof band"
+     },
+     "hint": {
+      "ru": "Канал кровли. Подошвой считается следующий за ним: так устроен грид пласта. У многопластового грида это выбор пласта.",
+      "en": "The roof band. The next one counts as the floor: that is how a bed grid is built. In a multi-bed grid this is the choice of bed."
+     },
+     "default": 1,
+     "parent": "INPUT"
+    },
+    {
+     "key": "STEP",
+     "kind": "integer",
+     "label": {
+      "ru": "Прореживание сетки",
+      "en": "Thinning of the mesh"
+     },
+     "hint": {
+      "ru": "Прореживание сетки. Единица - как есть; двойка берёт каждую вторую ячейку и даёт вчетверо меньше треугольников. Объём при этом меняется мало, а вот тонкие детали срезаются.",
+      "en": "Thinning of the mesh. One means as it is; two takes every second cell and gives four times fewer triangles. The volume changes little, but fine detail is cut away."
+     },
+     "default": 1,
+     "minimum": 1,
+     "maximum": 50,
+     "advanced": true
+    },
+    {
+     "key": "OUTPUT",
+     "kind": "sink",
+     "label": {
+      "ru": "Тела пласта",
+      "en": "Bodies of the bed"
+     },
+     "hint": {
+      "ru": "Тела пласта: полигоны с Z, объём каждого в атрибутах. Дальше их принимают 2.11 и 2.12.",
+      "en": "The bodies of the bed: polygons with Z, the volume of each in the attributes. 2.11 and 2.12 take them next."
+     }
+    }
+   ],
+   "messages": [
+    {
+     "ru": "Мощность: %.2f .. %.2f м.",
+     "en": "Thickness: %.2f .. %.2f m."
+    },
+    {
+     "ru": "Вершин %d, граней %d.",
+     "en": "Vertices %d, faces %d."
+    },
+    {
+     "ru": "Тел: %d, объём всего %.1f м3.",
+     "en": "Bodies: %d, volume in all %.1f m3."
+    },
+    {
+     "ru": "После канала %d нет канала подошвы. У грида пласта каналы идут парами: кровля, подошва.",
+     "en": "After band %d there is no floor band. In a bed grid the bands go in pairs: roof, floor."
+    },
+    {
+     "ru": "Мощность нигде не считается: в каналах нет перекрывающихся данных.",
+     "en": "The thickness cannot be computed anywhere: the bands hold no overlapping data."
+    },
+    {
+     "ru": "Местами подошва выше кровли: таких ячеек %d. Тела там нет, и они выброшены.",
+     "en": "In places the floor is above the roof: %d such cells. There is no body there, and they are dropped."
+    },
+    {
+     "ru": "Оболочка не построилась: проверьте каналы.",
+     "en": "The shell was not built: check the bands."
+    },
+    {
+     "ru": "Незамкнутых тел: %d. Их не примут 2.11 и 2.12, и объём по ним считать нельзя.",
+     "en": "Bodies that are not closed: %d. 2.11 and 2.12 will not take them, and no volume can be computed from them."
+    }
+   ]
+  },
+  {
    "code": "2.14",
    "name": "zonal_shell_stats",
    "title": {

@@ -45,6 +45,21 @@ fn reads_the_module_catalog() {
     assert!(zonal.param("STATS").unwrap().multiple);
     let holes = cat.tool("desurvey_holes").unwrap();
     assert_eq!(holes.param("COLLARS").unwrap().kind, ParamKind::Table);
+    // растр и канал растра (2.13), канал по умолчанию - целое
+    let grid = cat.tool("grid_to_shell").unwrap();
+    let band = grid
+        .params
+        .iter()
+        .find(|p| p.kind == ParamKind::Band)
+        .unwrap();
+    let raster = grid.param(band.parent.as_deref().unwrap()).unwrap();
+    assert_eq!(raster.kind, ParamKind::Raster);
+    if band.default.is_some() {
+        assert!(matches!(
+            grid.defaults().get(&band.key),
+            Some(Value::Integer(_))
+        ));
+    }
     let d = zonal.defaults();
     assert_eq!(d.get("OVERWRITE"), Some(&Value::Bool(false)));
     assert!(matches!(d.get("STATS"), Some(Value::Enums(_))));
