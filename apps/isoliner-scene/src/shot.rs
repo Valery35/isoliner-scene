@@ -29,12 +29,14 @@ pub fn encode_png(width: u32, height: u32, rgba: &[u8]) -> Result<Vec<u8>, Strin
 }
 
 /// Имя файла снимка по имени пакета: `шахта.i3dscene` -> `шахта.png`.
+/// Путь делится по обеим чертам: имя пакета из Windows бывает и на
+/// Linux, а `Path` там обратную черту разделителем не считает.
 pub fn png_name(package: Option<&str>) -> String {
     let stem = package
-        .and_then(|n| std::path::Path::new(n).file_stem())
-        .map(|s| s.to_string_lossy().into_owned())
+        .and_then(|n| n.rsplit(['/', '\\']).next())
+        .map(|file| file.rsplit_once('.').map_or(file, |(s, _)| s))
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "scene".to_string());
+        .unwrap_or("scene");
     format!("{stem}.png")
 }
 
@@ -63,5 +65,7 @@ mod tests {
         assert_eq!(png_name(Some("C:\\данные\\шахта.i3dscene")), "шахта.png");
         assert_eq!(png_name(Some("scene_demo.i3dscene")), "scene_demo.png");
         assert_eq!(png_name(None), "scene.png");
+        assert_eq!(png_name(Some("/home/v/шахта.v2.i3dscene")), "шахта.v2.png");
+        assert_eq!(png_name(Some("C:\\данные\\")), "scene.png");
     }
 }
