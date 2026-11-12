@@ -125,6 +125,10 @@ const TABLE: &[(&str, &str)] = &[
         "ffmpeg could not make the video: %s. The PNG frames are kept in %s",
     ),
     ("поток склейки оборвался", "the joining thread broke off"),
+    (
+        "Пакет обновился, камера на месте: %s",
+        "The package was updated, the camera stays: %s",
+    ),
     ("Измерение", "Measure"),
     (
         "Щелчок - точка, двойной щелчок - замкнуть контур, правая кнопка или Backspace - убрать точку, Esc - начать заново.",

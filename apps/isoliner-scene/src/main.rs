@@ -18,6 +18,8 @@ mod share;
 mod shot;
 #[cfg(not(target_arch = "wasm32"))]
 mod video;
+#[cfg(not(target_arch = "wasm32"))]
+mod watch;
 #[cfg(target_arch = "wasm32")]
 mod web;
 

@@ -259,6 +259,9 @@ pub struct SceneApp {
     recording: Option<Recording>,
     #[cfg(not(target_arch = "wasm32"))]
     joining: Option<Joining>,
+    /// Открытый с диска пакет: переписан - перечитывается.
+    #[cfg(not(target_arch = "wasm32"))]
+    watch: Option<crate::watch::Watch>,
     /// Папка из `--frames`: запись начнётся сама, как только есть кадр.
     #[cfg(not(target_arch = "wasm32"))]
     film_dir: Option<std::path::PathBuf>,
@@ -316,6 +319,8 @@ impl SceneApp {
             recording: None,
             #[cfg(not(target_arch = "wasm32"))]
             joining: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            watch: None,
             #[cfg(not(target_arch = "wasm32"))]
             film_dir: None,
             #[cfg(not(target_arch = "wasm32"))]
@@ -818,9 +823,47 @@ impl SceneApp {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn open(&mut self, path: &Path) {
         match std::fs::read(path) {
-            Ok(b) => self.open_bytes(path.display().to_string(), &b),
+            Ok(b) => {
+                self.open_bytes(path.display().to_string(), &b);
+                // открытый пакет перечитывается, когда модуль QGIS
+                // его перепишет
+                if self.error.is_none() {
+                    self.watch = Some(crate::watch::Watch::new(path.to_path_buf()));
+                }
+            }
             Err(e) => self.status = fill(self.t("Не открылось: %s"), &[e.to_string()]),
         }
+    }
+
+    /// Пакет на диске переписан - перечитать. Камера остаётся, где
+    /// была: сцену в QGIS пересобрали, а смотрят на неё отсюда.
+    /// Недописанный пакет не читается, попытка повторится. Во время
+    /// записи кадров сцена не меняется.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn poll_watch(&mut self, now: f64, ctx: &egui::Context) {
+        let busy = self.recording.is_some() || self.joining.is_some();
+        let Some(w) = self.watch.as_mut() else {
+            return;
+        };
+        ctx.request_repaint_after(std::time::Duration::from_secs_f64(crate::watch::PERIOD));
+        if busy || !w.due(now) {
+            return;
+        }
+        let path = w.path.clone();
+        let Ok(pkg) = std::fs::read(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|b| read_package(&b).map_err(|e| e.to_string()))
+        else {
+            return;
+        };
+        w.read_ok();
+        if self.pkg.is_some() {
+            self.pending_pose = Some(self.cam);
+        }
+        let name = path.display().to_string();
+        self.load(pkg, name.clone());
+        self.error = None;
+        self.status = fill(self.t("Пакет обновился, камера на месте: %s"), &[name]);
     }
 
     /// Открыть пакет из байтов: перетаскивание и выбор файла в браузере.
@@ -830,6 +873,12 @@ impl SceneApp {
                 self.load(pkg, name);
                 self.source = None;
                 self.error = None;
+                // пакет не с диска - следить не за чем, с диска
+                // слежение ставит `open`
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    self.watch = None;
+                }
             }
             Err(e) => {
                 self.status = fill(self.t("Не открылось: %s"), &[e.to_string()]);
@@ -2142,6 +2191,7 @@ impl eframe::App for SceneApp {
             }
             self.film_step(ui.ctx());
             self.poll_join(ui.ctx());
+            self.poll_watch(now, ui.ctx());
         }
         let view_size = self.target.as_ref().map_or(egui::vec2(1280.0, 800.0), |t| {
             egui::vec2(t.width as f32, t.height as f32)
