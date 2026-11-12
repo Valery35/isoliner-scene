@@ -123,6 +123,8 @@ struct Film {
     seconds: f64,
     leg: f64,
     pause: f64,
+    /// Склеить кадры в MP4, если в PATH есть ffmpeg.
+    mp4: bool,
 }
 
 impl Default for Film {
@@ -133,8 +135,17 @@ impl Default for Film {
             seconds: 12.0,
             leg: 4.0,
             pause: 1.0,
+            mp4: true,
         }
     }
+}
+
+/// Идущая склейка кадров в MP4: ответ ffmpeg из своего потока.
+#[cfg(not(target_arch = "wasm32"))]
+struct Joining {
+    rx: std::sync::mpsc::Receiver<Result<std::path::PathBuf, crate::video::JoinError>>,
+    dir: std::path::PathBuf,
+    made: usize,
 }
 
 /// Идущая запись кадров в папку.
@@ -149,6 +160,8 @@ struct Recording {
     /// Кадр записи своего размера: окно в это время рисует своё.
     target: Target,
     error: Option<String>,
+    /// Склеить в MP4 после записи.
+    mp4: bool,
 }
 
 /// Точки измерения в настоящих координатах.
@@ -244,6 +257,8 @@ pub struct SceneApp {
     film_open: bool,
     #[cfg(not(target_arch = "wasm32"))]
     recording: Option<Recording>,
+    #[cfg(not(target_arch = "wasm32"))]
+    joining: Option<Joining>,
     /// Папка из `--frames`: запись начнётся сама, как только есть кадр.
     #[cfg(not(target_arch = "wasm32"))]
     film_dir: Option<std::path::PathBuf>,
@@ -299,6 +314,8 @@ impl SceneApp {
             film_open: false,
             #[cfg(not(target_arch = "wasm32"))]
             recording: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            joining: None,
             #[cfg(not(target_arch = "wasm32"))]
             film_dir: None,
             #[cfg(not(target_arch = "wasm32"))]
@@ -496,6 +513,7 @@ impl SceneApp {
                 ui.weak(t(
                     "Кадры 25 в секунду, размер окна сцены, имена frame_00000.png и дальше. Склеивают их программой монтажа или ffmpeg.",
                 ));
+                ui.checkbox(&mut f.mp4, t("Склеить в MP4 (ffmpeg из PATH)"));
                 if ui.button(t("Выбрать папку и записать")).clicked() {
                     go = true;
                 }
@@ -560,6 +578,7 @@ impl SceneApp {
             start: self.cam,
             target,
             error: None,
+            mp4: f.mp4,
         });
     }
 
@@ -628,6 +647,23 @@ impl SceneApp {
                 self.t("Запись прервана на кадре %s из %s."),
                 &[made.to_string(), n.to_string()],
             )
+        } else if rec.mp4 {
+            // ffmpeg ждётся в своём потоке, окно в это время живёт
+            let out = rec.dir.join(crate::video::mp4_name(self.name.as_deref()));
+            let dir = rec.dir.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let res = crate::video::join(crate::video::FFMPEG, &dir, flight::FPS, &out);
+                let _ = tx.send(res);
+            });
+            self.joining = Some(Joining {
+                rx,
+                dir: rec.dir,
+                made,
+            });
+            self.status = fill(self.t("Склейка MP4 из %s кадров…"), &[made.to_string()]);
+            ctx.request_repaint();
+            return;
         } else {
             fill(
                 self.t("Записано кадров: %s, %s с ролика: %s"),
@@ -638,7 +674,50 @@ impl SceneApp {
                 ],
             )
         };
-        // запись из командной строки: итог в вывод, окно закрывается
+        self.film_done(ctx);
+    }
+
+    /// Ответ ffmpeg: ролик есть, программы нет или она не справилась.
+    /// Кадры PNG в папке остаются в любом случае.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn poll_join(&mut self, ctx: &egui::Context) {
+        let Some(job) = self.joining.as_ref() else {
+            return;
+        };
+        let res = match job.rx.try_recv() {
+            Ok(r) => r,
+            Err(std::sync::mpsc::TryRecvError::Empty) => {
+                ctx.request_repaint_after(std::time::Duration::from_millis(200));
+                return;
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => Err(
+                crate::video::JoinError::Failed(self.t("поток склейки оборвался").into()),
+            ),
+        };
+        let Some(job) = self.joining.take() else {
+            return;
+        };
+        let dir = job.dir.display().to_string();
+        self.status = match res {
+            Ok(path) => fill(
+                self.t("Записано кадров: %s, ролик MP4: %s"),
+                &[job.made.to_string(), path.display().to_string()],
+            ),
+            Err(crate::video::JoinError::Missing) => fill(
+                self.t("ffmpeg не найден в PATH. Кадры PNG остались в папке %s"),
+                &[dir],
+            ),
+            Err(crate::video::JoinError::Failed(e)) => fill(
+                self.t("ffmpeg не склеил ролик: %s. Кадры PNG остались в папке %s"),
+                &[e, dir],
+            ),
+        };
+        self.film_done(ctx);
+    }
+
+    /// Запись из командной строки: итог в вывод, окно закрывается.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn film_done(&mut self, ctx: &egui::Context) {
         if self.film_exit {
             println!("{}", self.status);
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -1722,6 +1801,8 @@ impl SceneApp {
                 if ui.button(self.t("Прервать")).clicked() {
                     self.finish_film(None, ui.ctx());
                 }
+            } else if self.joining.is_some() {
+                ui.spinner();
             } else if ui.button(self.t("Кадры PNG…")).clicked() {
                 self.film_open = true;
             }
@@ -2060,6 +2141,7 @@ impl eframe::App for SceneApp {
                 self.start_film();
             }
             self.film_step(ui.ctx());
+            self.poll_join(ui.ctx());
         }
         let view_size = self.target.as_ref().map_or(egui::vec2(1280.0, 800.0), |t| {
             egui::vec2(t.width as f32, t.height as f32)

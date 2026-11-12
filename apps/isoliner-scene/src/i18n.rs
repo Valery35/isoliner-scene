@@ -107,6 +107,24 @@ const TABLE: &[(&str, &str)] = &[
         "Записано кадров: %s, %s с ролика: %s",
         "Frames written: %s, %s s of video: %s",
     ),
+    (
+        "Склеить в MP4 (ffmpeg из PATH)",
+        "Join into MP4 (ffmpeg from PATH)",
+    ),
+    ("Склейка MP4 из %s кадров…", "Joining %s frames into MP4…"),
+    (
+        "Записано кадров: %s, ролик MP4: %s",
+        "Frames written: %s, MP4 video: %s",
+    ),
+    (
+        "ffmpeg не найден в PATH. Кадры PNG остались в папке %s",
+        "ffmpeg was not found in PATH. The PNG frames are kept in %s",
+    ),
+    (
+        "ffmpeg не склеил ролик: %s. Кадры PNG остались в папке %s",
+        "ffmpeg could not make the video: %s. The PNG frames are kept in %s",
+    ),
+    ("поток склейки оборвался", "the joining thread broke off"),
     ("Измерение", "Measure"),
     (
         "Щелчок - точка, двойной щелчок - замкнуть контур, правая кнопка или Backspace - убрать точку, Esc - начать заново.",

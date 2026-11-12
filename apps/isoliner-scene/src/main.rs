@@ -16,13 +16,15 @@ mod app;
 mod i18n;
 mod share;
 mod shot;
+#[cfg(not(target_arch = "wasm32"))]
+mod video;
 #[cfg(target_arch = "wasm32")]
 mod web;
 
 /// Ключи командной строки: `файл.i3dscene`, `--pose x,y,z,...` -
 /// камера как в ссылке «Поделиться», `--check` - самопроверка
-/// с отчётом в вывод, `--frames ПАПКА` - кадры оборота PNG в папку,
-/// потом окно закрывается.
+/// с отчётом в вывод, `--frames ПАПКА` - кадры оборота PNG в папку
+/// и ролик MP4, если в PATH есть ffmpeg, потом окно закрывается.
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     let mut path = None;
