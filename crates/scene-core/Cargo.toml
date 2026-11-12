@@ -10,6 +10,7 @@ repository.workspace = true
 [dependencies]
 glam.workspace = true
 scene-format.workspace = true
+spade.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

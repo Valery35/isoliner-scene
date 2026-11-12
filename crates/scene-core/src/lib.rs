@@ -20,6 +20,7 @@
 
 pub mod axes;
 pub mod camera;
+pub mod clip;
 pub mod flight;
 pub mod measure;
 pub mod mesh;

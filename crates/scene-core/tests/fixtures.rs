@@ -137,3 +137,92 @@ fn section_scales_like_the_module() {
     assert_eq!(got.arrow_label.1, want["arrow_label"][1].as_str().unwrap());
     assert!((got.azimuth - want["azimuth"].as_f64().unwrap()).abs() < 1e-9);
 }
+
+/// Обрезка демо-сцены против окна модуля (fixtures/clip.json):
+/// пустая часть пуста, замкнутость, охват и объём замкнутых частей.
+/// Число вершин и граней зависит от разбиения и не сверяется.
+#[test]
+fn clip_like_the_module_window() {
+    use scene_core::clip::{Clip, Mesh, Side, clip_mesh, holes, signed_volume};
+    use scene_format::Indices;
+    let pkg = read_package(&load("scene_demo.i3dscene")).unwrap();
+    let data = json("clip.json");
+    let p2 = |v: &Value| [v[0].as_f64().unwrap(), v[1].as_f64().unwrap()];
+    let lines = |v: &Value| -> Vec<Vec<[f64; 2]>> {
+        v.as_array()
+            .unwrap()
+            .iter()
+            .map(|l| l.as_array().unwrap().iter().map(p2).collect())
+            .collect()
+    };
+    let mut bad = Vec::new();
+    for case in data["cases"].as_array().unwrap() {
+        let c = &case["clip"];
+        let clip = Clip {
+            side: Side::parse(c["side"].as_str().unwrap()).unwrap(),
+            rings: lines(&c["rings"]),
+            lines: lines(&c["lines"]),
+            width: c["width"].as_f64().unwrap_or(0.0),
+            zlo: c["zlo"].as_f64(),
+            zhi: c["zhi"].as_f64(),
+        };
+        let name = case["case"].as_str().unwrap();
+        for want in case["parts"].as_array().unwrap() {
+            let pname = want["name"].as_str().unwrap();
+            let src = pkg.parts.iter().find(|p| p.name == pname).unwrap();
+            let Indices::Triangles(tris) = &src.indices else {
+                panic!("{pname}")
+            };
+            let mesh = Mesh {
+                verts: src.verts.clone(),
+                faces: tris.clone(),
+            };
+            let body = want["path"] == "body";
+            let got = clip_mesh(&mesh, &clip, body);
+            let tag = format!("{name} {pname}");
+            if want["bbox"].is_null() {
+                if !got.faces.is_empty() {
+                    bad.push(format!("{tag}: ждали пусто, граней {}", got.faces.len()));
+                }
+                continue;
+            }
+            if got.faces.is_empty() {
+                bad.push(format!("{tag}: пусто"));
+                continue;
+            }
+            let closed = holes(&got) == 0;
+            if body && closed != want["closed"].as_bool().unwrap() {
+                bad.push(format!(
+                    "{tag}: замкнуто {closed}, рёбер-краёв {}",
+                    holes(&got)
+                ));
+            }
+            let used: Vec<[f64; 3]> = got
+                .faces
+                .iter()
+                .flatten()
+                .map(|&i| got.verts[i as usize])
+                .collect();
+            for k in 0..3 {
+                let lo = used.iter().map(|v| v[k]).fold(f64::INFINITY, f64::min);
+                let hi = used.iter().map(|v| v[k]).fold(f64::NEG_INFINITY, f64::max);
+                let (wl, wh) = (
+                    want["bbox"][0][k].as_f64().unwrap(),
+                    want["bbox"][1][k].as_f64().unwrap(),
+                );
+                if (lo - wl).abs() > 0.01 || (hi - wh).abs() > 0.01 {
+                    bad.push(format!(
+                        "{tag}: охват по {k}: {lo:.3}..{hi:.3}, ждали {wl:.3}..{wh:.3}"
+                    ));
+                }
+            }
+            if let Some(wv) = want["volume"].as_f64() {
+                let v = signed_volume(&got);
+                if (v - wv).abs() > 1e-3 * wv.abs().max(1.0) {
+                    bad.push(format!("{tag}: объём {v:.3}, ждали {wv:.3}"));
+                }
+            }
+        }
+    }
+    assert!(bad.is_empty(), "расхождения:\n{}", bad.join("\n"));
+}
