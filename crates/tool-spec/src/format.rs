@@ -96,6 +96,24 @@ pub fn format(template: &str, args: &[Arg]) -> String {
             out.push('%');
             continue;
         }
+        // флаги и ширина, как у % в Python: %+.1f, %5d, %-8s, %05.1f
+        let (mut plus, mut left, mut zero, mut space) = (false, false, false, false);
+        while let Some(f) = chars.peek().copied().filter(|f| "+- 0#".contains(*f)) {
+            match f {
+                '+' => plus = true,
+                '-' => left = true,
+                '0' => zero = true,
+                ' ' => space = true,
+                _ => {}
+            }
+            chars.next();
+        }
+        let mut width_s = String::new();
+        while let Some(d) = chars.peek().filter(|d| d.is_ascii_digit()) {
+            width_s.push(*d);
+            chars.next();
+        }
+        let width: usize = width_s.parse().unwrap_or(0);
         let mut prec: Option<usize> = None;
         if chars.peek() == Some(&'.') {
             chars.next();
@@ -115,20 +133,44 @@ pub fn format(template: &str, args: &[Arg]) -> String {
             out.push(conv);
             continue;
         };
-        match conv {
-            'd' | 'i' => out.push_str(&format!("{}", as_f64(arg).trunc() as i64)),
-            'f' => out.push_str(&format!("{:.*}", prec.unwrap_or(6), as_f64(arg))),
-            'g' => out.push_str(&general(as_f64(arg), prec.unwrap_or(6))),
+        let num = matches!(conv, 'd' | 'i' | 'f' | 'g');
+        let mut piece = match conv {
+            'd' | 'i' => format!("{}", as_f64(arg).trunc() as i64),
+            'f' => format!("{:.*}", prec.unwrap_or(6), as_f64(arg)),
+            'g' => general(as_f64(arg), prec.unwrap_or(6)),
             's' => match arg {
-                Arg::Text(t) => out.push_str(t),
-                Arg::Int(i) => out.push_str(&i.to_string()),
-                Arg::Float(f) => out.push_str(&general(*f, 12)),
+                Arg::Text(t) => t.clone(),
+                Arg::Int(i) => i.to_string(),
+                Arg::Float(f) => general(*f, 12),
             },
             other => {
                 out.push('%');
                 out.push(other);
+                continue;
+            }
+        };
+        if num && !piece.starts_with('-') {
+            if plus {
+                piece.insert(0, '+');
+            } else if space {
+                piece.insert(0, ' ');
             }
         }
+        let len = piece.chars().count();
+        if len < width {
+            let pad = width - len;
+            if left {
+                piece.push_str(&" ".repeat(pad));
+            } else if zero && num {
+                // нули после знака
+                let sign = piece.starts_with(['+', '-', ' ']);
+                let at = usize::from(sign);
+                piece.insert_str(at, &"0".repeat(pad));
+            } else {
+                piece.insert_str(0, &" ".repeat(pad));
+            }
+        }
+        out.push_str(&piece);
     }
     out
 }
@@ -155,5 +197,15 @@ mod tests {
             "-299.250 ниже"
         );
         assert_eq!(format("нет %d", &[]), "нет %d");
+        // флаги и ширина
+        assert_eq!(format("%+.1f процента", &[3.25.into()]), "+3.2 процента");
+        assert_eq!(format("%+.1f", &[(-7.0).into()]), "-7.0");
+        assert_eq!(
+            format(
+                "[%5d|%-4s|%05.1f]",
+                &[42i64.into(), "ab".into(), 3.5.into()]
+            ),
+            "[   42|ab  |003.5]"
+        );
     }
 }

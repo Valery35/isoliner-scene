@@ -323,6 +323,60 @@ fn boolean_runs_like_the_module() {
     assert_eq!(n, 3);
 }
 
+/// Объекты слоя из прогона: `[{"id", "parts", "attrs"}]`.
+fn features_of(v: &J) -> Vec<LineFeature> {
+    v.as_array()
+        .unwrap()
+        .iter()
+        .map(|l| LineFeature {
+            id: l["id"].as_i64().unwrap(),
+            parts: l["parts"].as_array().unwrap().iter().map(pts).collect(),
+            attrs: l["attrs"]
+                .as_object()
+                .map(|o| o.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+                .unwrap_or_default(),
+        })
+        .collect()
+}
+
+#[test]
+fn select_runs_like_the_module() {
+    let runs = json("tool_runs.json");
+    let run = run_fn("select_by_shell").unwrap();
+    let mut n = 0;
+    for r in runs["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["tool"] == "select_by_shell")
+    {
+        let mut vals = values_of(&r["values"]);
+        vals.insert(
+            "MODE".into(),
+            Value::Enum(r["values"]["MODE"].as_u64().unwrap() as usize),
+        );
+        vals.insert("SHELL".into(), Value::Mesh(body_of(&r["input"]["SHELL"])));
+        vals.insert(
+            "INPUT".into(),
+            Value::Features(features_of(&r["input"]["INPUT"])),
+        );
+        let mut rep = VecReport::default();
+        let out = run(&vals, &mut rep).unwrap();
+        let o = &out["OUTPUT"];
+        let got: Vec<i64> = o.features.iter().map(|f| f.source.unwrap()).collect();
+        let want: Vec<i64> = r["output"]["features"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f["source"].as_i64().unwrap())
+            .collect();
+        assert_eq!(got, want, "{}", r["values"]);
+        assert_eq!(report_texts(&rep), want_report(r), "{}", r["values"]);
+        n += 1;
+    }
+    assert_eq!(n, 6);
+}
+
 #[test]
 fn open_shell_is_refused() {
     let prof = sweep::profile("rect", 10.0, Some(10.0), None, 16).unwrap();

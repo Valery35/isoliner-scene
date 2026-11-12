@@ -103,6 +103,194 @@ pub fn shell_occupancy(
     occ
 }
 
+/// Какие точки внутри замкнутой оболочки, как `points_inside` модуля:
+/// луч из точки вверх, нечётное число пересечений - внутри. Ответ
+/// точный, без ячеек.
+pub fn points_inside(verts: &[[f64; 3]], faces: &[[u32; 3]], pts: &[[f64; 3]]) -> Vec<bool> {
+    if pts.is_empty() {
+        return Vec::new();
+    }
+    // точки по X: у треугольника берётся только своя полоса
+    let mut order: Vec<usize> = (0..pts.len()).collect();
+    order.sort_by(|&a, &b| pts[a][0].total_cmp(&pts[b][0]));
+    let ptp = |k: usize| {
+        let (lo, hi) = pts
+            .iter()
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(l, h), p| {
+                (l.min(p[k]), h.max(p[k]))
+            });
+        hi - lo
+    };
+    let scale = ptp(0).max(ptp(1)).max(1.0);
+    // сдвиг, как у заливки ячеек: точка на ребре двух треугольников
+    // засчиталась бы обоим
+    let px: Vec<f64> = order
+        .iter()
+        .map(|&i| pts[i][0] + scale * 1e-9 * 2f64.sqrt())
+        .collect();
+    let py: Vec<f64> = order
+        .iter()
+        .map(|&i| pts[i][1] + scale * 1e-9 * 3f64.sqrt())
+        .collect();
+    let pz: Vec<f64> = order.iter().map(|&i| pts[i][2]).collect();
+    let mut above = vec![0u32; pts.len()];
+    for t in faces {
+        let (Some(a), Some(b), Some(c)) = (
+            verts.get(t[0] as usize),
+            verts.get(t[1] as usize),
+            verts.get(t[2] as usize),
+        ) else {
+            continue;
+        };
+        let det = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
+        if det.abs() < 1e-12 {
+            continue;
+        }
+        let i0 = px.partition_point(|&x| x < a[0].min(b[0]).min(c[0]));
+        let i1 = px.partition_point(|&x| x <= a[0].max(b[0]).max(c[0]));
+        let (ylo, yhi) = (a[1].min(b[1]).min(c[1]), a[1].max(b[1]).max(c[1]));
+        for i in i0..i1 {
+            let (x, y) = (px[i], py[i]);
+            if y < ylo || y > yhi {
+                continue;
+            }
+            let u = ((x - a[0]) * (c[1] - a[1]) - (y - a[1]) * (c[0] - a[0])) / det;
+            let w = ((y - a[1]) * (b[0] - a[0]) - (x - a[0]) * (b[1] - a[1])) / det;
+            if u >= 0.0 && w >= 0.0 && u + w <= 1.0 {
+                let z = a[2] + u * (b[2] - a[2]) + w * (c[2] - a[2]);
+                if z > pz[i] {
+                    above[i] += 1;
+                }
+            }
+        }
+    }
+    let mut res = vec![false; pts.len()];
+    for (k, &i) in order.iter().enumerate() {
+        res[i] = above[k] % 2 == 1;
+    }
+    res
+}
+
+/// Охват каждого треугольника: отсечка перед точным пересечением.
+pub fn tri_bbox(verts: &[[f64; 3]], faces: &[[u32; 3]]) -> Vec<([f64; 3], [f64; 3])> {
+    faces
+        .iter()
+        .map(|t| {
+            let mut lo = [f64::INFINITY; 3];
+            let mut hi = [f64::NEG_INFINITY; 3];
+            for &i in t {
+                if let Some(v) = verts.get(i as usize) {
+                    for k in 0..3 {
+                        lo[k] = lo[k].min(v[k]);
+                        hi[k] = hi[k].max(v[k]);
+                    }
+                }
+            }
+            (lo, hi)
+        })
+        .collect()
+}
+
+/// Параметры t в (0, 1), где отрезок a-b пересекает оболочку,
+/// как `_segment_hits` модуля. Точки на общем ребре двух треугольников
+/// сливаются.
+fn segment_hits(
+    verts: &[[f64; 3]],
+    faces: &[[u32; 3]],
+    a: [f64; 3],
+    b: [f64; 3],
+    bbox: &[([f64; 3], [f64; 3])],
+) -> Vec<f64> {
+    let sub = |p: [f64; 3], q: [f64; 3]| [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+    let cross = |p: [f64; 3], q: [f64; 3]| {
+        [
+            p[1] * q[2] - p[2] * q[1],
+            p[2] * q[0] - p[0] * q[2],
+            p[0] * q[1] - p[1] * q[0],
+        ]
+    };
+    let dot = |p: [f64; 3], q: [f64; 3]| p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+    let d = sub(b, a);
+    let s_lo = [a[0].min(b[0]), a[1].min(b[1]), a[2].min(b[2])];
+    let s_hi = [a[0].max(b[0]), a[1].max(b[1]), a[2].max(b[2])];
+    let mut ts = Vec::new();
+    for (t, (lo, hi)) in faces.iter().zip(bbox) {
+        if (0..3).any(|k| hi[k] < s_lo[k] || lo[k] > s_hi[k]) {
+            continue;
+        }
+        let (Some(p0), Some(p1), Some(p2)) = (
+            verts.get(t[0] as usize),
+            verts.get(t[1] as usize),
+            verts.get(t[2] as usize),
+        ) else {
+            continue;
+        };
+        let (e1, e2) = (sub(*p1, *p0), sub(*p2, *p0));
+        let h = cross(d, e2);
+        let det = dot(e1, h);
+        if det.abs() <= 1e-14 {
+            continue;
+        }
+        let inv = 1.0 / det;
+        let s = sub(a, *p0);
+        let u = dot(s, h) * inv;
+        let q = cross(s, e1);
+        let w = dot(d, q) * inv;
+        let tt = dot(e2, q) * inv;
+        if u >= 0.0 && w >= 0.0 && u + w <= 1.0 && tt > 0.0 && tt < 1.0 {
+            ts.push(tt);
+        }
+    }
+    ts.sort_by(f64::total_cmp);
+    let mut out: Vec<f64> = Vec::with_capacity(ts.len());
+    for t in ts {
+        if out.last().is_none_or(|l| t - l > 1e-9) {
+            out.push(t);
+        }
+    }
+    out
+}
+
+/// Длина ломаной внутри замкнутой оболочки, как `polyline_inside_length`
+/// модуля: (длина внутри, длина всего). `start_inside` - уже известно,
+/// внутри ли начало ломаной.
+pub fn polyline_inside_length(
+    verts: &[[f64; 3]],
+    faces: &[[u32; 3]],
+    pts: &[[f64; 3]],
+    bbox: &[([f64; 3], [f64; 3])],
+    start_inside: Option<bool>,
+) -> (f64, f64) {
+    if pts.len() < 2 {
+        return (0.0, 0.0);
+    }
+    let mut inside = start_inside
+        .unwrap_or_else(|| points_inside(verts, faces, &pts[..1]).first() == Some(&true));
+    let (mut got, mut total) = (0.0, 0.0);
+    for w in pts.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let len = ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2) + (b[2] - a[2]).powi(2)).sqrt();
+        if len <= 0.0 || !len.is_finite() {
+            continue;
+        }
+        total += len;
+        let ts = segment_hits(verts, faces, a, b, bbox);
+        let mut edges = Vec::with_capacity(ts.len() + 2);
+        edges.push(0.0);
+        edges.extend(ts);
+        edges.push(1.0);
+        for e in edges.windows(2) {
+            if inside {
+                got += (e[1] - e[0]) * len;
+            }
+            inside = !inside;
+        }
+        // цикл переключил состояние и на последнем фиктивном краю
+        inside = !inside;
+    }
+    (got, total)
+}
+
 /// Логическая операция над занятостью двух тел.
 pub fn combine(a: &[Vec<bool>], b: &[Vec<bool>], op: &str) -> Vec<Vec<bool>> {
     a.iter()

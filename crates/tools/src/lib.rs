@@ -10,6 +10,8 @@
 //!
 //! - [`boolean_shells`] - 2.11 Булевы операции с оболочками, ядро
 //!   в [`boolean`] и [`voxel`];
+//! - [`select_by_shell`] - 2.12 Выборка оболочкой, луч вверх
+//!   из [`boolean`];
 //! - [`sweep_body`] - 2.24 Тело вдоль выработки, ядро в [`sweep`];
 //! - [`fill_volume`] - 2.23 Заполнение тела до объёма, ядро в [`fill`]
 //!   и [`voxel`].
@@ -20,6 +22,7 @@ pub mod boolean;
 pub mod boolean_shells;
 pub mod fill;
 pub mod fill_volume;
+pub mod select_by_shell;
 pub mod shell;
 pub mod sweep;
 pub mod sweep_body;
@@ -36,6 +39,7 @@ pub type RunFn = fn(&Values, &mut dyn Report) -> Result<BTreeMap<String, Output>
 pub const RUNS: &[(&str, RunFn)] = &[
     ("boolean_shells", boolean_shells::run),
     ("fill_to_volume", fill_volume::run),
+    ("select_by_shell", select_by_shell::run),
     ("sweep_body", sweep_body::run),
 ];
 

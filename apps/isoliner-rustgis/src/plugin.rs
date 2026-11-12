@@ -374,7 +374,13 @@ mod tests {
                     w["n_faces"].as_u64().unwrap()
                 );
             }
-            {
+            // объект источника без своих полей - значений в образце нет
+            if let Some(want_values) = w["values"].as_array() {
+                assert_eq!(
+                    g["values"].as_array().map(Vec::len),
+                    Some(want_values.len()),
+                    "{name}"
+                );
                 // строки слово в слово, числа - в допуске прогона
                 let tol = r["tolerance"]["volume_rel"].as_f64().unwrap_or(1e-9);
                 let lvl = r["tolerance"]["level"].as_f64();

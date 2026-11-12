@@ -732,8 +732,12 @@ pub fn read_rgba(
     target: &Target,
 ) -> Result<Vec<u8>, String> {
     let rb = start_readback(device, queue, target);
+    // не дольше минуты: занятая видеокарта даёт ошибку, а не зависание
     device
-        .poll(wgpu::PollType::wait_indefinitely())
+        .poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: Some(std::time::Duration::from_secs(60)),
+        })
         .map_err(|e| e.to_string())?;
     rb.poll(device)
         .unwrap_or_else(|| Err("видеокарта не отдала снимок".to_string()))
