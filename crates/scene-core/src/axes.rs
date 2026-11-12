@@ -70,6 +70,33 @@ pub fn tick_label(value: f64, mult: f64) -> String {
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
+/// Подпись глубины с точностью шага делений `step`: знаков после
+/// точки столько, сколько у шага (0.25 - два, 5 - ни одного). Модуль
+/// пишет глубину как есть, с хвостом неровной верхней кромки (0.981658),
+/// здесь она округляется. Соседние подписи отличаются на шаг и потому
+/// не сливаются.
+pub fn depth_label(depth: f64, step: f64) -> String {
+    let mut digits = 0usize;
+    let mut s = step.abs();
+    if s.is_finite() && s > 0.0 {
+        while digits < 6 && (s - s.round()).abs() > 1e-9 * s.max(1.0) {
+            s *= 10.0;
+            digits += 1;
+        }
+    }
+    let text = format!("{depth:.digits$}");
+    // -0 и -0.0 после округления пишутся без минуса
+    if text
+        .trim_start_matches('-')
+        .chars()
+        .all(|c| c == '0' || c == '.')
+    {
+        text.trim_start_matches('-').to_string()
+    } else {
+        text
+    }
+}
+
 /// Азимут направления от a к b в плане, градусы 0-360 от севера.
 pub fn azimuth(a: [f64; 2], b: [f64; 2]) -> f64 {
     ((b[0] - a[0]).atan2(b[1] - a[1]).to_degrees() + 360.0) % 360.0
@@ -120,7 +147,14 @@ pub fn section_scales(
         ([out_r[0], out_r[1], zlo], [out_r[0], out_r[1], zhi]),
     ];
     let (mut left, mut right) = (Vec::new(), Vec::new());
-    for z in nice_ticks(zlo, zhi, want, 0.0) {
+    let ticks = nice_ticks(zlo, zhi, want, 0.0);
+    // шаг делений: разность соседних, при одном делении - весь охват
+    let step = ticks
+        .windows(2)
+        .map(|w| (w[1] - w[0]).abs())
+        .find(|d| *d > 0.0)
+        .unwrap_or(span);
+    for z in ticks {
         let pl = at(out_l, -tick);
         let pr = at(out_r, tick);
         segs.push(([out_l[0], out_l[1], z], [pl[0], pl[1], z]));
@@ -128,7 +162,7 @@ pub fn section_scales(
         let lab_l = at(out_l, -tick * 2.2);
         let lab_r = at(out_r, tick * 1.4);
         left.push(([lab_l[0], lab_l[1], z], tick_label(z, 1.0)));
-        right.push(([lab_r[0], lab_r[1], z], tick_label(zhi - z, 1.0)));
+        right.push(([lab_r[0], lab_r[1], z], depth_label(zhi - z, step)));
     }
     // стрелка направления над серединой, длиной в десятую линии
     let mid = [0.5 * (a[0] + b[0]), 0.5 * (a[1] + b[1])];
@@ -172,5 +206,28 @@ mod tests {
         assert_eq!(tick_label(-0.0, 1.0), "0");
         assert!((azimuth([0.0, 0.0], [1.0, 1.0]) - 45.0).abs() < 1e-12);
         assert!((azimuth([0.0, 0.0], [-1.0, 0.0]) - 270.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn depth_labels_rounded_by_step() {
+        assert_eq!(depth_label(0.981658, 0.2), "1.0");
+        assert_eq!(depth_label(0.781658, 0.2), "0.8");
+        assert_eq!(depth_label(12.481658, 5.0), "12");
+        assert_eq!(depth_label(0.981658, 0.25), "0.98");
+        assert_eq!(depth_label(-0.0004, 0.1), "0.0");
+        assert_eq!(depth_label(300.0, 100.0), "300");
+        assert_eq!(depth_label(1.5, 0.0), "2");
+    }
+
+    /// Неровная верхняя кромка: глубины справа округлены по шагу,
+    /// все разные, отметки слева как у модуля.
+    #[test]
+    fn section_depths_do_not_merge() {
+        let s = section_scales([0.0, 0.0], [100.0, 0.0], -1.4, 0.981658, 6, None, 1.0);
+        let right: Vec<&str> = s.right.iter().map(|r| r.1.as_str()).collect();
+        // деления -1, -0.5, 0, 0.5, глубины 1.981658 и дальше
+        assert_eq!(right, ["2.0", "1.5", "1.0", "0.5"]);
+        let left: Vec<&str> = s.left.iter().map(|r| r.1.as_str()).collect();
+        assert_eq!(left, ["-1", "-0.5", "0", "0.5"]);
     }
 }
