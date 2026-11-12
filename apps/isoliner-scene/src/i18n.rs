@@ -80,6 +80,33 @@ const TABLE: &[(&str, &str)] = &[
     ("Градиентный фон", "Gradient background"),
     ("Поделиться", "Share"),
     ("Снимок PNG", "PNG snapshot"),
+    ("Кадры PNG", "PNG frames"),
+    ("Кадры PNG…", "PNG frames…"),
+    ("Оборот вокруг сцены", "Orbit around the scene"),
+    ("Переход между видами", "Transition between views"),
+    ("Пауза на виде", "Pause at a view"),
+    ("Угол оборота", "Orbit angle"),
+    ("Длительность оборота", "Orbit duration"),
+    (
+        "Кадры 25 в секунду, размер окна сцены, имена frame_00000.png и дальше. Склеивают их программой монтажа или ffmpeg.",
+        "25 frames per second at the scene window size, named frame_00000.png and on. Join them in a video editor or with ffmpeg.",
+    ),
+    ("Выбрать папку и записать", "Choose a folder and record"),
+    ("Куда складывать кадры", "Folder for the frames"),
+    ("Прервать", "Stop recording"),
+    ("Запись кадров: %s из %s", "Recording frames: %s of %s"),
+    (
+        "Запись прервана: %s. Записано кадров: %s.",
+        "Recording stopped: %s. Frames written: %s.",
+    ),
+    (
+        "Запись прервана на кадре %s из %s.",
+        "Recording stopped at frame %s of %s.",
+    ),
+    (
+        "Записано кадров: %s, %s с ролика: %s",
+        "Frames written: %s, %s s of video: %s",
+    ),
     ("Измерение", "Measure"),
     (
         "Щелчок - точка, двойной щелчок - замкнуть контур, правая кнопка или Backspace - убрать точку, Esc - начать заново.",

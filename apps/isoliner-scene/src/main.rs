@@ -21,12 +21,14 @@ mod web;
 
 /// Ключи командной строки: `файл.i3dscene`, `--pose x,y,z,...` -
 /// камера как в ссылке «Поделиться», `--check` - самопроверка
-/// с отчётом в вывод.
+/// с отчётом в вывод, `--frames ПАПКА` - кадры оборота PNG в папку,
+/// потом окно закрывается.
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     let mut path = None;
     let mut pose = None;
     let mut check = false;
+    let mut frames = None;
     let mut args = std::env::args_os().skip(1);
     while let Some(a) = args.next() {
         match a.to_str() {
@@ -36,6 +38,7 @@ fn main() -> eframe::Result {
                     .and_then(|v| v.to_str().and_then(share::parse_pose));
             }
             Some("--check") => check = true,
+            Some("--frames") => frames = args.next().map(std::path::PathBuf::from),
             _ => path = Some(std::path::PathBuf::from(a)),
         }
     }
@@ -56,6 +59,9 @@ fn main() -> eframe::Result {
             }
             if check {
                 app.start_check();
+            }
+            if let Some(dir) = frames {
+                app.film_to(dir);
             }
             if let Some(p) = path {
                 app.open(&p);

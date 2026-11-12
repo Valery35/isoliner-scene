@@ -112,6 +112,44 @@ struct Probe {
     point: [f64; 3],
 }
 
+/// Настройки записи кадров, как окно записи видео модуля: оборот
+/// на угол за время или облёт по видам с переходом и паузой.
+#[derive(Clone, Copy)]
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+struct Film {
+    tour: bool,
+    degrees: f64,
+    seconds: f64,
+    leg: f64,
+    pause: f64,
+}
+
+impl Default for Film {
+    fn default() -> Self {
+        Self {
+            tour: false,
+            degrees: 360.0,
+            seconds: 12.0,
+            leg: 4.0,
+            pause: 1.0,
+        }
+    }
+}
+
+/// Идущая запись кадров в папку.
+#[cfg(not(target_arch = "wasm32"))]
+struct Recording {
+    /// Камеры кадров в настоящих координатах.
+    frames: Vec<Camera>,
+    next: usize,
+    dir: std::path::PathBuf,
+    /// Камера до записи: после неё возвращается.
+    start: Camera,
+    /// Кадр записи своего размера: окно в это время рисует своё.
+    target: Target,
+    error: Option<String>,
+}
+
 /// Точки измерения в настоящих координатах.
 #[derive(Default)]
 struct Ruler {
@@ -166,6 +204,18 @@ pub struct SceneApp {
     shot: Option<render::Readback>,
     /// Измерение: включено, если есть.
     ruler: Option<Ruler>,
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    film: Film,
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    film_open: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    recording: Option<Recording>,
+    /// Папка из `--frames`: запись начнётся сама, как только есть кадр.
+    #[cfg(not(target_arch = "wasm32"))]
+    film_dir: Option<std::path::PathBuf>,
+    /// Закрыть окно после записи (`--frames`).
+    #[cfg(not(target_arch = "wasm32"))]
+    film_exit: bool,
 }
 
 impl SceneApp {
@@ -208,6 +258,14 @@ impl SceneApp {
             check: None,
             shot: None,
             ruler: None,
+            film: Film::default(),
+            film_open: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            recording: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            film_dir: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            film_exit: false,
         }
     }
 
@@ -336,6 +394,218 @@ impl SceneApp {
                 ui.end_row();
             }
         });
+    }
+
+    /// Настройки кадра для камеры в координатах просмотра.
+    fn look(&self, camera: Camera, ppp: f32) -> Look {
+        Look {
+            camera,
+            vex: self.vex,
+            opacity: self.opacity,
+            background: if self.gradient {
+                render::BG_GRADIENT
+            } else {
+                render::BG_PLAIN
+            },
+            pixels_per_point: ppp,
+        }
+    }
+
+    /// Окно «Кадры PNG»: путь камеры, углы и длительности, как окно
+    /// записи видео модуля (`_spin_capture`).
+    #[cfg(not(target_arch = "wasm32"))]
+    fn film_window(&mut self, ctx: &egui::Context, now: f64) {
+        if !self.film_open || self.pkg.is_none() {
+            return;
+        }
+        let _ = now;
+        let mut open = true;
+        let mut go = false;
+        let lang = self.lang;
+        let t = |s: &'static str| tr(lang, s);
+        let has_views = self.views.len() > 1;
+        if !has_views {
+            self.film.tour = false;
+        }
+        let f = &mut self.film;
+        egui::Window::new(t("Кадры PNG"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.radio_value(&mut f.tour, false, t("Оборот вокруг сцены"));
+                    if has_views {
+                        ui.radio_value(&mut f.tour, true, t("Облёт по видам"));
+                    }
+                });
+                egui::Grid::new("film").num_columns(2).show(ui, |ui| {
+                    if f.tour {
+                        ui.label(t("Переход между видами"));
+                        ui.add(egui::DragValue::new(&mut f.leg).range(0.5..=120.0).suffix(" s"));
+                        ui.end_row();
+                        ui.label(t("Пауза на виде"));
+                        ui.add(egui::DragValue::new(&mut f.pause).range(0.0..=60.0).suffix(" s"));
+                        ui.end_row();
+                    } else {
+                        ui.label(t("Угол оборота"));
+                        ui.add(egui::DragValue::new(&mut f.degrees).range(-720.0..=720.0).suffix("°"));
+                        ui.end_row();
+                        ui.label(t("Длительность оборота"));
+                        ui.add(egui::DragValue::new(&mut f.seconds).range(1.0..=600.0).suffix(" s"));
+                        ui.end_row();
+                    }
+                });
+                ui.weak(t(
+                    "Кадры 25 в секунду, размер окна сцены, имена frame_00000.png и дальше. Склеивают их программой монтажа или ffmpeg.",
+                ));
+                if ui.button(t("Выбрать папку и записать")).clicked() {
+                    go = true;
+                }
+            });
+        self.film_open = open;
+        if go {
+            self.film_open = false;
+            self.start_film();
+        }
+    }
+
+    /// Записать кадры оборота в папку и закрыть окно (`--frames`).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn film_to(&mut self, dir: std::path::PathBuf) {
+        self.film_dir = Some(dir);
+    }
+
+    /// Начать запись: кадры пути камеры в папку.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn start_film(&mut self) {
+        let f = self.film;
+        let frames = if f.tour {
+            flight::tour(&self.views, f.leg, f.pause, flight::FPS)
+        } else {
+            flight::orbit(&self.cam, f.degrees, f.seconds, flight::FPS)
+        };
+        if frames.is_empty() {
+            return;
+        }
+        let dir = match self.film_dir.take() {
+            Some(d) => {
+                self.film_exit = true;
+                d
+            }
+            None => {
+                let Some(d) = rfd::FileDialog::new()
+                    .set_title(self.t("Куда складывать кадры"))
+                    .pick_folder()
+                else {
+                    return;
+                };
+                d
+            }
+        };
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            self.status = fill(
+                self.t("Запись прервана: %s. Записано кадров: %s."),
+                &[e.to_string(), "0".into()],
+            );
+            return;
+        }
+        let (Some(gpu), Some(view)) = (&self.gpu, &self.target) else {
+            return;
+        };
+        let target = Target::new(&gpu.device, view.width, view.height);
+        self.spin = false;
+        self.anim = None;
+        self.recording = Some(Recording {
+            frames,
+            next: 0,
+            dir,
+            start: self.cam,
+            target,
+            error: None,
+        });
+    }
+
+    /// Снять очередной кадр записи. Кадр на обновление окна: так видно
+    /// ход и запись можно прервать.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn film_step(&mut self, ctx: &egui::Context) {
+        let Some(rec) = self.recording.as_ref() else {
+            return;
+        };
+        let k = rec.next;
+        let n = rec.frames.len();
+        let mut error = rec.error.clone();
+        if error.is_none()
+            && k < n
+            && let (Some(gpu), Some(scene)) = (&self.gpu, &self.scene)
+        {
+            let view = self.frame_now().camera_to_view(&rec.frames[k]);
+            let look = self.look(view, ctx.pixels_per_point());
+            gpu.renderer
+                .render(&gpu.device, &gpu.queue, &rec.target, scene, &look);
+            let (w, h) = (rec.target.width, rec.target.height);
+            let res = render::read_rgba(&gpu.device, &gpu.queue, &rec.target)
+                .and_then(|rgba| shot::encode_png(w, h, &rgba))
+                .and_then(|png| {
+                    std::fs::write(rec.dir.join(format!("frame_{k:05}.png")), png)
+                        .map_err(|e| e.to_string())
+                });
+            if let Err(e) = res {
+                error = Some(e);
+            }
+        }
+        let template = self.t("Запись кадров: %s из %s");
+        let Some(rec) = self.recording.as_mut() else {
+            return;
+        };
+        rec.error.clone_from(&error);
+        if error.is_none() && k < n {
+            rec.next += 1;
+            let done = rec.next;
+            self.status = fill(template, &[done.to_string(), n.to_string()]);
+            ctx.request_repaint();
+            if done < n {
+                return;
+            }
+        }
+        self.finish_film(error, ctx);
+    }
+
+    /// Закончить или прервать запись: камера возвращается на место.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn finish_film(&mut self, error: Option<String>, ctx: &egui::Context) {
+        let Some(rec) = self.recording.take() else {
+            return;
+        };
+        self.cam = rec.start;
+        self.dirty = true;
+        let (made, n) = (rec.next, rec.frames.len());
+        self.status = if let Some(e) = error {
+            fill(
+                self.t("Запись прервана: %s. Записано кадров: %s."),
+                &[e, made.to_string()],
+            )
+        } else if made < n {
+            fill(
+                self.t("Запись прервана на кадре %s из %s."),
+                &[made.to_string(), n.to_string()],
+            )
+        } else {
+            fill(
+                self.t("Записано кадров: %s, %s с ролика: %s"),
+                &[
+                    made.to_string(),
+                    format!("{:.1}", flight::duration(made, flight::FPS)),
+                    rec.dir.display().to_string(),
+                ],
+            )
+        };
+        // запись из командной строки: итог в вывод, окно закрывается
+        if self.film_exit {
+            println!("{}", self.status);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
     }
 
     /// Начать снимок кадра: текстура кадра уже держит последний кадр.
@@ -1084,6 +1354,18 @@ impl SceneApp {
                 self.anim = None;
             }
         });
+        // запись кадров - на диске: в браузере ролик в сотни кадров
+        // в память не поместится
+        #[cfg(not(target_arch = "wasm32"))]
+        ui.horizontal_wrapped(|ui| {
+            if self.recording.is_some() {
+                if ui.button(self.t("Прервать")).clicked() {
+                    self.finish_film(None, ui.ctx());
+                }
+            } else if ui.button(self.t("Кадры PNG…")).clicked() {
+                self.film_open = true;
+            }
+        });
 
         ui.separator();
         if let Some(pkg) = &self.pkg {
@@ -1281,17 +1563,7 @@ impl SceneApp {
 
         if self.dirty {
             if let (Some(gpu), Some(scene), Some(target)) = (&self.gpu, &self.scene, &self.target) {
-                let look = Look {
-                    camera: self.view_camera(),
-                    vex: self.vex,
-                    opacity: self.opacity,
-                    background: if self.gradient {
-                        render::BG_GRADIENT
-                    } else {
-                        render::BG_PLAIN
-                    },
-                    pixels_per_point: ppp,
-                };
+                let look = self.look(self.view_camera(), ppp);
                 gpu.renderer
                     .render(&gpu.device, &gpu.queue, target, scene, &look);
             }
@@ -1412,6 +1684,15 @@ impl eframe::App for SceneApp {
         self.share_window(ui.ctx());
         self.run_check(ui.ctx());
         self.finish_shot(ui.ctx());
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.film_window(ui.ctx(), now);
+            // запись из командной строки ждёт открытый пакет и кадр окна
+            if self.film_dir.is_some() && self.pkg.is_some() && self.target.is_some() {
+                self.start_film();
+            }
+            self.film_step(ui.ctx());
+        }
         let view_size = self.target.as_ref().map_or(egui::vec2(1280.0, 800.0), |t| {
             egui::vec2(t.width as f32, t.height as f32)
         });
