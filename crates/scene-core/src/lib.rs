@@ -4,6 +4,7 @@
 
 //! Сцена без окна и без видеокарты.
 //!
+//! - [`axes`] - деления, подписи и шкалы вида по разрезу;
 //! - [`camera`] - камера окна Isoliner3D: матрицы вида и проекции
 //!   как у pyqtgraph, управление мышью, перевод между настоящими
 //!   координатами и координатами просмотра;
@@ -17,6 +18,7 @@
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod axes;
 pub mod camera;
 pub mod flight;
 pub mod measure;

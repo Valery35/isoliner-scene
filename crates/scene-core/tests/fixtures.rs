@@ -101,3 +101,39 @@ fn bodies_match_the_module() {
         assert!((hi[k] - exp["bbox"][1][k].as_f64().unwrap()).abs() < 0.01);
     }
 }
+
+/// Шкалы вида по разрезу против `axes.section_scales` модуля
+/// (fixtures/clip.json, раздел section).
+#[test]
+fn section_scales_like_the_module() {
+    let s = &json("clip.json")["section"];
+    let p2 = |v: &Value| [v[0].as_f64().unwrap(), v[1].as_f64().unwrap()];
+    let p3 = |v: &Value| [0, 1, 2].map(|k| v[k].as_f64().unwrap());
+    let near = |a: [f64; 3], b: [f64; 3]| (0..3).all(|k| (a[k] - b[k]).abs() < 1e-9);
+    let got = scene_core::axes::section_scales(
+        p2(&s["a"]),
+        p2(&s["b"]),
+        s["zlo"].as_f64().unwrap(),
+        s["zhi"].as_f64().unwrap(),
+        s["want"].as_u64().unwrap() as usize,
+        None,
+        s["vex"].as_f64().unwrap(),
+    );
+    let want = &s["scales"];
+    let segs = want["segs"].as_array().unwrap();
+    assert_eq!(got.segs.len(), segs.len());
+    for (g, w) in got.segs.iter().zip(segs) {
+        assert!(near(g.0, p3(&w[0])) && near(g.1, p3(&w[1])), "{g:?} {w}");
+    }
+    for (side, list) in [("left", &got.left), ("right", &got.right)] {
+        let w = want[side].as_array().unwrap();
+        assert_eq!(list.len(), w.len(), "{side}");
+        for (g, w) in list.iter().zip(w) {
+            assert!(near(g.0, p3(&w[0])), "{side}");
+            assert_eq!(g.1, w[1].as_str().unwrap(), "{side}");
+        }
+    }
+    assert!(near(got.arrow_label.0, p3(&want["arrow_label"][0])));
+    assert_eq!(got.arrow_label.1, want["arrow_label"][1].as_str().unwrap());
+    assert!((got.azimuth - want["azimuth"].as_f64().unwrap()).abs() < 1e-9);
+}

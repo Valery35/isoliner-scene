@@ -12,6 +12,15 @@ use render::{BG_GRADIENT, BG_PLAIN, GpuScene, Look, Renderer, Target, headless, 
 use scene_core::{Frame, mesh};
 use scene_format::read_package;
 
+/// Тесты кадра идут по одному: два устройства видеокарты, создаваемые
+/// одновременно из параллельных тестов, изредка вешали весь прогон.
+static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn gpu_turn() -> std::sync::MutexGuard<'static, ()> {
+    GPU.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// Цвет sRGB в байтах, как его видит окно модуля.
 fn bytes(c: [f32; 3]) -> [u8; 3] {
     c.map(|v| (v * 255.0).round() as u8)
@@ -34,6 +43,7 @@ fn background_share(rgba: &[u8]) -> f64 {
 /// размером в пикселях, вдвое крупнее при двух пикселях на точку.
 #[test]
 fn point_marks_render_in_screen_pixels() {
+    let _turn = gpu_turn();
     let (device, queue) = match headless() {
         Ok(d) => d,
         Err(e) => {
@@ -117,6 +127,7 @@ fn point_marks_render_in_screen_pixels() {
 
 #[test]
 fn demo_scene_renders_with_its_camera() {
+    let _turn = gpu_turn();
     let (device, queue) = match headless() {
         Ok(d) => d,
         Err(e) => {
