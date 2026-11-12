@@ -14,8 +14,9 @@ use std::sync::{Arc, Mutex};
 use eframe::egui;
 use eframe::egui_wgpu;
 
-use render::{GpuScene, Look, Renderer, Target};
+use render::{GpuPart, GpuScene, Look, Renderer, Target};
 use scene_core::camera::{self, fit};
+use scene_core::clip::{self, Clip, Side};
 use scene_core::{Camera, Frame, flight, mesh};
 use scene_format::{Package, Part, PartInfo, read_package, write_package};
 
@@ -158,6 +159,33 @@ struct Ruler {
     closed: bool,
 }
 
+/// Обрезка, как раздел «Обрезка» окна модуля. Контур и линия берутся
+/// из измерения: замкнутый контур - для «внутри» и «снаружи»,
+/// ломаная - для сторон и коридора.
+struct ClipUi {
+    /// Что оставить в плане. None - в плане не резать.
+    side: Option<Side>,
+    /// Полуширина коридора, метры. У модуля по умолчанию 250.
+    width: f64,
+    use_lo: bool,
+    zlo: f64,
+    use_hi: bool,
+    zhi: f64,
+}
+
+impl Default for ClipUi {
+    fn default() -> Self {
+        Self {
+            side: Some(Side::In),
+            width: 250.0,
+            use_lo: false,
+            zlo: 0.0,
+            use_hi: false,
+            zhi: 0.0,
+        }
+    }
+}
+
 /// Строка списка частей.
 struct Row {
     info: Option<PartInfo>,
@@ -204,6 +232,12 @@ pub struct SceneApp {
     shot: Option<render::Readback>,
     /// Измерение: включено, если есть.
     ruler: Option<Ruler>,
+    clip: ClipUi,
+    /// Части до обрезки, по номерам строк. Есть - сцена обрезана.
+    full: Option<Vec<Part>>,
+    /// Вид по разрезу: начало и конец линии в плане. Есть - поворот
+    /// заперт, на кадре шкалы отметок и глубин.
+    section: Option<([f64; 2], [f64; 2])>,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     film: Film,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -258,6 +292,9 @@ impl SceneApp {
             check: None,
             shot: None,
             ruler: None,
+            clip: ClipUi::default(),
+            full: None,
+            section: None,
             film: Film::default(),
             film_open: false,
             #[cfg(not(target_arch = "wasm32"))]
@@ -815,7 +852,315 @@ impl SceneApp {
         }
         self.anim = None;
         self.probe = None;
+        self.full = None;
+        self.section = None;
         self.dirty = true;
+    }
+
+    /// Вид по разрезу, как `_section_view` окна модуля: камера поперёк
+    /// линии измерения (линия идёт слева направо), горизонтально,
+    /// в параллельной проекции, кадр по длине линии. Поворот заперт.
+    fn section_view(&mut self, w: f64, h: f64) {
+        let pts: Vec<[f64; 2]> = self
+            .ruler
+            .as_ref()
+            .map(|r| r.pts.iter().map(|p| [p[0], p[1]]).collect())
+            .unwrap_or_default();
+        let (a, b) = match (pts.first(), pts.last()) {
+            (Some(&a), Some(&b)) if pts.len() >= 2 => (a, b),
+            _ => {
+                self.section = None;
+                self.status = self
+                    .t("Вид по разрезу смотрит поперёк линии: поставьте измерением две точки и больше.")
+                    .to_string();
+                return;
+            }
+        };
+        let mut d = [b[0] - a[0], b[1] - a[1]];
+        let mut length = d[0].hypot(d[1]);
+        if length <= 0.0 {
+            length = pts
+                .windows(2)
+                .map(|s| (s[1][0] - s[0][0]).hypot(s[1][1] - s[0][1]))
+                .sum();
+            d = [pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]];
+        }
+        if d == [0.0, 0.0] {
+            d = [1.0, 0.0];
+        }
+        let (lo, hi) =
+            pts.iter()
+                .fold(([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]), |(l, h), p| {
+                    (
+                        [l[0].min(p[0]), l[1].min(p[1])],
+                        [h[0].max(p[0]), h[1].max(p[1])],
+                    )
+                });
+        self.cam.center[0] = 0.5 * (lo[0] + hi[0]);
+        self.cam.center[1] = 0.5 * (lo[1] + hi[1]);
+        if let Some((zlo, zhi)) = self.section_z() {
+            self.cam.center[2] = 0.5 * (zlo + zhi);
+        }
+        // камера с той стороны, откуда линия идёт слева направо
+        self.cam.azimuth = (-d[0]).atan2(d[1]).to_degrees();
+        self.cam.elevation = 0.0;
+        self.cam.fov = 60.0;
+        self.cam.ortho = true;
+        // запас по краям: подписи отметок стоят за концами линии
+        let half_w = 0.66 * length.max(1.0);
+        self.cam.distance = (half_w * h / w.max(1.0)) / 30f64.to_radians().tan();
+        self.spin = false;
+        self.anim = None;
+        self.section = Some((a, b));
+        self.dirty = true;
+        self.status = fill(
+            self.t("Вид по разрезу: длина линии %s м. Поворот заперт, левая кнопка сдвигает, колёсико приближает. Отжать кнопку или «Сбросить вид» - поворот снова свободен."),
+            &[grouped(length, 0)],
+        );
+    }
+
+    /// Шкалы вида по разрезу поверх кадра: отметки у начала линии,
+    /// глубины от верхней кромки у конца, стрелка с азимутом.
+    fn section_marks(&self, ui: &egui::Ui, rect: egui::Rect) {
+        let (Some((a, b)), Some((zlo, zhi))) = (self.section, self.section_z()) else {
+            return;
+        };
+        let sc = scene_core::axes::section_scales(a, b, zlo, zhi, 6, None, self.vex);
+        let view = self.view_camera();
+        let frame = self.frame_now();
+        let (w, h) = (f64::from(rect.width()), f64::from(rect.height()));
+        let at = |p: [f64; 3]| {
+            camera::to_screen(&view, w, h, frame.to_view(p))
+                .map(|[x, y]| rect.min + egui::vec2(x as f32, y as f32))
+        };
+        let painter = ui.painter_at(rect);
+        let ink = egui::Color32::from_rgba_unmultiplied(51, 61, 97, 242);
+        for (p, q) in &sc.segs {
+            if let (Some(p), Some(q)) = (at(*p), at(*q)) {
+                painter.line_segment([p, q], egui::Stroke::new(1.4, ink));
+            }
+        }
+        let font = egui::FontId::proportional(11.0);
+        let labels = sc
+            .left
+            .iter()
+            .map(|l| (l, egui::Align2::RIGHT_CENTER))
+            .chain(sc.right.iter().map(|l| (l, egui::Align2::LEFT_CENTER)))
+            .chain(std::iter::once((
+                &sc.arrow_label,
+                egui::Align2::CENTER_BOTTOM,
+            )));
+        for ((p, text), align) in labels {
+            if let Some(s) = at(*p) {
+                for o in [
+                    egui::vec2(-1.0, 0.0),
+                    egui::vec2(1.0, 0.0),
+                    egui::vec2(0.0, -1.0),
+                    egui::vec2(0.0, 1.0),
+                ] {
+                    painter.text(s + o, align, text, font.clone(), egui::Color32::WHITE);
+                }
+                painter.text(s, align, text, font.clone(), egui::Color32::from_gray(30));
+            }
+        }
+    }
+
+    /// Обрезка из настроек и точек измерения.
+    fn clip_spec(&self) -> Result<Clip, &'static str> {
+        let (pts, closed): (Vec<[f64; 2]>, bool) =
+            self.ruler.as_ref().map_or((Vec::new(), false), |r| {
+                (r.pts.iter().map(|p| [p[0], p[1]]).collect(), r.closed)
+            });
+        let c = &self.clip;
+        let mut spec = Clip {
+            side: c.side.unwrap_or(Side::In),
+            rings: Vec::new(),
+            lines: Vec::new(),
+            width: c.width,
+            zlo: c.use_lo.then_some(c.zlo),
+            zhi: c.use_hi.then_some(c.zhi),
+        };
+        match c.side {
+            Some(Side::In | Side::Out) => {
+                if !closed || pts.len() < 3 {
+                    return Err(
+                        "Нужен замкнутый контур: поставьте точки измерением и замкните двойным щелчком.",
+                    );
+                }
+                spec.rings = vec![pts];
+            }
+            Some(side) => {
+                if pts.len() < 2 {
+                    return Err("Нужна линия: поставьте измерением две точки и больше.");
+                }
+                if side == Side::Corridor && c.width <= 0.0 {
+                    return Err("Полуширина коридора должна быть больше нуля.");
+                }
+                spec.lines = vec![pts];
+            }
+            None => {}
+        }
+        if c.side.is_none() && spec.zlo.is_none() && spec.zhi.is_none() {
+            return Err("Нечего обрезать: выберите, что оставить, или отметки.");
+        }
+        Ok(spec)
+    }
+
+    /// Обрезать сцену. Режутся части до обрезки: новая обрезка
+    /// заменяет прежнюю, а не режет уже обрезанное.
+    fn apply_clip(&mut self) {
+        let spec = match self.clip_spec() {
+            Ok(s) => s,
+            Err(e) => {
+                self.status = self.t(e).to_string();
+                return;
+            }
+        };
+        let Some(pkg) = self.pkg.as_ref() else { return };
+        let src = self.full.clone().unwrap_or_else(|| pkg.parts.clone());
+        // оформление (короб, подписи) не режется: оно о всей сцене
+        let cut: Vec<Part> = src
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                if self.is_decor(i) {
+                    p.clone()
+                } else {
+                    clip::clip_part(p, &spec)
+                }
+            })
+            .collect();
+        let tris = |parts: &[Part]| {
+            parts
+                .iter()
+                .filter(|p| matches!(p.indices, scene_format::Indices::Triangles(_)))
+                .map(|p| p.indices.len())
+                .sum::<usize>()
+        };
+        self.status = fill(
+            self.t("Обрезка: осталось %s граней из %s."),
+            &[grouped(tris(&cut) as f64, 0), grouped(tris(&src) as f64, 0)],
+        );
+        self.full = Some(src);
+        self.set_parts(cut);
+    }
+
+    /// Часть - оформление сцены: короб, подписи.
+    fn is_decor(&self, i: usize) -> bool {
+        self.rows
+            .get(i)
+            .and_then(|r| r.info.as_ref())
+            .is_some_and(|info| info.decor)
+    }
+
+    /// Отметки низа и верха для шкал разреза: охват частей сцены без
+    /// оформления после обрезки, как `_box_scene` модуля.
+    fn section_z(&self) -> Option<(f64, f64)> {
+        let pkg = self.pkg.as_ref()?;
+        let body: Vec<Part> = pkg
+            .parts
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !self.is_decor(*i))
+            .map(|(_, p)| p.clone())
+            .collect();
+        let (lo, hi) = mesh::bounds(&body).or_else(|| mesh::bounds(&pkg.parts))?;
+        Some((lo[2], hi[2]))
+    }
+
+    /// Снять обрезку: вернуть части целиком.
+    fn clear_clip(&mut self) {
+        if let Some(full) = self.full.take() {
+            self.set_parts(full);
+            self.status = self.t("Обрезка снята, сцена показана целиком.").to_string();
+        }
+    }
+
+    /// Заменить части сцены, номера строк те же. Показ частей
+    /// и кадр не меняются.
+    fn set_parts(&mut self, parts: Vec<Part>) {
+        if let (Some(gpu), Some(scene)) = (&self.gpu, self.scene.as_mut()) {
+            for (old, part) in scene.parts.iter_mut().zip(&parts) {
+                match GpuPart::upload(&gpu.device, part, scene.frame) {
+                    Some(mut p) => {
+                        p.visible = old.visible;
+                        *old = p;
+                    }
+                    None => old.clear(),
+                }
+            }
+        }
+        for (row, part) in self.rows.iter_mut().zip(&parts) {
+            row.volume = mesh::body_volume(part);
+            row.count = part.indices.len();
+        }
+        if let Some(pkg) = self.pkg.as_mut() {
+            pkg.parts = parts;
+        }
+        self.probe = None;
+        self.dirty = true;
+    }
+
+    /// Раздел «Обрезка» панели.
+    fn clip_panel(&mut self, ui: &mut egui::Ui) {
+        let lang = self.lang;
+        let t = |s: &'static str| tr(lang, s);
+        egui::CollapsingHeader::new(t("Обрезка"))
+            .id_salt("clip")
+            .show(ui, |ui| {
+                ui.weak(t(
+                    "Контур и линия берутся из измерения: щелчками поставьте точки, двойной щелчок замыкает контур.",
+                ));
+                let c = &mut self.clip;
+                let name = |s: Option<Side>| match s {
+                    None => t("(нет)"),
+                    Some(Side::In) => t("Оставить внутри"),
+                    Some(Side::Out) => t("Убрать внутри"),
+                    Some(Side::Left) => t("Слева от линии"),
+                    Some(Side::Right) => t("Справа от линии"),
+                    Some(Side::Corridor) => t("Коридор вдоль линии"),
+                };
+                egui::Grid::new("clip").num_columns(2).show(ui, |ui| {
+                    ui.label(t("Что оставить"));
+                    egui::ComboBox::from_id_salt("clip_side")
+                        .selected_text(name(c.side))
+                        .show_ui(ui, |ui| {
+                            for s in [
+                                None,
+                                Some(Side::In),
+                                Some(Side::Out),
+                                Some(Side::Left),
+                                Some(Side::Right),
+                                Some(Side::Corridor),
+                            ] {
+                                ui.selectable_value(&mut c.side, s, name(s));
+                            }
+                        });
+                    ui.end_row();
+                    if c.side == Some(Side::Corridor) {
+                        ui.label(t("Полуширина коридора, м"));
+                        ui.add(egui::DragValue::new(&mut c.width).range(0.0..=1e9).speed(1.0));
+                        ui.end_row();
+                    }
+                    ui.checkbox(&mut c.use_lo, t("Отметка не ниже, м"));
+                    ui.add_enabled(c.use_lo, egui::DragValue::new(&mut c.zlo).speed(1.0));
+                    ui.end_row();
+                    ui.checkbox(&mut c.use_hi, t("Отметка не выше, м"));
+                    ui.add_enabled(c.use_hi, egui::DragValue::new(&mut c.zhi).speed(1.0));
+                    ui.end_row();
+                });
+            });
+        ui.horizontal_wrapped(|ui| {
+            if ui.button(t("Обрезать")).clicked() {
+                self.apply_clip();
+            }
+            if ui
+                .add_enabled(self.full.is_some(), egui::Button::new(t("Снять обрезку")))
+                .clicked()
+            {
+                self.clear_clip();
+            }
+        });
     }
 
     fn reset_camera(&mut self, w: f64, h: f64) {
@@ -1125,7 +1470,7 @@ impl SceneApp {
         let speed = 125.0 * dt;
         let azim = (f64::from(u8::from(l)) - f64::from(u8::from(r))) * speed;
         let elev = (f64::from(u8::from(d)) - f64::from(u8::from(u))) * speed;
-        if azim != 0.0 || elev != 0.0 {
+        if (azim != 0.0 || elev != 0.0) && self.section.is_none() {
             self.cam.azimuth += azim;
             self.cam.elevation = (self.cam.elevation + elev).clamp(-90.0, 90.0);
             self.anim = None;
@@ -1136,6 +1481,7 @@ impl SceneApp {
 
     fn start(&mut self, frames: Vec<Camera>, now: f64) {
         if !frames.is_empty() {
+            self.section = None;
             self.anim = Some(Anim {
                 frames,
                 start: now,
@@ -1192,17 +1538,21 @@ impl SceneApp {
         // кнопки плашки окна модуля
         ui.horizontal_wrapped(|ui| {
             if ui.button(self.t("Вид сверху")).clicked() {
+                self.section = None;
                 let v = camera::top(&self.view_camera());
                 self.set_view_camera(v);
                 self.anim = None;
             }
             if ui.button(self.t("Сбросить вид")).clicked() {
+                self.section = None;
                 let v = camera::reset(&self.view_camera(), self.span());
                 self.set_view_camera(v);
                 self.anim = None;
             }
             let label = self.t("Вращение");
-            ui.toggle_value(&mut self.spin, label);
+            if ui.toggle_value(&mut self.spin, label).changed() && self.spin {
+                self.section = None;
+            }
             let label = self.t("Поделиться");
             ui.toggle_value(&mut self.share_open, label);
             if ui
@@ -1225,6 +1575,16 @@ impl SceneApp {
             }
         });
         self.ruler_panel(ui);
+        self.clip_panel(ui);
+        let label = self.t("Вид по разрезу");
+        if ui.selectable_label(self.section.is_some(), label).clicked() {
+            if self.section.is_some() {
+                self.section = None;
+                self.status.clear();
+            } else {
+                self.section_view(w, h);
+            }
+        }
         let mut ortho = self.cam.ortho;
         if ui
             .checkbox(&mut ortho, self.t("Параллельная проекция"))
@@ -1458,10 +1818,16 @@ impl SceneApp {
             .filter(|t| t.num_touches >= 2 && resp.contains_pointer());
         if let Some(t) = touch {
             let mut v = self.view_camera();
+            // в виде по разрезу пальцы не поворачивают
+            let turn = if self.section.is_some() {
+                0.0
+            } else {
+                f64::from(t.rotation_delta)
+            };
             camera::touch(
                 &mut v,
                 f64::from(t.zoom_delta),
-                f64::from(t.rotation_delta),
+                turn,
                 f64::from(t.translation_delta.x),
                 f64::from(t.translation_delta.y),
                 wpt,
@@ -1472,7 +1838,8 @@ impl SceneApp {
             let mut v = self.view_camera();
             let mut moved = true;
             if resp.dragged_by(egui::PointerButton::Primary) {
-                if ctrl {
+                // в виде по разрезу поворот заперт: левая кнопка сдвигает
+                if ctrl || self.section.is_some() {
                     camera::pan(&mut v, dx, dy, wpt);
                 } else {
                     camera::orbit(&mut v, dx, dy);
@@ -1577,6 +1944,7 @@ impl SceneApp {
                 egui::Color32::WHITE,
             );
         }
+        self.section_marks(ui, rect);
         // линия измерения: отрезки и точки поверх кадра
         if let Some(r) = &self.ruler {
             let view = self.view_camera();

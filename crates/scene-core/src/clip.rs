@@ -17,14 +17,20 @@
 //! отрезок - граница, если по разные стороны от него разная
 //! принадлежность области.
 //!
-//! Грань, пересечённая границей, разбивается триангуляцией
-//! с закреплёнными рёбрами (`spade`), куски отбираются по середине.
-//! Точка на ребре грани считается от его концов в одном порядке,
-//! поэтому соседние грани ставят её в одно место и вершины сшиваются.
-//! Отвесная грань режется вдоль своего отрезка в плане.
+//! Грань, пересечённая границей, режется прямыми ближних отрезков
+//! границы на выпуклые куски, куски отбираются по середине. Точка
+//! на ребре грани считается от его концов в одном порядке, поэтому
+//! соседние грани ставят её в одно место и вершины сшиваются.
+//! Отвесная грань режется вдоль своего отрезка в плане. Крышки
+//! заполняются триангуляцией с закреплёнными рёбрами (`spade`).
+//!
+//! [`clip_part`] режет часть сцены целиком: цвет новых вершин берётся
+//! с ближней точки исходной сетки, линии и точки отбираются
+//! по вершинам, как `_clip_run` модуля.
 
 use std::collections::HashMap;
 
+use scene_format::{Indices, Part};
 use spade::{ConstrainedDelaunayTriangulation, Point2, Triangulation};
 
 type P2 = [f64; 2];
@@ -1308,6 +1314,280 @@ pub fn clip_mesh(m: &Mesh, clip: &Clip, body: bool) -> Mesh {
     cur
 }
 
+impl Clip {
+    /// Остаётся ли точка: область в плане и полоса отметок.
+    pub fn keeps(&self, region: Option<&Region>, p: P3) -> bool {
+        region.is_none_or(|r| r.keep([p[0], p[1]]))
+            && self.zlo.is_none_or(|z| p[2] >= z)
+            && self.zhi.is_none_or(|z| p[2] <= z)
+    }
+}
+
+/// Обрезать часть сцены. Тело (замкнутая сетка) закрывается крышками,
+/// поверхность только режется, у линий и точек остаётся то, что
+/// внутри: отрезок - если внутри оба конца. От части может ничего
+/// не остаться - тогда номеров вершин нет.
+pub fn clip_part(part: &Part, clip: &Clip) -> Part {
+    let region = clip.region();
+    let keeps = |i: u32| {
+        part.verts
+            .get(i as usize)
+            .is_some_and(|p| clip.keeps(region.as_ref(), *p))
+    };
+    match &part.indices {
+        Indices::Triangles(t) => {
+            let src = Mesh {
+                verts: part.verts.clone(),
+                faces: t.clone(),
+            };
+            let body = !t.is_empty() && holes(&weld(&src, 1e-6)) == 0;
+            let got = clip_mesh(&src, clip, body);
+            let colors = part
+                .colors
+                .as_ref()
+                .map(|c| transfer_colors(&src, c, &got.verts));
+            Part {
+                name: part.name.clone(),
+                verts: got.verts,
+                indices: Indices::Triangles(got.faces),
+                colors,
+                sizes: None,
+            }
+        }
+        Indices::Lines(l) => {
+            let kept: Vec<[u32; 2]> = l
+                .iter()
+                .copied()
+                .filter(|s| keeps(s[0]) && keeps(s[1]))
+                .collect();
+            let used: Vec<u32> = kept.iter().flatten().copied().collect();
+            let (map, out) = compact(part, &used);
+            Part {
+                indices: Indices::Lines(
+                    kept.iter()
+                        .filter_map(|s| Some([*map.get(&s[0])?, *map.get(&s[1])?]))
+                        .collect(),
+                ),
+                ..out
+            }
+        }
+        Indices::Points(p) => {
+            let kept: Vec<u32> = p.iter().copied().filter(|&i| keeps(i)).collect();
+            let (map, out) = compact(part, &kept);
+            Part {
+                indices: Indices::Points(kept.iter().filter_map(|i| map.get(i).copied()).collect()),
+                ..out
+            }
+        }
+    }
+}
+
+/// Оставить у части только вершины `used`: новые номера и часть
+/// без номеров вершин.
+fn compact(part: &Part, used: &[u32]) -> (HashMap<u32, u32>, Part) {
+    let mut map: HashMap<u32, u32> = HashMap::new();
+    let mut order: Vec<usize> = Vec::new();
+    for &i in used {
+        if (i as usize) < part.verts.len() && !map.contains_key(&i) {
+            map.insert(i, order.len() as u32);
+            order.push(i as usize);
+        }
+    }
+    let pick = |v: &Vec<[f32; 4]>| {
+        order
+            .iter()
+            .filter_map(|&i| v.get(i).copied())
+            .collect::<Vec<_>>()
+    };
+    let out = Part {
+        name: part.name.clone(),
+        verts: order.iter().map(|&i| part.verts[i]).collect(),
+        indices: Indices::Points(Vec::new()),
+        colors: part
+            .colors
+            .as_ref()
+            .map(pick)
+            .filter(|c| c.len() == order.len()),
+        sizes: part
+            .sizes
+            .as_ref()
+            .map(|s| {
+                order
+                    .iter()
+                    .filter_map(|&i| s.get(i).copied())
+                    .collect::<Vec<_>>()
+            })
+            .filter(|s| s.len() == order.len()),
+    };
+    (map, out)
+}
+
+/// Цвет вершин обрезанной сетки с исходной: вершина на месте старой
+/// берёт её цвет, новая - цвет ближней точки исходных граней
+/// по долям вершин грани.
+fn transfer_colors(src: &Mesh, cols: &[[f32; 4]], verts: &[P3]) -> Vec<[f32; 4]> {
+    let fallback = cols.first().copied().unwrap_or([0.8, 0.8, 0.8, 1.0]);
+    let key = |p: &P3| p.map(|x| (x * 1e6).round() as i64);
+    let mut exact: HashMap<[i64; 3], usize> = HashMap::new();
+    for (i, v) in src.verts.iter().enumerate() {
+        exact.entry(key(v)).or_insert(i);
+    }
+    let grid = TriGrid::new(src);
+    let col = |i: u32| cols.get(i as usize).copied().unwrap_or(fallback);
+    verts
+        .iter()
+        .map(|p| {
+            if let Some(&i) = exact.get(&key(p)) {
+                return cols.get(i).copied().unwrap_or(fallback);
+            }
+            let Some((f, w)) = grid.nearest(src, *p) else {
+                return fallback;
+            };
+            let (a, b, c) = (col(f[0]), col(f[1]), col(f[2]));
+            let mut out = [0.0f32; 4];
+            for k in 0..4 {
+                out[k] = (w[0] * f64::from(a[k]) + w[1] * f64::from(b[k]) + w[2] * f64::from(c[k]))
+                    as f32;
+            }
+            out
+        })
+        .collect()
+}
+
+/// Грани по клеткам плана: поиск ближней грани к точке.
+struct TriGrid {
+    lo: P2,
+    cell: f64,
+    nx: i64,
+    ny: i64,
+    cells: HashMap<(i64, i64), Vec<usize>>,
+}
+
+impl TriGrid {
+    fn new(m: &Mesh) -> Self {
+        let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+        for v in &m.verts {
+            for k in 0..2 {
+                lo[k] = lo[k].min(v[k]);
+                hi[k] = hi[k].max(v[k]);
+            }
+        }
+        let span = (hi[0] - lo[0]).max(hi[1] - lo[1]).max(1e-6);
+        let n = (m.faces.len() as f64).sqrt().clamp(1.0, 512.0);
+        let cell = span / n;
+        let at = |x: f64, k: usize| ((x - lo[k]) / cell).floor() as i64;
+        let mut cells: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+        for (fi, f) in m.faces.iter().enumerate() {
+            let p = f.map(|i| m.verts.get(i as usize).copied().unwrap_or([0.0; 3]));
+            let (x0, x1) = (
+                at(p[0][0].min(p[1][0]).min(p[2][0]), 0),
+                at(p[0][0].max(p[1][0]).max(p[2][0]), 0),
+            );
+            let (y0, y1) = (
+                at(p[0][1].min(p[1][1]).min(p[2][1]), 1),
+                at(p[0][1].max(p[1][1]).max(p[2][1]), 1),
+            );
+            for x in x0..=x1 {
+                for y in y0..=y1 {
+                    cells.entry((x, y)).or_default().push(fi);
+                }
+            }
+        }
+        Self {
+            lo,
+            cell,
+            nx: at(hi[0], 0) + 1,
+            ny: at(hi[1], 1) + 1,
+            cells,
+        }
+    }
+
+    /// Ближняя грань и доли её вершин в ближней точке.
+    fn nearest(&self, m: &Mesh, p: P3) -> Option<(Tri, [f64; 3])> {
+        let cx = ((p[0] - self.lo[0]) / self.cell).floor() as i64;
+        let cy = ((p[1] - self.lo[1]) / self.cell).floor() as i64;
+        let max_r = self.nx.max(self.ny) + (cx.abs()).max(cy.abs()) + 1;
+        let mut best: Option<(f64, Tri, [f64; 3])> = None;
+        let mut seen = std::collections::HashSet::new();
+        for r in 0..=max_r {
+            for x in (cx - r)..=(cx + r) {
+                for y in (cy - r)..=(cy + r) {
+                    if (x - cx).abs() != r && (y - cy).abs() != r {
+                        continue;
+                    }
+                    let Some(list) = self.cells.get(&(x, y)) else {
+                        continue;
+                    };
+                    for &fi in list {
+                        if !seen.insert(fi) {
+                            continue;
+                        }
+                        let Some(f) = m.faces.get(fi) else { continue };
+                        let t = f.map(|i| m.verts.get(i as usize).copied().unwrap_or(p));
+                        let w = closest_bary(p, t);
+                        let q = [0, 1, 2].map(|k| w[0] * t[0][k] + w[1] * t[1][k] + w[2] * t[2][k]);
+                        let d = (0..3).map(|k| (q[k] - p[k]).powi(2)).sum::<f64>().sqrt();
+                        if best.is_none_or(|b| d < b.0) {
+                            best = Some((d, *f, w));
+                        }
+                    }
+                }
+            }
+            // клетки следующего кольца не ближе r клеток
+            if let Some(b) = best
+                && b.0 <= r as f64 * self.cell
+            {
+                break;
+            }
+        }
+        best.map(|b| (b.1, b.2))
+    }
+}
+
+/// Доли вершин треугольника в его ближней к `p` точке (Эриксон,
+/// «Real-Time Collision Detection», 5.1.5).
+fn closest_bary(p: P3, t: [P3; 3]) -> [f64; 3] {
+    let sub = |u: P3, v: P3| [u[0] - v[0], u[1] - v[1], u[2] - v[2]];
+    let dot = |u: P3, v: P3| u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+    let (a, b, c) = (t[0], t[1], t[2]);
+    let (ab, ac, ap) = (sub(b, a), sub(c, a), sub(p, a));
+    let (d1, d2) = (dot(ab, ap), dot(ac, ap));
+    if d1 <= 0.0 && d2 <= 0.0 {
+        return [1.0, 0.0, 0.0];
+    }
+    let bp = sub(p, b);
+    let (d3, d4) = (dot(ab, bp), dot(ac, bp));
+    if d3 >= 0.0 && d4 <= d3 {
+        return [0.0, 1.0, 0.0];
+    }
+    let vc = d1 * d4 - d3 * d2;
+    if vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0 && d1 - d3 > 0.0 {
+        let v = d1 / (d1 - d3);
+        return [1.0 - v, v, 0.0];
+    }
+    let cp = sub(p, c);
+    let (d5, d6) = (dot(ab, cp), dot(ac, cp));
+    if d6 >= 0.0 && d5 <= d6 {
+        return [0.0, 0.0, 1.0];
+    }
+    let vb = d5 * d2 - d1 * d6;
+    if vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0 && d2 - d6 > 0.0 {
+        let w = d2 / (d2 - d6);
+        return [1.0 - w, 0.0, w];
+    }
+    let va = d3 * d6 - d5 * d4;
+    if va <= 0.0 && d4 - d3 >= 0.0 && d5 - d6 >= 0.0 && (d4 - d3) + (d5 - d6) > 0.0 {
+        let w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        return [0.0, 1.0 - w, w];
+    }
+    let s = va + vb + vc;
+    if s.abs() <= f64::MIN_POSITIVE {
+        return [1.0, 0.0, 0.0];
+    }
+    let (v, w) = (vb / s, vc / s);
+    [1.0 - v - w, v, w]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1343,6 +1623,56 @@ mod tests {
             zlo: None,
             zhi: None,
         }
+    }
+
+    #[test]
+    fn part_keeps_colors_and_points() {
+        let c = cube();
+        let colors: Vec<[f32; 4]> = c
+            .verts
+            .iter()
+            .map(|v| [(v[2] / 10.0) as f32, 0.0, 0.0, 1.0])
+            .collect();
+        let part = Part {
+            name: "куб".into(),
+            verts: c.verts.clone(),
+            indices: Indices::Triangles(c.faces.clone()),
+            colors: Some(colors),
+            sizes: None,
+        };
+        let mut band = clip(Side::In);
+        band.side = Side::Out;
+        band.rings.clear();
+        band.zhi = Some(5.0);
+        let got = clip_part(&part, &band);
+        let faces = match &got.indices {
+            Indices::Triangles(t) => t.clone(),
+            _ => Vec::new(),
+        };
+        let m = Mesh {
+            verts: got.verts.clone(),
+            faces,
+        };
+        assert_eq!(holes(&m), 0);
+        assert!((signed_volume(&m) - 500.0).abs() < 1e-6);
+        let cols = got.colors.unwrap();
+        for (v, col) in got.verts.iter().zip(&cols) {
+            assert!(
+                (f64::from(col[0]) - v[2] / 10.0).abs() < 1e-4,
+                "{v:?} {col:?}"
+            );
+        }
+        let pts = Part {
+            name: "точки".into(),
+            verts: vec![[0.0, 0.0, 1.0], [0.0, 0.0, 9.0], [1.0, 1.0, 2.0]],
+            indices: Indices::Points(vec![0, 1, 2]),
+            colors: None,
+            sizes: Some(vec![4.0, 5.0, 6.0]),
+        };
+        let got = clip_part(&pts, &band);
+        assert_eq!(got.verts, vec![[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]]);
+        assert_eq!(got.indices, Indices::Points(vec![0, 1]));
+        assert_eq!(got.sizes, Some(vec![4.0, 6.0]));
     }
 
     #[test]

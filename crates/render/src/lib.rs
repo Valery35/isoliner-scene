@@ -119,69 +119,81 @@ impl GpuScene {
     /// Выгрузить части. Вершины сдвигаются на центр `frame`
     /// в double и только потом сводятся к float32.
     pub fn upload(device: &wgpu::Device, parts: &[Part], frame: Frame) -> Self {
-        let mut out = Vec::with_capacity(parts.len());
-        for part in parts {
-            if part.verts.is_empty() || part.indices.is_empty() {
-                continue;
-            }
-            if let Indices::Points(idx) = &part.indices {
-                out.push(upload_points(device, part, idx, frame));
-                continue;
-            }
-            let mut sum = [0.0f64; 3];
-            let verts: Vec<Vertex> = part
-                .verts
-                .iter()
-                .enumerate()
-                .map(|(i, v)| {
-                    let p = [v[0] - frame.cx, v[1] - frame.cy, v[2] - frame.cz];
-                    for k in 0..3 {
-                        sum[k] += p[k];
-                    }
-                    let color = part
-                        .colors
-                        .as_ref()
-                        .and_then(|c| c.get(i).copied())
-                        .unwrap_or(DEFAULT_COLOR);
-                    Vertex {
-                        pos: [p[0] as f32, p[1] as f32, p[2] as f32],
-                        color,
-                    }
-                })
-                .collect();
-            let n = verts.len() as f64;
-            let (flat, lines): (Vec<u32>, bool) = match &part.indices {
-                Indices::Triangles(t) => (t.iter().flatten().copied().collect(), false),
-                Indices::Lines(l) => (l.iter().flatten().copied().collect(), true),
-                Indices::Points(_) => continue,
-            };
-            let transparent = part
-                .colors
-                .as_ref()
-                .is_some_and(|c| c.iter().any(|c| c[3] < 0.999));
-            let vbuf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("вершины части"),
-                contents: bytemuck::cast_slice(&verts),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-            let ibuf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("номера вершин части"),
-                contents: bytemuck::cast_slice(&flat),
-                usage: wgpu::BufferUsages::INDEX,
-            });
-            out.push(GpuPart {
-                name: part.name.clone(),
-                lines,
-                points: false,
-                transparent,
-                visible: true,
-                center: [sum[0] / n, sum[1] / n, sum[2] / n],
-                vbuf,
-                ibuf: Some(ibuf),
-                count: flat.len() as u32,
-            });
-        }
+        let out = parts
+            .iter()
+            .filter_map(|p| GpuPart::upload(device, p, frame))
+            .collect();
         Self { parts: out, frame }
+    }
+}
+
+impl GpuPart {
+    /// Выгрузить одну часть. Пустая часть - None.
+    pub fn upload(device: &wgpu::Device, part: &Part, frame: Frame) -> Option<Self> {
+        if part.verts.is_empty() || part.indices.is_empty() {
+            return None;
+        }
+        if let Indices::Points(idx) = &part.indices {
+            return Some(upload_points(device, part, idx, frame));
+        }
+        let mut sum = [0.0f64; 3];
+        let verts: Vec<Vertex> = part
+            .verts
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                let p = [v[0] - frame.cx, v[1] - frame.cy, v[2] - frame.cz];
+                for k in 0..3 {
+                    sum[k] += p[k];
+                }
+                let color = part
+                    .colors
+                    .as_ref()
+                    .and_then(|c| c.get(i).copied())
+                    .unwrap_or(DEFAULT_COLOR);
+                Vertex {
+                    pos: [p[0] as f32, p[1] as f32, p[2] as f32],
+                    color,
+                }
+            })
+            .collect();
+        let n = verts.len() as f64;
+        let (flat, lines): (Vec<u32>, bool) = match &part.indices {
+            Indices::Triangles(t) => (t.iter().flatten().copied().collect(), false),
+            Indices::Lines(l) => (l.iter().flatten().copied().collect(), true),
+            Indices::Points(_) => return None,
+        };
+        let transparent = part
+            .colors
+            .as_ref()
+            .is_some_and(|c| c.iter().any(|c| c[3] < 0.999));
+        let vbuf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("вершины части"),
+            contents: bytemuck::cast_slice(&verts),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let ibuf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("номера вершин части"),
+            contents: bytemuck::cast_slice(&flat),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        Some(GpuPart {
+            name: part.name.clone(),
+            lines,
+            points: false,
+            transparent,
+            visible: true,
+            center: [sum[0] / n, sum[1] / n, sum[2] / n],
+            vbuf,
+            ibuf: Some(ibuf),
+            count: flat.len() as u32,
+        })
+    }
+
+    /// Рисовать нечего: от части после обрезки ничего не осталось.
+    /// Часть остаётся в списке, номера частей не сдвигаются.
+    pub fn clear(&mut self) {
+        self.count = 0;
     }
 }
 

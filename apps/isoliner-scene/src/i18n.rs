@@ -168,6 +168,56 @@ const TABLE: &[(&str, &str)] = &[
         "Видеокарта недоступна: окно не может рисовать сцену.",
         "No graphics adapter: the window cannot draw the scene.",
     ),
+    ("Обрезка", "Clipping"),
+    (
+        "Контур и линия берутся из измерения: щелчками поставьте точки, двойной щелчок замыкает контур.",
+        "The outline and the line come from the measurement: click to place points, double-click closes the outline.",
+    ),
+    ("Что оставить", "Keep"),
+    ("(нет)", "(none)"),
+    ("Оставить внутри", "Keep inside"),
+    ("Убрать внутри", "Remove inside"),
+    ("Слева от линии", "Left of the line"),
+    ("Справа от линии", "Right of the line"),
+    ("Коридор вдоль линии", "Corridor along the line"),
+    ("Полуширина коридора, м", "Corridor half-width, m"),
+    ("Отметка не ниже, м", "Elevation from, m"),
+    ("Отметка не выше, м", "Elevation up to, m"),
+    ("Обрезать", "Clip"),
+    ("Снять обрезку", "Remove clipping"),
+    (
+        "Обрезка: осталось %s граней из %s.",
+        "Clipping: %s of %s faces left.",
+    ),
+    (
+        "Обрезка снята, сцена показана целиком.",
+        "Clipping removed, the whole scene is shown.",
+    ),
+    (
+        "Нужен замкнутый контур: поставьте точки измерением и замкните двойным щелчком.",
+        "A closed outline is needed: place points with the measurement and close it with a double-click.",
+    ),
+    (
+        "Нужна линия: поставьте измерением две точки и больше.",
+        "A line is needed: place two or more points with the measurement.",
+    ),
+    (
+        "Полуширина коридора должна быть больше нуля.",
+        "The corridor half-width must be above zero.",
+    ),
+    (
+        "Нечего обрезать: выберите, что оставить, или отметки.",
+        "Nothing to clip: choose what to keep or the elevations.",
+    ),
+    ("Вид по разрезу", "Section view"),
+    (
+        "Вид по разрезу смотрит поперёк линии: поставьте измерением две точки и больше.",
+        "The section view looks across a line: place two or more points with the measurement.",
+    ),
+    (
+        "Вид по разрезу: длина линии %s м. Поворот заперт, левая кнопка сдвигает, колёсико приближает. Отжать кнопку или «Сбросить вид» - поворот снова свободен.",
+        "Section view: line length %s m. Rotation is locked, the left button pans, the wheel zooms. Release the button or press «Reset view» to rotate again.",
+    ),
 ];
 
 /// Значок кнопки «Убрать вид» - знак умножения U+00D7. Знаков U+2715,
