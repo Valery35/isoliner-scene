@@ -103,6 +103,9 @@ pub fn run(
             };
             let (holes, _pinch) = shell::defects(&verts, &faces);
             let vol = crown::mesh_volume(&verts, &faces);
+            // обход наружу: тело принимают 2.23 и 2.11, сцена освещает
+            // его верно. Вершины, грани и объём те же, что у модуля.
+            let faces = crown::outward(&verts, &faces);
             let zmin = verts.iter().fold(f64::INFINITY, |m, v| m.min(v[2]));
             let zmax = verts.iter().fold(f64::NEG_INFINITY, |m, v| m.max(v[2]));
             vol_sum += vol;

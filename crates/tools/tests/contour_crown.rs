@@ -91,6 +91,33 @@ fn values(r: &J) -> Values {
     out
 }
 
+/// Тот же контур далеко от начала координат (метры зоны UTM) - то же тело.
+#[test]
+fn far_from_the_origin_the_body_is_the_same() {
+    let run = tools::run_fn("contour_crown").unwrap();
+    let r = &runs("contour_crown")[0];
+    let near = run(&values(r), &mut VecReport::default()).unwrap();
+    let mut far_v = values(r);
+    if let Some(Value::Features(f)) = far_v.get_mut("INPUT") {
+        for item in f.iter_mut() {
+            for part in &mut item.parts {
+                for p in part.iter_mut() {
+                    p[0] += 435_000.0;
+                    p[1] += 6_062_000.0;
+                }
+            }
+        }
+    }
+    let far = run(&far_v, &mut VecReport::default()).unwrap();
+    for (a, b) in near["OUTPUT"].features.iter().zip(&far["OUTPUT"].features) {
+        for (x, y) in a.values.iter().zip(&b.values) {
+            if let (OutValue::Double(x), OutValue::Double(y)) = (x, y) {
+                assert!((x - y).abs() / x.abs().max(1.0) < 1e-9, "{x} {y}");
+            }
+        }
+    }
+}
+
 #[test]
 fn contour_crown_runs_like_the_module() {
     let run = tools::run_fn("contour_crown").unwrap();

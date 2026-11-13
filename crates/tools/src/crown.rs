@@ -64,9 +64,11 @@ pub fn ring_area(ring: &[[f64; 3]]) -> f64 {
 /// Расстояние от точки до ломаной кольца, точно по отрезкам.
 fn boundary_distance(x: f64, y: f64, ring: &[[f64; 3]]) -> f64 {
     let mut p: Vec<[f64; 2]> = ring.iter().map(|q| [q[0], q[1]]).collect();
+    // замкнуто ли кольцо - точным сравнением. Модуль берёт np.allclose
+    // с относительным допуском 1e-5: в метрах зоны (сотни километров)
+    // это метры, и замыкающая сторона кольца пропадала
     if let (Some(a), Some(b)) = (p.first().copied(), p.last().copied())
-        && ((a[0] - b[0]).abs() > 1e-8 + 1e-5 * b[0].abs()
-            || (a[1] - b[1]).abs() > 1e-8 + 1e-5 * b[1].abs())
+        && a != b
     {
         p.push(a);
     }
@@ -147,10 +149,9 @@ pub fn crown_grids(
 ) -> Result<Grids, &'static str> {
     let mut p: Vec<[f64; 3]> = ring.to_vec();
     if p.len() > 1 {
+        // последняя вершина - повтор первой (точно, см. boundary_distance)
         let (a, b) = (p[0], p[p.len() - 1]);
-        let close = (0..3).all(|k| {
-            (a[k].is_nan() && b[k].is_nan()) || (a[k] - b[k]).abs() <= 1e-8 + 1e-5 * b[k].abs()
-        });
+        let close = a[0] == b[0] && a[1] == b[1];
         if close {
             p.pop();
         }
@@ -341,13 +342,32 @@ pub fn bed_mesh(g: &Grids) -> Result<Mesh, &'static str> {
 /// из гридов юбка обходится вразнобой с кровлей, без согласования объём
 /// выходит меньше настоящего.
 pub fn mesh_volume(verts: &[[f64; 3]], faces: &[[u32; 3]]) -> f64 {
+    signed_volume(verts, &orient(faces)).abs()
+}
+
+/// Грани с обходом, согласованным по общим рёбрам и направленным наружу
+/// (подписанный объём положителен). Вырожденные грани выбрасываются.
+/// Так тело принимают расчёты, которые считают объём без согласования
+/// (2.23, 2.11), и сцена освещает его верно.
+pub fn outward(verts: &[[f64; 3]], faces: &[[u32; 3]]) -> Vec<[u32; 3]> {
+    let f = orient(faces);
+    if signed_volume(verts, &f) < 0.0 {
+        f.into_iter().map(|t| [t[2], t[1], t[0]]).collect()
+    } else {
+        f
+    }
+}
+
+/// Согласовать обход граней по общим рёбрам, как `cleanup.orient_faces`
+/// модуля, после выброса вырожденных граней.
+fn orient(faces: &[[u32; 3]]) -> Vec<[u32; 3]> {
     let mut f: Vec<[u32; 3]> = faces
         .iter()
         .copied()
         .filter(|t| t[0] != t[1] && t[1] != t[2] && t[0] != t[2])
         .collect();
-    if f.is_empty() || verts.is_empty() {
-        return 0.0;
+    if f.is_empty() {
+        return f;
     }
     // согласование обхода: у соседних граней общее ребро проходится
     // в разные стороны
@@ -384,6 +404,14 @@ pub fn mesh_volume(verts: &[[f64; 3]], faces: &[[u32; 3]]) -> f64 {
             }
         }
     }
+    f
+}
+
+/// Подписанный объём от середины вершин.
+fn signed_volume(verts: &[[f64; 3]], f: &[[u32; 3]]) -> f64 {
+    if verts.is_empty() {
+        return 0.0;
+    }
     let n = verts.len() as f64;
     let mut c = [0.0; 3];
     for v in verts {
@@ -397,7 +425,7 @@ pub fn mesh_volume(verts: &[[f64; 3]], faces: &[[u32; 3]]) -> f64 {
             .map(|v| [v[0] - c[0], v[1] - c[1], v[2] - c[2]])
     };
     let mut sum = 0.0;
-    for t in &f {
+    for t in f {
         let (Some(a), Some(b), Some(d)) = (p(t[0]), p(t[1]), p(t[2])) else {
             continue;
         };
@@ -405,7 +433,7 @@ pub fn mesh_volume(verts: &[[f64; 3]], faces: &[[u32; 3]]) -> f64 {
             + a[1] * (b[2] * d[0] - b[0] * d[2])
             + a[2] * (b[0] * d[1] - b[1] * d[0]);
     }
-    (sum / 6.0).abs()
+    sum / 6.0
 }
 
 #[cfg(test)]
