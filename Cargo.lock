@@ -1055,6 +1055,7 @@ dependencies = [
  "rfd",
  "scene-core",
  "scene-format",
+ "serde",
  "serde_json",
  "sys-locale",
  "wasm-bindgen",

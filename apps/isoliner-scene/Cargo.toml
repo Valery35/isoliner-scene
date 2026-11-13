@@ -13,6 +13,7 @@ egui-wgpu.workspace = true
 wgpu.workspace = true
 glam.workspace = true
 rfd.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 png.workspace = true
 scene-format.workspace = true

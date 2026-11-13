@@ -377,6 +377,11 @@ impl SceneApp {
             renderer: Renderer::new(&rs.device),
             egui: rs.renderer.clone(),
         });
+        Self::blank(lang, dark, gpu)
+    }
+
+    /// Окно без пакета. Без видеокарты (`gpu` None) - для тестов.
+    fn blank(lang: Lang, dark: bool, gpu: Option<Gpu>) -> Self {
         Self {
             lang,
             gpu,
@@ -2527,7 +2532,7 @@ impl SceneApp {
                         if button(
                             ui,
                             Icon::Params,
-                            t("Параметры сцены: камера, вертикальное преувеличение, короб, оформление, обрезка"),
+                            t("Параметры сцены: вид, камера, оформление, короб, обрезка"),
                             self.params_open,
                             loaded,
                         )
@@ -2695,6 +2700,11 @@ impl eframe::App for SceneApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Окно без видеокарты и пакета: для тестов полей.
+    pub(super) fn bare_app() -> SceneApp {
+        SceneApp::blank(Lang::Ru, false, None)
+    }
 
     #[test]
     fn templates_and_numbers() {

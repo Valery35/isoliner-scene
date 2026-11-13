@@ -1,0 +1,515 @@
+{
+ "version": 1,
+ "window": {
+  "ru": "Параметры сцены",
+  "en": "Scene settings"
+ },
+ "groups": [
+  {
+   "id": "view",
+   "ru": "Вид",
+   "en": "View",
+   "sections": [
+    {
+     "ru": "Масштаб",
+     "en": "Scale",
+     "params": [
+      {
+       "key": "vex",
+       "ru": "Вертикальное преувеличение",
+       "en": "Vertical exaggeration",
+       "kind": "float",
+       "where": "both",
+       "min": 0.01,
+       "max": 10000.0,
+       "step": 0.5,
+       "default": 5.0
+      },
+      {
+       "key": "spacing",
+       "ru": "Разнос по Z, м",
+       "en": "Z spacing, m",
+       "kind": "float",
+       "where": "pro",
+       "min": 0.0,
+       "max": 1000000000.0,
+       "step": 1.0,
+       "default": 0.0
+      },
+      {
+       "key": "opacity",
+       "ru": "Прозрачность, %",
+       "en": "Transparency, %",
+       "kind": "float",
+       "where": "both",
+       "min": 0.0,
+       "max": 95.0,
+       "step": 1.0,
+       "default": 0.0
+      }
+     ]
+    },
+    {
+     "ru": "Камера",
+     "en": "Camera",
+     "params": [
+      {
+       "key": "camera.azimuth",
+       "ru": "Азимут, °",
+       "en": "Azimuth, °",
+       "kind": "float",
+       "where": "both",
+       "min": -360.0,
+       "max": 720.0,
+       "step": 1.0,
+       "default": 45.0
+      },
+      {
+       "key": "camera.elevation",
+       "ru": "Наклон, °",
+       "en": "Elevation, °",
+       "kind": "float",
+       "where": "both",
+       "min": -90.0,
+       "max": 90.0,
+       "step": 1.0,
+       "default": 30.0
+      },
+      {
+       "key": "camera.distance",
+       "ru": "Удаление, м",
+       "en": "Distance, m",
+       "kind": "float",
+       "where": "both",
+       "min": 0.01,
+       "max": 1000000000.0,
+       "step": 1.0
+      },
+      {
+       "key": "camera.fov",
+       "ru": "Угол обзора, °",
+       "en": "Field of view, °",
+       "kind": "float",
+       "where": "both",
+       "min": 1.0,
+       "max": 150.0,
+       "step": 1.0,
+       "default": 60.0
+      },
+      {
+       "key": "camera.ortho",
+       "ru": "Параллельная проекция",
+       "en": "Orthographic projection",
+       "kind": "bool",
+       "where": "both",
+       "default": false
+      }
+     ]
+    },
+    {
+     "ru": "",
+     "en": "",
+     "params": [
+      {
+       "key": "auto_rebuild",
+       "ru": "Обновлять автоматически",
+       "en": "Update automatically",
+       "kind": "bool",
+       "where": "pro",
+       "default": false,
+       "stored": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "look",
+   "ru": "Оформление",
+   "en": "Appearance",
+   "sections": [
+    {
+     "ru": "Оформление",
+     "en": "Appearance",
+     "params": [
+      {
+       "key": "light",
+       "ru": "Отмывка",
+       "en": "Hillshade",
+       "kind": "int",
+       "where": "both",
+       "min": 0,
+       "max": 100,
+       "step": 5,
+       "default": 55
+      },
+      {
+       "key": "bg_grad",
+       "ru": "Градиентный фон",
+       "en": "Gradient background",
+       "kind": "bool",
+       "where": "both",
+       "default": true
+      },
+      {
+       "key": "smooth_edges",
+       "ru": "Сглаживать края",
+       "en": "Smooth the edges",
+       "kind": "bool",
+       "where": "both",
+       "default": true
+      },
+      {
+       "key": "sketch_on",
+       "ru": "Показывать разметку",
+       "en": "Show sketch",
+       "kind": "bool",
+       "where": "both",
+       "default": true
+      },
+      {
+       "key": "theme",
+       "ru": "Тема",
+       "en": "Theme",
+       "kind": "choice",
+       "where": "lite",
+       "stored": false,
+       "choices": [
+        {
+         "value": "light",
+         "ru": "Светлая",
+         "en": "Light"
+        },
+        {
+         "value": "dark",
+         "ru": "Тёмная",
+         "en": "Dark"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "ru": "Нагрузка",
+     "en": "Load",
+     "params": [
+      {
+       "key": "texside",
+       "ru": "Текстура, пикс.",
+       "en": "Texture, px",
+       "kind": "int",
+       "where": "pro",
+       "min": 256,
+       "max": 8192,
+       "step": 512,
+       "default": 2048
+      },
+      {
+       "key": "vert_cap",
+       "ru": "Предел вершин, тыс.",
+       "en": "Vertex limit, thousands",
+       "kind": "int",
+       "where": "pro",
+       "min": 100,
+       "max": 8000,
+       "step": 100
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "box",
+   "ru": "Короб",
+   "en": "Box",
+   "sections": [
+    {
+     "ru": "Координатный короб",
+     "en": "Coordinate box",
+     "toggle": "axes_on",
+     "params": [
+      {
+       "key": "axes_on",
+       "ru": "Координатный короб",
+       "en": "Coordinate box",
+       "kind": "bool",
+       "where": "both",
+       "default": false
+      },
+      {
+       "key": "box_edges",
+       "ru": "Рёбра",
+       "en": "Edges",
+       "kind": "choice",
+       "where": "both",
+       "default": "all",
+       "choices": [
+        {
+         "value": "all",
+         "ru": "Все двенадцать",
+         "en": "All twelve"
+        },
+        {
+         "value": "axes",
+         "ru": "Три оси из угла",
+         "en": "Three axes from the corner"
+        },
+        {
+         "value": "none",
+         "ru": "Без рёбер",
+         "en": "No edges"
+        }
+       ]
+      },
+      {
+       "key": "box_near",
+       "ru": "подписи к ближним",
+       "en": "labels to the near edges",
+       "kind": "bool",
+       "where": "both",
+       "default": true
+      },
+      {
+       "key": "grid_planes",
+       "ru": "Сетка",
+       "en": "Grid",
+       "kind": "choice",
+       "where": "both",
+       "default": "",
+       "choices": [
+        {
+         "value": "",
+         "ru": "Только короб",
+         "en": "Box only"
+        },
+        {
+         "value": "floor",
+         "ru": "Пол",
+         "en": "Floor"
+        },
+        {
+         "value": "floor,walls",
+         "ru": "Пол и стены",
+         "en": "Floor and walls"
+        },
+        {
+         "value": "walls",
+         "ru": "Стены",
+         "en": "Walls"
+        }
+       ]
+      },
+      {
+       "key": "grid_step",
+       "ru": "Шаг сетки, м",
+       "en": "Grid step, m",
+       "kind": "float",
+       "where": "both",
+       "min": 0.0,
+       "max": 1000000.0,
+       "step": 10.0,
+       "default": 0.0
+      },
+      {
+       "key": "tick_xy",
+       "ru": "Шаг делений: план, Z",
+       "en": "Tick step: plan, Z",
+       "kind": "float",
+       "where": "both",
+       "min": 0.0,
+       "max": 10000000.0,
+       "default": 0.0
+      },
+      {
+       "key": "tick_z",
+       "ru": "Шаг делений: план, Z",
+       "en": "Tick step: plan, Z",
+       "kind": "float",
+       "where": "both",
+       "min": 0.0,
+       "max": 10000000.0,
+       "default": 0.0
+      },
+      {
+       "key": "mult_xy",
+       "ru": "Множитель подписей: план, Z",
+       "en": "Label multiplier: plan, Z",
+       "kind": "float",
+       "where": "both",
+       "min": -1000000.0,
+       "max": 1000000.0,
+       "default": 1.0
+      },
+      {
+       "key": "mult_z",
+       "ru": "Множитель подписей: план, Z",
+       "en": "Label multiplier: plan, Z",
+       "kind": "float",
+       "where": "both",
+       "min": -1000000.0,
+       "max": 1000000.0,
+       "default": 1.0
+      }
+     ]
+    },
+    {
+     "ru": "Охват короба",
+     "en": "Box extent",
+     "params": [
+      {
+       "key": "box_range_on",
+       "ru": "Свой охват короба",
+       "en": "Own box extent",
+       "kind": "bool",
+       "where": "both",
+       "default": false
+      },
+      {
+       "key": "box_range",
+       "ru": "X, Y, Z от и до",
+       "en": "X, Y, Z from and to",
+       "kind": "float6",
+       "where": "both",
+       "default": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "clip",
+   "ru": "Обрезка",
+   "en": "Clipping",
+   "sections": [
+    {
+     "ru": "Обрезка",
+     "en": "Clipping",
+     "params": [
+      {
+       "key": "clip",
+       "ru": "Контуром или линией",
+       "en": "By an outline or a line",
+       "kind": "layer",
+       "where": "pro"
+      },
+      {
+       "key": "side",
+       "ru": "Что оставить",
+       "en": "What to keep",
+       "kind": "choice",
+       "where": "both",
+       "default": "in",
+       "choices": [
+        {
+         "value": "in",
+         "ru": "Оставить внутри",
+         "en": "Keep what is inside"
+        },
+        {
+         "value": "out",
+         "ru": "Убрать внутри",
+         "en": "Remove what is inside"
+        },
+        {
+         "value": "left",
+         "ru": "Слева от линии",
+         "en": "To the left of the line"
+        },
+        {
+         "value": "right",
+         "ru": "Справа от линии",
+         "en": "To the right of the line"
+        },
+        {
+         "value": "corridor",
+         "ru": "Коридор вдоль линии",
+         "en": "A corridor along the line"
+        }
+       ]
+      },
+      {
+       "key": "width",
+       "ru": "Полуширина коридора, м",
+       "en": "Corridor half-width, m",
+       "kind": "float",
+       "where": "both",
+       "min": 0.0,
+       "max": 1000000000.0,
+       "default": 250.0
+      },
+      {
+       "key": "zlo",
+       "ru": "По отметке",
+       "en": "By elevation",
+       "kind": "float",
+       "where": "both",
+       "min": -10000000.0,
+       "max": 10000000.0,
+       "default": -10000000.0
+      },
+      {
+       "key": "zhi",
+       "ru": "По отметке",
+       "en": "By elevation",
+       "kind": "float",
+       "where": "both",
+       "min": -10000000.0,
+       "max": 10000000.0,
+       "default": -10000000.0
+      },
+      {
+       "key": "zs_top",
+       "ru": "Сверху и снизу (растры)",
+       "en": "Above and below (rasters)",
+       "kind": "layer",
+       "where": "pro"
+      },
+      {
+       "key": "zs_bot",
+       "ru": "Сверху и снизу (растры)",
+       "en": "Above and below (rasters)",
+       "kind": "layer",
+       "where": "pro"
+      }
+     ]
+    },
+    {
+     "ru": "Маска и заборы",
+     "en": "Mask and fences",
+     "params": [
+      {
+       "key": "mask_lyr",
+       "ru": "По маске (растр)",
+       "en": "By a mask (raster)",
+       "kind": "layer",
+       "where": "pro"
+      },
+      {
+       "key": "mask_level",
+       "ru": "По маске (растр)",
+       "en": "By a mask (raster)",
+       "kind": "float",
+       "where": "pro",
+       "default": 0.5
+      },
+      {
+       "key": "fence_all",
+       "ru": "Показать заборами по линии",
+       "en": "Show as fences along the line",
+       "kind": "bool",
+       "where": "pro",
+       "default": false
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
