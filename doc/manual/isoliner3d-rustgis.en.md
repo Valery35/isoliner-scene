@@ -171,3 +171,29 @@ The volume accuracy is limited by the column step, the elevation of the level is
 | **Volume given in** | What the volume is given in. Per cent are handy when the volume of the body is not known in advance. |
 | **Column step, m (0 - by the extent)** | Column step over the plan, m. Zero gives about 400 thousand columns over the body extent. The volume accuracy is limited by this step, and the elevation of the level is exact: no steps vertically. The difference from the exact shell volume is printed. |
 | **Filled part (body)** | The filled part as a body of cells: the lid is flat on the level, the walls are stepped by the column step. The attributes hold the level, the volume and the share of the body. The body is taken by 2.11, 2.12 and 2.14. |
+
+## 2.18 Intervals along a borehole
+
+Cuts borehole traces into intervals in three ways.
+
+**Intervals from the table** put every sample row on the trace from its depth to its depth with all the fields of the table. The scene then shows the sampling as it is.
+
+**Equal intervals** cut the trace into pieces of the given length from the collar. The last piece to the end of hole is shorter when the length does not divide evenly.
+
+**Length-weighted composites** cut the same way and compute in each interval the mean of the table weighted by the length of overlap with a sample. A sample 0-1 m at 10 g/t and a sample 1-4 m at 2 g/t give a composite 0-4 m at 4 g/t, while a plain mean would give 6. A composite without a single sample gets an empty value, not a zero: a gap in sampling is not barren rock. The cover field shows the sampled share of the composite length.
+
+There are two outputs. Pieces of the trace with Z are shown in the scene as tubes with the thickness and colour by grade. Interval midpoints as points with the same fields go into 2.02, 2.06 and 2.07: this is the way from the assays to a cube and shells.
+
+| Field | What it sets |
+|---|---|
+| **Borehole traces (lines with Z)** | Borehole traces: lines with Z from the collar to the end of hole, for example from 2.17. The depth along the hole is the line length from its start. |
+| **Hole ID field in the traces** | The hole ID field in the traces. It matches a trace with the rows of the interval table. |
+| **How to cut** | Intervals from the table put every sample row on the trace as it is. Equal intervals cut the trace into samples of the given length from the collar to the end of hole. Composites cut the same way and compute in each a length-weighted mean of the table. |
+| **Interval table** | The interval table: hole, from, to and values. Needed for intervals from the table and for composites. |
+| **Hole ID field in the table** | The hole ID field in the interval table. IDs are matched with the traces as text. |
+| **Interval from field** | The field of the interval start, metres along the hole from the collar, not an elevation. |
+| **Interval to field** | The field of the interval end, metres along the hole. A row whose end is not beyond its start is skipped. |
+| **Fields for composites (empty - all numeric)** | Numeric fields for composites. Empty - all numeric ones except the interval start and end. |
+| **Interval length, m** | The length of an equal interval or a composite, metres. The last interval to the end of hole is shorter when the length does not divide evenly. |
+| **Intervals** | Intervals: pieces of the trace with Z from the start to the end of the interval, with the from, to, length and value fields. In the scene they are shown as tubes with the thickness or colour by grade. |
+| **Interval midpoints** | Interval midpoints: points with Z and the same fields. This is the input for 2.02, 2.06 and 2.07. |

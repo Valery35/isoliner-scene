@@ -41,7 +41,12 @@ use crate::i18n::tr;
 /// числа. 2.17 берёт устья точками или таблицей с X и Y, отметку устья -
 /// из поля. Остальным нужны тела (2.11, 2.12, 2.14, 2.23) или линии с Z
 /// (2.18), а слой RustGIS их не держит.
-pub const OFFERED: &[&str] = &["sweep_body", "desurvey_holes", "fill_to_volume"];
+pub const OFFERED: &[&str] = &[
+    "sweep_body",
+    "desurvey_holes",
+    "fill_to_volume",
+    "hole_intervals",
+];
 
 /// Слой-таблица с X и Y в метрах своей системы: устья 2.17. Если у слоя
 /// нет геометрии, расчёт идёт в его метрах, итог уходит в RustGIS в тех
@@ -1360,6 +1365,131 @@ mod tests {
             .unwrap_or("")
             .to_string();
         assert!(e.starts_with("Слой «Контур» - не тела Isoliner3D"), "{e}");
+    }
+
+    /// Линии с высотой в метрах образца (`[{"id", "attrs", "parts"}]`) -
+    /// итогом Isoliner3D в хранилище слоя `layer`. Ответ - план слоя,
+    /// каким его отдаст RustGIS.
+    fn line_layer(layer: &str, feats: &J) -> J {
+        let utm = Utm::at(56.0, 54.7);
+        let [e0, n0] = utm.forward(56.0, 54.7);
+        let mut plan = Vec::new();
+        let mut g3 = Vec::new();
+        for (i, f) in feats.as_array().unwrap().iter().enumerate() {
+            let pts: Vec<[f64; 3]> = f["parts"][0]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|p| {
+                    [
+                        e0 + p[0].as_f64().unwrap(),
+                        n0 + p[1].as_f64().unwrap(),
+                        p[2].as_f64().unwrap_or(f64::NAN),
+                    ]
+                })
+                .collect();
+            let g = Geom::Line(pts);
+            plan.push(
+                json!({"type": "Feature", "row": i, "properties": f["attrs"],
+                "geometry": out_geometry(&g, &Frame::Utm(utm), &HashMap::new())}),
+            );
+            g3.push(geom_3d(&g, &utm));
+        }
+        keep_bodies(&bodies_dir(), layer, &plan, g3);
+        json!({"type": "FeatureCollection", "features": plan})
+    }
+
+    /// Таблица образца (`[{"id", "attrs"}]`) - слоем RustGIS без геометрии.
+    fn table_layer(rows: &J) -> J {
+        let feats: Vec<J> = rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| json!({"type": "Feature", "row": r["id"], "properties": r["attrs"], "geometry": null}))
+            .collect();
+        json!({"type": "FeatureCollection", "features": feats})
+    }
+
+    /// Объекты выхода против образца: число, значения полей по порядку,
+    /// числа - до 1e-6, строки - слово в слово.
+    fn same_values(name: &str, got: &J, want: &J) {
+        let names: Vec<&str> = want["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f[0].as_str().unwrap())
+            .collect();
+        let feats = got["features"].as_array().unwrap();
+        let wf = want["features"].as_array().unwrap();
+        assert_eq!(feats.len(), wf.len(), "{name}");
+        for (g, w) in feats.iter().zip(wf) {
+            for (i, n) in names.iter().enumerate() {
+                let (a, b) = (&g["properties"][*n], &w["values"][i]);
+                match (a.as_f64(), b.as_f64()) {
+                    (Some(x), Some(y)) => {
+                        assert!(
+                            (x - y).abs() / y.abs().max(1.0) < 1e-6,
+                            "{name} {n}: {x} {y}"
+                        )
+                    }
+                    _ => assert_eq!(a, b, "{name} {n}"),
+                }
+            }
+        }
+    }
+
+    /// 2.18 по стволам - итогу 2.17 в RustGIS: интервалы и середины как
+    /// у модуля, отметки стволов сохраняются, сообщения слово в слово.
+    #[test]
+    fn hole_intervals_from_trace_layer() {
+        let cat = catalog();
+        let tool = cat.tool("hole_intervals").unwrap();
+        for (k, r) in runs_of("hole_intervals").iter().enumerate() {
+            let layer = format!("Стволы {k}");
+            let traces = line_layer(&layer, &r["input"]["TRACES"]);
+            let v = &r["values"];
+            let mode =
+                &tool.param("MODE").unwrap().options[v["MODE"].as_u64().unwrap() as usize].en;
+            let req = json!({"kind": "tool", "id": "hole-intervals", "lang": "ru",
+                "params": {"traces": layer, "t_hole": v["T_HOLE"], "mode": mode,
+                    "table": "Пробы", "f_hole": v["F_HOLE"], "f_from": v["F_FROM"],
+                    "f_to": v["F_TO"], "length": v["LENGTH"]},
+                "layers": {layer.clone(): traces, "Пробы": table_layer(&r["input"]["TABLE"])}});
+            let got = run_t(&req, &cat, Lang::Ru);
+            assert!(got["ok"].is_object(), "{k}: {got}");
+            let ls = got["ok"]["layers"].as_array().unwrap();
+            // выходы - по порядку ключей: OUTPUT, OUTPUT_POINTS
+            same_values(
+                &format!("{k} OUTPUT"),
+                &ls[0]["geojson"],
+                &r["output"]["OUTPUT"],
+            );
+            same_values(
+                &format!("{k} POINTS"),
+                &ls[1]["geojson"],
+                &r["output"]["OUTPUT_POINTS"],
+            );
+            // отметки интервала - из ствола с высотой
+            for (g, w) in ls[0]["geojson"]["features"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .zip(r["output"]["OUTPUT"]["features"].as_array().unwrap())
+            {
+                let zs: Vec<f64> = w["geometry"]["points"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|p| p[2].as_f64().unwrap())
+                    .collect();
+                let lo = zs.iter().copied().fold(f64::INFINITY, f64::min);
+                assert!((g["properties"]["z_min"].as_f64().unwrap() - lo).abs() < 1e-9);
+            }
+            let msgs: Vec<&J> = got["ok"]["messages"].as_array().unwrap().iter().collect();
+            for (m, w) in msgs.iter().zip(r["report"].as_array().unwrap()) {
+                assert_eq!(*m, &w[1], "{k}");
+            }
+        }
     }
 
     #[test]
