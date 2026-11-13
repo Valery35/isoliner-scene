@@ -34,6 +34,11 @@ RUSTGIS = "https://github.com/opengeos/RustGIS"
 
 # Лента выпусков: свежие сверху.
 FEED = (
+    ("2026-11-13", "pro", "1.5.5",
+     "Три новых инструмента. 3D-плотность, отчёт по горизонтам блочной "
+     "модели с рудой, вскрышей и маржой, тела по контуру со сводом.",
+     "Three new tools. 3D density, a bench report of the block model with "
+     "ore, waste and margin, and crowned bodies from outlines."),
     ("2026-11-13", "scene", "0.3.0",
      "Окно стало одним с модулем 1.5.4. Общая плашка и окно «Параметры "
      "сцены», Солнце и тени от рельефа и тел, выгрузка в GLB, STL и OBJ, "
