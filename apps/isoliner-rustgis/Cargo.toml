@@ -6,7 +6,7 @@
 name = "isoliner-rustgis"
 description = "Isoliner3D для RustGIS: расширение-процесс, сцена .i3dscene и инструменты 2.23, 2.24"
 # своя версия: выпуски расширения - теги rustgis-v<версия>
-version = "0.5.0"
+version = "0.5.1"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
