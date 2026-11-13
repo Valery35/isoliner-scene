@@ -409,6 +409,9 @@ pub fn hello(line: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    /// Тесты сцены пишут один пакет во временной папке: по очереди.
+    static SCENE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn hello_line() {
         assert_eq!(
@@ -423,6 +426,9 @@ mod tests {
     /// без id. Сцена строится из слоёв, окно запускается.
     #[test]
     fn scene_in_one_run() {
+        let _turn = SCENE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let fc = json!({"type": "FeatureCollection", "features": [
             {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[56.0, 54.7], [56.001, 54.7]]}}
         ]});
@@ -463,6 +469,9 @@ mod tests {
     /// и отвечает тем же id; событие layers переписывает пакет.
     #[test]
     fn session_round_trip() {
+        let _turn = SCENE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let fc = json!({"type": "FeatureCollection", "features": [
             {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[57.0, 56.0, -10.0], [57.01, 56.01, -20.0]]}}
         ]});

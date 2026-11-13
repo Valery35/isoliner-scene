@@ -19,6 +19,7 @@
 mod convert;
 mod i18n;
 mod layers;
+mod manual;
 mod plugin;
 mod rgtools;
 mod session;
