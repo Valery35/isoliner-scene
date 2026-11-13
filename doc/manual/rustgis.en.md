@@ -9,7 +9,7 @@ version 0.5.
 
 ## Installation
 
-1. Download `isoliner3d-0.3.0.rgplugin` from the release page.
+1. Download `isoliner3d-0.4.0.rgplugin` from the release page.
 2. In RustGIS open the Plugins tab and click Install from File.
 3. Choose the package and confirm the installation.
 
@@ -24,7 +24,7 @@ group.
 Installation from the command line.
 
 ```
-rustgis-cli plugins install isoliner3d-0.3.0.rgplugin
+rustgis-cli plugins install isoliner3d-0.4.0.rgplugin
 ```
 
 Removal is in the Plugin Manager, on the Isoliner3D row.
@@ -90,6 +90,6 @@ The result goes to the project as a new layer. Undo in RustGIS
 A single run checks the package, RustGIS installs nothing.
 
 ```
-rustgis-cli run --plugin isoliner3d-0.3.0.rgplugin --data axes.geojson ^
+rustgis-cli run --plugin isoliner3d-0.4.0.rgplugin --data axes.geojson ^
   --cmd "gp.run={\"tool\":\"plugin:isoliner3d/sweep-body\",\"params\":{\"input\":\"axes\",\"elev\":-300}}"
 ```

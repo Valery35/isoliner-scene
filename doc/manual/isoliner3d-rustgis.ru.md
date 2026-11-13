@@ -8,7 +8,7 @@ Isoliner3D для RustGIS - расширение RustGIS с той же сцен
 
 ## Установка
 
-1. Скачать пакет `isoliner3d-0.3.0.rgplugin` со страницы выпуска.
+1. Скачать пакет `isoliner3d-0.4.0.rgplugin` со страницы выпуска.
 2. В RustGIS открыть вкладку «Модули» и нажать «Установить из файла».
 3. Выбрать пакет и подтвердить установку.
 
@@ -23,7 +23,7 @@ RustGIS предупреждает, что расширение - програм
 Установка из командной строки.
 
 ```
-rustgis-cli plugins install isoliner3d-0.3.0.rgplugin
+rustgis-cli plugins install isoliner3d-0.4.0.rgplugin
 ```
 
 Удаление - «Менеджер модулей», строка Isoliner3D.
@@ -91,7 +91,7 @@ rustgis-cli plugins install isoliner3d-0.3.0.rgplugin
 не ставит.
 
 ```
-rustgis-cli run --plugin isoliner3d-0.3.0.rgplugin --data оси.geojson ^
+rustgis-cli run --plugin isoliner3d-0.4.0.rgplugin --data оси.geojson ^
   --cmd "gp.run={\"tool\":\"plugin:isoliner3d/sweep-body\",\"params\":{\"input\":\"оси\",\"elev\":-300}}"
 ```
 
