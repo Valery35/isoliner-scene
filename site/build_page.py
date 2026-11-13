@@ -34,6 +34,13 @@ RUSTGIS = "https://github.com/opengeos/RustGIS"
 
 # Лента выпусков: свежие сверху.
 FEED = (
+    ("2026-11-13", "scene", "0.3.0",
+     "Окно стало одним с модулем 1.5.4. Общая плашка и окно «Параметры "
+     "сцены», Солнце и тени от рельефа и тел, выгрузка в GLB, STL и OBJ, "
+     "кнопка «О программе».",
+     "One window with the plugin 1.5.4. The shared toolbar and Scene "
+     "settings window, sun and shadows of the relief and bodies, export to "
+     "GLB, STL and OBJ, an About button."),
     ("2026-11-13", "pro", "1.5.4",
      "Кнопка (i) с окном «О программе», общим с Isoliner Scene, чёткие "
      "значки плашки на экранах с масштабом и дописанное руководство PDF.",
@@ -465,9 +472,9 @@ def scene(b):
                b.btn("cta.code", "Исходный код на GitHub",
                      "Source code on GitHub", SCENE_CODE),
                b.el("cta.note",
-                    "Выпуск 0.2.0. Пакет в браузере читается на месте "
+                    "Выпуск 0.3.0. Пакет в браузере читается на месте "
                     "и никуда не отправляется. Apache 2.0.",
-                    "Release 0.2.0. In the browser the package is read "
+                    "Release 0.3.0. In the browser the package is read "
                     "locally and is not sent anywhere. Apache 2.0.",
                     cls="note"),
                picture(),
