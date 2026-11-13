@@ -44,6 +44,10 @@ pub const TABLE: &[(&str, &str)] = &[
     ("Значения не годятся: %s", "The values do not fit: %s"),
     ("%s: значение не того вида", "%s: wrong kind of value"),
     ("Расчёт не удался: %s", "The run failed: %s"),
+    (
+        "%s: тела в плане, верхними гранями, метры зоны UTM %s.",
+        "%s: bodies in plan by their top faces, metres of UTM zone %s.",
+    ),
 ];
 
 /// Перевод текста ответа с подстановкой.

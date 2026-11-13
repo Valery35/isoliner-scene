@@ -20,6 +20,7 @@ mod convert;
 mod i18n;
 mod layers;
 mod plugin;
+mod rgtools;
 mod session;
 
 use std::io::{BufRead, Write};
