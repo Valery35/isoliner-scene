@@ -30,12 +30,20 @@ SCENE_CODE = "https://github.com/Valery35/isoliner-scene"
 SCENE_RELEASES = SCENE_CODE + "/releases"
 SCENE_WEB = "https://valery35.github.io/isoliner-scene/app/"
 RUST = PAGE + "/isoliner3d-rustgis"
-RUST_REL = SCENE_RELEASES + "/tag/rustgis-v0.4.0"
+RUST_REL = SCENE_RELEASES + "/tag/rustgis-v0.5.0"
 RUST_CODE = SCENE_CODE + "/tree/main/apps/isoliner-rustgis"
 RUSTGIS = "https://github.com/opengeos/RustGIS"
 
 # Лента выпусков: свежие сверху.
 FEED = (
+    ("2026-11-13", "rust", "0.5.0",
+     "Десять инструментов модуля в панели RustGIS, итоги складываются в "
+     "цепочку, объёмные итоги открываются в окне сцены.",
+     "Ten plugin tools in the RustGIS Tools pane, results chain from step "
+     "to step, 3D results open in the scene window."),
+    ("2026-11-13", "pro", "1.5.7",
+     "Исправлено замыкание контуров в координатах проекции (2.26, 2.25).",
+     "Fixed ring closure in projected coordinates (2.26, 2.25)."),
     ("2026-11-13", "pro", "1.5.6",
      "Система координат сцены в параметрах сцены, справка 2.17 и 2.18 "
      "полнее, глава «Isoliner3D в RustGIS» в руководстве.",
@@ -407,7 +415,7 @@ def family(b):
               "A RustGIS extension. The plugin tools compute the same bodies "
               "as in QGIS, the project layers open in the scene window in the "
               "map's coordinate system."),
-             ("Первый выпуск 0.4.0", "First release 0.4.0")),
+             ("Выпуск 0.5.0", "Release 0.5.0")),
         )))
 
     choose = b.section(
@@ -624,11 +632,11 @@ def rust(b):
                b.btn("cta.code", "Исходный код на GitHub",
                      "Source code on GitHub", RUST_CODE),
                b.el("cta.note",
-                    "Первый выпуск 0.4.0 для RustGIS 0.6.0. Файл "
-                    "isoliner3d-0.4.0.rgplugin, руководство на русском и "
+                    "Выпуск 0.5.0 для RustGIS 0.6.0. Файл "
+                    "isoliner3d-0.5.0.rgplugin, руководство на русском и "
                     "английском. Apache 2.0.",
-                    "First release 0.4.0 for RustGIS 0.6.0. The file "
-                    "isoliner3d-0.4.0.rgplugin, a manual in Russian and "
+                    "Release 0.5.0 for RustGIS 0.6.0. The file "
+                    "isoliner3d-0.5.0.rgplugin, a manual in Russian and "
                     "English. Apache 2.0.",
                     cls="note"),
                picture("rustgis_scene.jpg"),
@@ -661,12 +669,16 @@ def rust(b):
               "be changed by an EPSG code in the Scene settings window. A map "
               "in degrees gives a UTM zone."), None),
             (None, None, ("Инструменты модуля", "The plugin tools"),
-             ("2.24 Тело вдоль выработки и 2.17 Стволы скважин в панели "
-              "«Инструменты». Поля и справка те же, что в QGIS, итог "
-              "слоем в проект с отменой.",
-              "2.24 Body along a working and 2.17 Borehole traces in the "
-              "Tools pane. The fields and help are as in QGIS, the result is a "
-              "project layer with undo."), None),
+             ("Десять инструментов в панели «Инструменты» - тела выработок "
+              "и по контуру, стволы и интервалы скважин, булевы операции, "
+              "выборка и статистика оболочек, заполнение до объёма, "
+              "3D-плотность, отчёт по горизонтам. Итоги идут в цепочку, "
+              "объёмные открываются в сцене.",
+              "Ten tools in the Tools pane - working and outline bodies, "
+              "borehole traces and intervals, boolean operations, shell "
+              "selection and statistics, fill to volume, 3D density, a bench "
+              "report. Results chain from step to step, 3D results open in "
+              "the scene."), None),
             (None, None, ("Одно описание на всю линейку",
                           "One description for the whole family"),
              ("Инструменты, окно параметров и руководство собираются из "
@@ -682,8 +694,8 @@ def rust(b):
         ("Как поставить", "How to install"), None,
         b.rows("how", (
             ("1. Файл", "1. The file",
-             "Скачать isoliner3d-0.4.0.rgplugin со страницы выпуска.",
-             "Download isoliner3d-0.4.0.rgplugin from the release page."),
+             "Скачать isoliner3d-0.5.0.rgplugin со страницы выпуска.",
+             "Download isoliner3d-0.5.0.rgplugin from the release page."),
             ("2. RustGIS", "2. RustGIS",
              "Вкладка <b>Модули</b>, кнопка <b>Установить из файла</b>, "
              "выбрать скачанный файл.",
