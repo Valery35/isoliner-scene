@@ -23,6 +23,7 @@ mod value;
 pub use format::{Arg, format};
 pub use spec::{Catalog, Lang, Param, ParamKind, Text, Tool, parse_catalog};
 pub use value::{
-    Body, FieldType, Geom, LayerInfo, LineFeature, MeshFeature, Message, OutFeature, OutGeometry,
-    OutValue, Output, PointFeature, Report, Row, ToolError, Value, Values, VecReport, attr_number,
+    Body, FieldType, Geom, Grid, LayerInfo, LineFeature, MeshFeature, Message, OutFeature,
+    OutGeometry, OutValue, Output, PointFeature, Report, Row, ToolError, Value, Values, VecReport,
+    attr_number,
 };
