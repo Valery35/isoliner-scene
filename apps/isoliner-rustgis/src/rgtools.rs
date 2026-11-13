@@ -45,6 +45,7 @@ pub const OFFERED: &[&str] = &[
     "sweep_body",
     "contour_crown",
     "bench_report",
+    "density_3d",
     "desurvey_holes",
     "fill_to_volume",
     "hole_intervals",
@@ -133,6 +134,8 @@ fn rg_kind(p: &Param) -> Option<&'static str> {
         // несколько пунктов: у RustGIS такого вида нет, пункты - текстом
         ParamKind::Enum => "text",
         ParamKind::Bool => "bool",
+        // необязательный выход: заказан или нет
+        ParamKind::Sink if p.optional => "bool",
         ParamKind::String => "text",
         _ => return None,
     })
@@ -344,7 +347,7 @@ fn body_of(geoms: &[&J], utm: &Utm) -> Option<J> {
     let mut index: HashMap<[u64; 3], u32> = HashMap::new();
     let mut faces: Vec<[u32; 3]> = Vec::new();
     for g in geoms {
-        for ring in parts(g) {
+        for ring in parts_m(g, utm) {
             let ring: Vec<[f64; 3]> = if ring.len() == 4 && ring[0] == ring[3] {
                 ring[..3].to_vec()
             } else {
@@ -355,7 +358,7 @@ fn body_of(geoms: &[&J], utm: &Utm) -> Option<J> {
             }
             let mut f = [0u32; 3];
             for (k, p) in ring.iter().enumerate() {
-                let [e, n] = utm.forward(p[0], p[1]).map(snap);
+                let [e, n] = [p[0], p[1]];
                 let key = [e.to_bits(), n.to_bits(), p[2].to_bits()];
                 let next = u32::try_from(verts.len()).ok()?;
                 f[k] = *index.entry(key).or_insert_with(|| {
@@ -403,17 +406,7 @@ fn layer_value(p: &Param, fc: &J, utm: &Utm) -> J {
         .map(|(i, f)| {
             let id = feature_id(f, i);
             let attrs = f["properties"].clone();
-            let ps: Vec<Vec<[f64; 3]>> = parts(&f["geometry"])
-                .into_iter()
-                .map(|part| {
-                    part.into_iter()
-                        .map(|[x, y, z]| {
-                            let [e, n] = utm.forward(x, y).map(snap);
-                            [e, n, z]
-                        })
-                        .collect()
-                })
-                .collect();
+            let ps: Vec<Vec<[f64; 3]>> = parts_m(&f["geometry"], utm);
             let xyz = |pt: [f64; 3]| {
                 json!([pt[0], pt[1], if pt[2].is_finite() { json!(pt[2]) } else { J::Null }])
             };
@@ -715,6 +708,32 @@ pub fn run(
             },
             |p| p.label.get(lang).to_string(),
         );
+        // куб слоем RustGIS не положить: непустые ячейки - в сцену точками
+        if o.geometry == OutGeometry::Grid {
+            if let Frame::Utm(u) = &frame {
+                let pts: Vec<J> = o
+                    .features
+                    .iter()
+                    .filter_map(|f| match &f.geom {
+                        Geom::Grid(g) => Some(grid_points(g, u)),
+                        _ => None,
+                    })
+                    .flatten()
+                    .collect();
+                if !pts.is_empty() {
+                    in_scene.push((
+                        name.clone(),
+                        json!({"type": "FeatureCollection", "features": pts}),
+                    ));
+                }
+            }
+            messages.push(tr(
+                lang,
+                "%s: куб - в окне сцены, ячейками точками.",
+                &[Arg::Text(name.clone())],
+            ));
+            continue;
+        }
         // объекты источника - геометрией своего входа
         let empty = HashMap::new();
         let src = o
@@ -858,6 +877,27 @@ fn show_in_scene(
     })
 }
 
+/// Непустые ячейки куба точками в градусах с высотой: середина ячейки,
+/// значение - полем `value`. Ноль и пусто не показываются.
+fn grid_points(g: &tool_spec::Grid, utm: &Utm) -> Vec<J> {
+    let t = g.transform;
+    let mut out = Vec::new();
+    for (k, band) in g.bands.iter().enumerate() {
+        let z = g.z0 + k as f64 * g.dz;
+        for (at, v) in band.iter().enumerate() {
+            let Some(v) = v.filter(|v| *v != 0.0) else {
+                continue;
+            };
+            let (row, col) = (at / g.nx.max(1), at % g.nx.max(1));
+            let x = t[0] + (col as f64 + 0.5) * t[1];
+            let y = t[3] + (row as f64 + 0.5) * t[5];
+            out.push(json!({"type": "Feature", "properties": {"value": v},
+                "geometry": {"type": "Point", "coordinates": lonlat_z(utm, &[x, y, z])}}));
+        }
+    }
+    out
+}
+
 /// Где лежат пакеты объёмных итогов инструментов.
 pub fn results_dir() -> std::path::PathBuf {
     crate::session::scene_path().with_extension("results")
@@ -897,23 +937,44 @@ fn lonlat_z(utm: &Utm, v: &[f64; 3]) -> J {
 /// MultiPolygon, как модуль пишет тела, линия и точка - с Z. Объект
 /// источника - None, у него своя геометрия слоя.
 fn geom_3d(g: &Geom, utm: &Utm) -> J {
+    // метры как есть: [x, y, z], без высоты - [x, y]
+    let metre = |v: &[f64; 3]| {
+        if v[2].is_finite() {
+            json!([v[0], v[1], v[2]])
+        } else {
+            json!([v[0], v[1]])
+        }
+    };
     match g {
         Geom::Mesh(b) => {
-            let tris: Vec<J> = b
-                .faces
-                .iter()
-                .filter_map(|t| {
-                    let p = |i: u32| b.verts.get(i as usize).map(|v| lonlat_z(utm, v));
-                    Some(json!([[p(t[0])?, p(t[1])?, p(t[2])?, p(t[0])?]]))
-                })
-                .collect();
-            json!({"type": "MultiPolygon", "coordinates": tris})
+            let tri = |f: &dyn Fn(&[f64; 3]) -> J| -> Vec<J> {
+                b.faces
+                    .iter()
+                    .filter_map(|t| {
+                        let p = |i: u32| b.verts.get(i as usize).map(f);
+                        Some(json!([[p(t[0])?, p(t[1])?, p(t[2])?, p(t[0])?]]))
+                    })
+                    .collect()
+            };
+            with_metres(
+                json!({"type": "MultiPolygon", "coordinates": tri(&|v| lonlat_z(utm, v))}),
+                json!(tri(&metre)),
+                utm,
+            )
         }
-        Geom::Line(p) => json!({
-            "type": "LineString",
-            "coordinates": p.iter().map(|q| lonlat_z(utm, q)).collect::<Vec<_>>(),
-        }),
-        Geom::Point(p) => json!({"type": "Point", "coordinates": lonlat_z(utm, p)}),
+        Geom::Line(p) => with_metres(
+            json!({
+                "type": "LineString",
+                "coordinates": p.iter().map(|q| lonlat_z(utm, q)).collect::<Vec<_>>(),
+            }),
+            json!(p.iter().map(metre).collect::<Vec<_>>()),
+            utm,
+        ),
+        Geom::Point(p) => with_metres(
+            json!({"type": "Point", "coordinates": lonlat_z(utm, p)}),
+            metre(p),
+            utm,
+        ),
         Geom::Source(_) | Geom::None | Geom::Grid(_) => J::Null,
     }
 }
@@ -938,7 +999,46 @@ fn strip_z(g: &J) -> J {
     if let Some(c) = g.get("coordinates") {
         out["coordinates"] = walk(c);
     }
+    // метры итога - не для RustGIS
+    if let Some(o) = out.as_object_mut() {
+        o.remove("m");
+        o.remove("utm");
+    }
     out
+}
+
+/// Метры итога рядом с градусами: член `m` (те же координаты в метрах
+/// зоны) и `utm` (зона, север). Градусы туда и обратно рядами UTM дают
+/// ошибку до миллиметра, а следующему инструменту в той же зоне метры
+/// нужны точно: ячейка 2.25 и стенка 2.11 на ровной границе от неё
+/// сдвигаются.
+fn with_metres(mut g: J, m: J, utm: &Utm) -> J {
+    if g.is_object() {
+        g["m"] = m;
+        g["utm"] = json!([utm.zone, utm.north]);
+    }
+    g
+}
+
+/// Части геометрии в метрах зоны `utm`: свои метры итога, если зона та
+/// же, иначе градусы через ряды UTM.
+fn parts_m(g: &J, utm: &Utm) -> Vec<Vec<[f64; 3]>> {
+    if g["utm"] == json!([utm.zone, utm.north]) {
+        let mut own = g.clone();
+        own["coordinates"] = g["m"].clone();
+        return parts(&own);
+    }
+    parts(g)
+        .into_iter()
+        .map(|part| {
+            part.into_iter()
+                .map(|[x, y, z]| {
+                    let [e, n] = utm.forward(x, y).map(snap);
+                    [e, n, z]
+                })
+                .collect()
+        })
+        .collect()
 }
 
 /// Геометрии итога с высотой по объектам: их берут сцена и следующие
@@ -1161,7 +1261,9 @@ mod tests {
             .unwrap();
         // ось 1 прогона: Z из поля z, её и берём; кладём в Уфу
         let utm = Utm::at(56.0, 54.7);
-        let [e0, n0] = utm.forward(56.0, 54.7).map(f64::round);
+        let [e0, n0] = utm
+            .forward(56.0, 54.7)
+            .map(|v| (v / 1000.0).round() * 1000.0);
         let f = &r["input"][0];
         let coords: Vec<J> = f["parts"][0]
             .as_array()
@@ -1414,7 +1516,9 @@ mod tests {
     /// `layer` около Уфы. Ответ - план слоя, каким его отдаст RustGIS.
     fn body_layer(layer: &str, verts: &J, faces: &J) -> (J, Utm, [f64; 2]) {
         let utm = Utm::at(56.0, 54.7);
-        let [e0, n0] = utm.forward(56.0, 54.7).map(f64::round);
+        let [e0, n0] = utm
+            .forward(56.0, 54.7)
+            .map(|v| (v / 1000.0).round() * 1000.0);
         let verts: Vec<[f64; 3]> = verts
             .as_array()
             .unwrap()
@@ -1502,7 +1606,9 @@ mod tests {
     /// каким его отдаст RustGIS.
     fn line_layer(layer: &str, feats: &J) -> J {
         let utm = Utm::at(56.0, 54.7);
-        let [e0, n0] = utm.forward(56.0, 54.7).map(f64::round);
+        let [e0, n0] = utm
+            .forward(56.0, 54.7)
+            .map(|v| (v / 1000.0).round() * 1000.0);
         let mut plan = Vec::new();
         let mut g3 = Vec::new();
         for (i, f) in feats.as_array().unwrap().iter().enumerate() {
@@ -1551,6 +1657,14 @@ mod tests {
             .collect();
         let feats = got["features"].as_array().unwrap();
         let wf = want["features"].as_array().unwrap();
+        if feats.len() != wf.len() {
+            for f in feats {
+                eprintln!("got {}", f["properties"]);
+            }
+            for w in wf {
+                eprintln!("want {} {}", w["values"], w["xyz"]);
+            }
+        }
         assert_eq!(feats.len(), wf.len(), "{name}");
         for (g, w) in feats.iter().zip(wf) {
             // выход, заменяющий поля источника, - значения по именам
@@ -1635,7 +1749,9 @@ mod tests {
     /// с высотой - итогом Isoliner3D в хранилище, таблица - без геометрии.
     fn sample_layer(kind: ParamKind, layer: &str, input: &J) -> J {
         let utm = Utm::at(56.0, 54.7);
-        let [e0, n0] = utm.forward(56.0, 54.7).map(f64::round);
+        let [e0, n0] = utm
+            .forward(56.0, 54.7)
+            .map(|v| (v / 1000.0).round() * 1000.0);
         let at = |p: &J| -> [f64; 3] {
             [
                 e0 + p[0].as_f64().unwrap(),
@@ -1786,6 +1902,10 @@ mod tests {
                     .collect()
             };
             for (key, want) in outs {
+                // куб слоем не ложится, его сверяет тест расчёта
+                if want.get("grid").is_some() {
+                    continue;
+                }
                 let label = tool.param(key).map(|p| p.label.get(Lang::Ru).to_string());
                 let found = ls
                     .iter()
@@ -1825,7 +1945,9 @@ mod tests {
         let cat = catalog();
         let tool = cat.tool("contour_crown").unwrap();
         let utm = Utm::at(56.0, 54.7);
-        let [e0, n0] = utm.forward(56.0, 54.7).map(f64::round);
+        let [e0, n0] = utm
+            .forward(56.0, 54.7)
+            .map(|v| (v / 1000.0).round() * 1000.0);
         for (k, r) in runs_of("contour_crown").iter().enumerate() {
             let f8 = r["input"]["INPUT"]
                 .as_array()
@@ -1901,6 +2023,11 @@ mod tests {
             .unwrap_or("")
             .to_string();
         assert!(e.contains("Нужен слой полигонов"), "{e}");
+    }
+
+    #[test]
+    fn density_3d_through_rustgis() {
+        runs_through_rustgis("density_3d");
     }
 
     #[test]

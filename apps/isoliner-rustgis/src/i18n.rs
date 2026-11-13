@@ -49,6 +49,10 @@ pub const TABLE: &[(&str, &str)] = &[
         "A collar table without points needs the EPSG code of its X and Y, for example EPSG:28410.",
     ),
     (
+        "%s: куб - в окне сцены, ячейками точками.",
+        "%s: the cube is in the scene window, its cells as points.",
+    ),
+    (
         "%s: объёмный итог - в окне сцены.",
         "%s: the result in 3D is in the scene window.",
     ),

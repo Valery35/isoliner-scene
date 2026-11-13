@@ -383,8 +383,12 @@ mod tests {
     /// Выход расширения против выхода модуля: число объектов, тела,
     /// строки слово в слово, числа - в допуске прогона.
     fn check_output(name: &str, r: &J, got: &J, want: &J) {
+        // куб (2.25) сверяет тест расчёта
+        let Some(want) = want["features"].as_array() else {
+            assert!(want.get("grid").is_some(), "{name}");
+            return;
+        };
         let out = &got["features"];
-        let want = want["features"].as_array().unwrap();
         assert_eq!(out.as_array().unwrap().len(), want.len(), "{name}");
         for (g, w) in out.as_array().unwrap().iter().zip(want) {
             assert_eq!(g["source"], w["source"], "{name}");

@@ -45,15 +45,18 @@ Open… button of the scene window.
 
 ## Tools
 
-RustGIS has seven tools now.
+RustGIS has ten tools now.
 
+- 1.09 Bench report.
 - 2.24 Body along a mine working.
+- 2.26 Crowned bodies from outlines.
 - 2.23 Fill a body up to a volume.
 - 2.11 Boolean operations on shells.
 - 2.12 Selection by a shell.
 - 2.14 Zonal statistics of shells.
 - 2.17 Borehole traces from survey.
 - 2.18 Intervals along a borehole.
+- 2.25 3D density.
 
 Their fields, hints and messages are those of the QGIS plugin. The tool
 pages of the Tools chapter are common to QGIS and RustGIS.
@@ -63,8 +66,14 @@ The result goes to the project as a new layer. Undo in RustGIS
 open in a scene window, one window per tool. An open window reloads a
 new result by itself.
 
-Results chain. 2.24 bodies go to 2.23, 2.11, 2.12 and 2.14, 2.17
-traces go to 2.18, and 2.18 intervals go to 2.12 and 2.14. An Isoliner3D
+The 1.09 report goes to the project as a table. A RustGIS layer cannot
+hold the 2.25 cube: its non-empty cells show in the scene window as
+points, and the Density cells box puts them in the project as a point
+layer.
+
+Results chain. 2.24 and 2.26 bodies go to 2.23, 2.11, 2.12 and 2.14,
+2.17 traces go to 2.18 and 2.25, and 2.18 intervals go to 2.12, 2.14
+and 2.25. An Isoliner3D
 result layer carries heights a RustGIS layer does not have. The plugin
 keeps them beside the scene and knows the layer by its name and
 features. A renamed or edited result layer loses its heights, and a

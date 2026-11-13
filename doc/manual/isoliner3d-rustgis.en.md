@@ -44,15 +44,18 @@ Open… button of the scene window.
 
 ## Tools
 
-RustGIS has seven tools now.
+RustGIS has ten tools now.
 
+- 1.09 Bench report.
 - 2.24 Body along a mine working.
+- 2.26 Crowned bodies from outlines.
 - 2.23 Fill a body up to a volume.
 - 2.11 Boolean operations on shells.
 - 2.12 Selection by a shell.
 - 2.14 Zonal statistics of shells.
 - 2.17 Borehole traces from survey.
 - 2.18 Intervals along a borehole.
+- 2.25 3D density.
 
 Their fields, hints and messages are those of the QGIS plugin. The tool
 pages of the Tools chapter are common to QGIS and RustGIS.
@@ -62,8 +65,14 @@ The result goes to the project as a new layer. Undo in RustGIS
 open in a scene window, one window per tool. An open window reloads a
 new result by itself.
 
-Results chain. 2.24 bodies go to 2.23, 2.11, 2.12 and 2.14, 2.17
-traces go to 2.18, and 2.18 intervals go to 2.12 and 2.14. An Isoliner3D
+The 1.09 report goes to the project as a table. A RustGIS layer cannot
+hold the 2.25 cube: its non-empty cells show in the scene window as
+points, and the Density cells box puts them in the project as a point
+layer.
+
+Results chain. 2.24 and 2.26 bodies go to 2.23, 2.11, 2.12 and 2.14,
+2.17 traces go to 2.18 and 2.25, and 2.18 intervals go to 2.12, 2.14
+and 2.25. An Isoliner3D
 result layer carries heights a RustGIS layer does not have. The plugin
 keeps them beside the scene and knows the layer by its name and
 features. A renamed or edited result layer loses its heights, and a
@@ -198,6 +207,30 @@ The idea comes from the QGIS 3D Studio plugin.
 | **Mining, per tonne of rock** | The cost of mining a tonne of rock: ore and waste. |
 | **Processing, per tonne of ore** | The cost of processing a tonne of ore. Waste does not carry it, only mining. |
 | **Bench report** | A table without geometry: a row per bench top down and the total. |
+
+## 2.25 3D density
+
+Builds a cube whose cell holds a count, not an estimate: how many features fall into the cell, the sum or mean of their attribute, the length of lines inside the cell.
+
+A feature is counted once: a point at its position, a line at its middle along the length, a polygon at the centre of its ring. Line length is split between cells exactly, at the crossings of each segment with the cell faces, and the sum over the cells equals the line length inside the grid. This is printed to the log.
+
+An empty cell is zero, not a gap: zero finds is a measured fact too. Only for the mean a cell without features is empty: there is no mean of an empty set.
+
+The cube carries the elevation marks (Z0, DZ) like every cube of the plugin: the scene window builds an isosurface and voxels from it, 2.03 turns it into a block model, 2.04 into a voxel body. So a cluster of finds or a dense net of workings becomes a body by a density threshold.
+
+A grid step of zero takes a round step from the data extent: about fifty cells along the long side of the plan and twenty along the height.
+
+The idea comes from the QGIS 3D Studio plugin.
+
+| Field | What it sets |
+|---|---|
+| **Features with Z** | Points, lines or polygons with elevation: finds, samples, sampling intervals, workings. Features without Z are skipped and their count goes to the log. |
+| **What to count in a cell** | Feature count is the density of finds or samples. Sum and mean use the attribute below. Line length, m is how many metres of workings or intervals pass through the cell. |
+| **Attribute for the sum and mean** | A numeric attribute: metal, mass, weight of a find. Empty values do not take part. |
+| **Cell in plan, m (0 - from extent)** | Cell size along x and y in metres. Zero takes a round step from the data extent, about fifty cells along the long side. |
+| **Cell along height, m (0 - from extent)** | Cell size along the height in metres. Zero takes about twenty levels over the elevation range. |
+| **Density cube** | The density cube: a band per elevation level, Z0 and DZ in the metadata. It opens in the scene window as an isosurface or voxels. |
+| **Density cells (points)** | Non-empty cells as points at their centres, with all counts at once: n, sum, mean, len_m and the cell volume vol. |
 
 ## 2.17 Borehole traces from downhole surveys
 
