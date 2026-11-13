@@ -38,21 +38,58 @@ use crate::convert;
 use crate::i18n::tr;
 
 /// Инструменты в RustGIS. 2.24 берёт оси без Z: отметка - из поля или
-/// числа. 2.17 берёт устья точечным слоем, отметку устья - из поля.
-/// Остальным нужны тела (2.11, 2.12, 2.14, 2.23) или линии с Z (2.18),
-/// а слой RustGIS их не держит.
+/// числа. 2.17 берёт устья точками или таблицей с X и Y, отметку устья -
+/// из поля. Остальным нужны тела (2.11, 2.12, 2.14, 2.23) или линии с Z
+/// (2.18), а слой RustGIS их не держит.
 pub const OFFERED: &[&str] = &["sweep_body", "desurvey_holes"];
 
-/// Поля, которых нет в окне RustGIS. 2.17: X и Y устьев полями -
-/// метры неизвестной системы координат, а у RustGIS систем координат
-/// нет. Устья идут точечным слоем, его градусы переводятся в метры.
-const HIDDEN: &[(&str, &str)] = &[("desurvey_holes", "XFIELD"), ("desurvey_holes", "YFIELD")];
+/// Слой-таблица с X и Y в метрах своей системы: устья 2.17. Если у слоя
+/// нет геометрии, расчёт идёт в его метрах, итог уходит в RustGIS в тех
+/// же метрах с кодом системы из поля [`CRS_PARAM`], пересчитывает его
+/// сам RustGIS. Слои RustGIS отдаёт расширению только в градусах, а
+/// таблица без геометрии хранит X и Y как есть.
+const XY_TABLES: &[(&str, &str)] = &[("desurvey_holes", "COLLARS")];
 
-/// Поля-слои, которым в RustGIS нужен свой вид.
-const POINT_LAYERS: &[(&str, &str)] = &[("desurvey_holes", "COLLARS")];
+/// Поле окна RustGIS, которого нет в tools.json: система координат X и Y
+/// таблицы.
+const CRS_PARAM: &str = "crs";
+#[cfg(test)]
+const CRS_LABEL: (&str, &str) = (
+    "Coordinate system of X and Y (EPSG)",
+    "Система координат X и Y (EPSG)",
+);
+#[cfg(test)]
+const CRS_HELP: (&str, &str) = (
+    "For a collar table without points: the EPSG code of its X and Y, for example EPSG:28410. The traces go to the project in that system, RustGIS draws them in place. Points need no code.",
+    "Для таблицы устьев без точек: код EPSG её X и Y, например EPSG:28410. Стволы ложатся в проект в этой системе, RustGIS ставит их на место сам. Точкам код не нужен.",
+);
 
-fn hidden(tool: &str, key: &str) -> bool {
-    HIDDEN.contains(&(tool, key))
+/// Система координат итога: метры зоны UTM, взятой по градусам входа
+/// (итог переводится обратно в градусы), или метры таблицы с кодом EPSG.
+#[derive(Debug, Clone)]
+enum Frame {
+    Utm(Utm),
+    Native(String),
+}
+
+impl Frame {
+    fn coord(&self, p: &[f64; 3]) -> J {
+        match self {
+            Frame::Utm(u) => lonlat(u, p),
+            Frame::Native(_) => json!([p[0], p[1]]),
+        }
+    }
+}
+
+/// Код EPSG из текста поля: `EPSG:28410`, `epsg:28410` или `28410`.
+fn epsg(text: &str) -> Option<String> {
+    let t = text.trim();
+    let digits = t
+        .strip_prefix("EPSG:")
+        .or_else(|| t.strip_prefix("epsg:"))
+        .unwrap_or(t);
+    (!digits.is_empty() && digits.len() <= 9 && digits.chars().all(|c| c.is_ascii_digit()))
+        .then(|| format!("EPSG:{digits}"))
 }
 
 /// Группа инструментов в панели RustGIS.
@@ -125,13 +162,7 @@ fn manifest_tools(catalog: &Catalog) -> (Vec<J>, serde_json::Map<String, J>) {
         say(sum, summary(t.help.get(Lang::Ru)));
         let mut params = Vec::new();
         for p in &t.params {
-            let Some(mut kind) = rg_kind(p) else { continue };
-            if hidden(&t.name, &p.key) {
-                continue;
-            }
-            if POINT_LAYERS.contains(&(t.name.as_str(), p.key.as_str())) {
-                kind = "pointLayer";
-            }
+            let Some(kind) = rg_kind(p) else { continue };
             let label = p.label.get(Lang::En);
             say(label, p.label.get(Lang::Ru));
             let mut o = json!({"name": param_name(&p.key), "label": label, "kind": kind});
@@ -161,6 +192,11 @@ fn manifest_tools(catalog: &Catalog) -> (Vec<J>, serde_json::Map<String, J>) {
                 o["default"] = d.clone();
             }
             params.push(o);
+        }
+        if XY_TABLES.iter().any(|(n, _)| *n == t.name) {
+            say(CRS_LABEL.0, CRS_LABEL.1);
+            say(CRS_HELP.0, CRS_HELP.1);
+            params.push(json!({"name": CRS_PARAM, "label": CRS_LABEL.0, "kind": "text", "help": CRS_HELP.0}));
         }
         tools.push(json!({
             "id": tool_id(&t.name),
@@ -348,11 +384,6 @@ fn values(tool: &Tool, req: &J) -> Result<(J, Utm, HashMap<i64, J>), BadKey> {
     let mut geoms = HashMap::new();
     for (p, fc) in &inputs {
         let info = layer_info(params[param_name(&p.key)].as_str().unwrap_or(""), fc);
-        // устья 2.17 - только точками: иначе X и Y взялись бы из полей
-        let point_layer = POINT_LAYERS.contains(&(tool.name.as_str(), p.key.as_str()));
-        if point_layer && info["geometry"] != "point" {
-            return Err(p.key.clone());
-        }
         out.insert(format!("@{}", p.key), info);
         out.insert(p.key.clone(), layer_value(p, fc, &utm));
         for (i, f) in fc["features"].as_array().into_iter().flatten().enumerate() {
@@ -363,7 +394,7 @@ fn values(tool: &Tool, req: &J) -> Result<(J, Utm, HashMap<i64, J>), BadKey> {
     }
     for p in &tool.params {
         let v = &params[param_name(&p.key)];
-        if v.is_null() || is_layer(p.kind) || hidden(&tool.name, &p.key) {
+        if v.is_null() || is_layer(p.kind) {
             continue;
         }
         let got = match p.kind {
@@ -397,8 +428,10 @@ fn lonlat(utm: &Utm, p: &[f64; 3]) -> J {
     json!([lon, lat])
 }
 
-/// Геометрия объекта итога в градусах. Тело - верхними гранями.
-fn out_geometry(g: &Geom, utm: &Utm, geoms: &HashMap<i64, J>) -> J {
+/// Геометрия объекта итога в системе `frame`. Тело - верхними гранями.
+fn out_geometry(g: &Geom, frame: &Frame, geoms: &HashMap<i64, J>) -> J {
+    let lonlat = |_: &Frame, p: &[f64; 3]| frame.coord(p);
+    let utm = frame;
     match g {
         Geom::Mesh(b) => {
             let tri = |f: &[u32; 3]| -> Option<[[f64; 3]; 3]> {
@@ -459,6 +492,25 @@ pub fn run(req: &J, catalog: &Catalog, lang: Lang) -> J {
         Ok(v) => v,
         Err(key) => return bad(key),
     };
+    // таблица с X и Y без геометрии - метры своей системы с кодом EPSG
+    let table_xy = XY_TABLES.iter().any(|(n, k)| {
+        *n == tool.name && given.get(*k).is_some() && given[format!("@{k}")]["geometry"] == "none"
+    });
+    let frame = if table_xy {
+        let code = req["params"][CRS_PARAM].as_str().and_then(epsg);
+        match code {
+            Some(c) => Frame::Native(c),
+            None => {
+                return json!({"error": tr(
+                    lang,
+                    "У таблицы устьев без точек нужен код системы координат X и Y, например EPSG:28410.",
+                    &[],
+                )});
+            }
+        }
+    } else {
+        Frame::Utm(utm)
+    };
     let values = match convert::values(tool, &given) {
         Ok(v) => v,
         Err(key) => return bad(key),
@@ -509,17 +561,21 @@ pub fn run(req: &J, catalog: &Catalog, lang: Lang) -> J {
                 json!({
                     "type": "Feature",
                     "properties": props,
-                    "geometry": out_geometry(&f.geom, &utm, &geoms),
+                    "geometry": out_geometry(&f.geom, &frame, &geoms),
                 })
             })
             .collect();
-        if o.geometry == OutGeometry::Mesh {
-            keep_bodies(&bodies_dir(), &name, &features, bodies_3d(o, &utm));
+        if o.geometry == OutGeometry::Mesh
+            && let Frame::Utm(u) = &frame
+        {
+            keep_bodies(&bodies_dir(), &name, &features, bodies_3d(o, u));
         }
-        layers.push(json!({
-            "name": name,
-            "geojson": {"type": "FeatureCollection", "features": features},
-        }));
+        let mut fc = json!({"type": "FeatureCollection", "features": features});
+        // метры таблицы: RustGIS читает член crs и пересчитывает сам
+        if let Frame::Native(code) = &frame {
+            fc["crs"] = json!({"type": "name", "properties": {"name": code}});
+        }
+        layers.push(json!({"name": name, "geojson": fc}));
         if o.geometry == OutGeometry::Mesh {
             messages.push(tr(
                 lang,
@@ -901,10 +957,37 @@ mod tests {
         }
         assert!(msgs[0].contains("X точка, Y точка, Z z"), "{}", msgs[0]);
 
-        // устья таблицей без точек - ошибка, а не метры из полей
+        // устья таблицей с X и Y: расчёт в метрах таблицы, как у модуля,
+        // итог в тех же метрах с кодом системы
+        let table: Vec<J> = r["input"]["COLLARS"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| json!({"type": "Feature", "row": row["id"], "properties": row["attrs"], "geometry": null}))
+            .collect();
         let mut req = req;
-        req["layers"]["Устья"] = req["layers"]["Инклинометрия"].clone();
+        req["layers"]["Устья"] = json!({"type": "FeatureCollection", "features": table});
+        req["params"]["zfield"] = J::Null;
+        // без кода системы - ошибка, а не стволы неизвестно где
         assert!(run(&req, &catalog(), Lang::En)["error"].is_string());
+        req["params"]["crs"] = json!("28410");
+        let got = run(&req, &catalog(), Lang::Ru);
+        let fc = &got["ok"]["layers"][0]["geojson"];
+        assert_eq!(fc["crs"]["properties"]["name"], "EPSG:28410", "{got}");
+        let msgs: Vec<&J> = got["ok"]["messages"].as_array().unwrap().iter().collect();
+        for (m, w) in msgs.iter().zip(r["report"].as_array().unwrap()) {
+            assert_eq!(*m, &w[1]);
+        }
+        for (g, w) in fc["features"].as_array().unwrap().iter().zip(want) {
+            let pts = g["geometry"]["coordinates"].as_array().unwrap();
+            for (p, q) in pts.iter().zip(w["points"].as_array().unwrap()) {
+                assert!((p[0].as_f64().unwrap() - q[0].as_f64().unwrap()).abs() < 1e-9);
+                assert!((p[1].as_f64().unwrap() - q[1].as_f64().unwrap()).abs() < 1e-9);
+            }
+        }
+        assert_eq!(epsg("EPSG:3857").as_deref(), Some("EPSG:3857"));
+        assert_eq!(epsg("epsg:4326").as_deref(), Some("EPSG:4326"));
+        assert!(epsg("Pulkovo").is_none() && epsg("").is_none());
     }
 
     /// Тела итога идут в сцену телами: слой проекта с тем же именем и теми
@@ -932,7 +1015,7 @@ mod tests {
             replace: false,
         };
         let plan = vec![json!({"type": "Feature", "properties": {},
-            "geometry": out_geometry(&out.features[0].geom, &utm, &HashMap::new())})];
+            "geometry": out_geometry(&out.features[0].geom, &Frame::Utm(utm), &HashMap::new())})];
         keep_bodies(&dir, "Тела выработок", &plan, bodies_3d(&out, &utm));
         let fc = json!({"type": "FeatureCollection", "features": plan});
         let got = with_bodies_in(&dir, "Тела выработок", fc.clone());

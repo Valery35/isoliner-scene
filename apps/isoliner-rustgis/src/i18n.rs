@@ -45,6 +45,10 @@ pub const TABLE: &[(&str, &str)] = &[
     ("%s: значение не того вида", "%s: wrong kind of value"),
     ("Расчёт не удался: %s", "The run failed: %s"),
     (
+        "У таблицы устьев без точек нужен код системы координат X и Y, например EPSG:28410.",
+        "A collar table without points needs the EPSG code of its X and Y, for example EPSG:28410.",
+    ),
+    (
         "%s: тела в плане, верхними гранями, метры зоны UTM %s.",
         "%s: bodies in plan by their top faces, metres of UTM zone %s.",
     ),
