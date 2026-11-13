@@ -44,16 +44,30 @@ Open… button of the scene window.
 
 ## Tools
 
-RustGIS has two tools now.
+RustGIS has seven tools now.
 
 - 2.24 Body along a mine working.
+- 2.23 Fill a body up to a volume.
+- 2.11 Boolean operations on shells.
+- 2.12 Selection by a shell.
+- 2.14 Zonal statistics of shells.
 - 2.17 Borehole traces from survey.
+- 2.18 Intervals along a borehole.
 
 Their fields, hints and messages are those of the QGIS plugin. The tool
 pages of the Tools chapter are common to QGIS and RustGIS.
 
 The result goes to the project as a new layer. Undo in RustGIS
-(Ctrl+Z) removes it.
+(Ctrl+Z) removes it. Bodies, traces and intervals with heights also
+open in a scene window, one window per tool. An open window reloads a
+new result by itself.
+
+Results chain. 2.24 bodies go to 2.23, 2.11, 2.12 and 2.14, 2.17
+traces go to 2.18, and 2.18 intervals go to 2.12 and 2.14. An Isoliner3D
+result layer carries heights a RustGIS layer does not have. The plugin
+keeps them beside the scene and knows the layer by its name and
+features. A renamed or edited result layer loses its heights, and a
+tool that needs bodies then says the layer has none.
 
 ## How RustGIS differs from QGIS
 
@@ -70,17 +84,21 @@ The result goes to the project as a new layer. Undo in RustGIS
   brings the layers to the scene's system.
 - Heights come from fields. For 2.24 it is the axis elevation field or
   the constant elevation. For 2.17 it is the collar elevation field.
-- A 2.24 body goes to the project as an outline in plan, the top faces
-  of the body, with the length, section area and volume fields. The
-  scene shows this layer as a body with heights.
+- A body goes to the project as an outline in plan, the top faces of
+  the body, with the run's fields (volume, area) and the `z_min` and
+  `z_max` elevations. Traces and intervals carry the same elevations.
+  The scene shows such a layer with heights.
 - 2.17 takes collars as a point layer or as a table with X and Y in
   metres. Points go through the UTM zone. A table without points gives
   X and Y from its fields, and the Coordinate system of X and Y (EPSG)
   field takes their code, for example EPSG:28410. The traces then go
   to the project in that system, and RustGIS puts them in place.
-- Tools with bodies on input (2.11, 2.12, 2.14, 2.23) and 2.18 with
-  traces in Z stay in the QGIS plugin. A RustGIS layer holds neither
-  bodies nor lines with Z.
+- Bodies and lines with heights on input come only from Isoliner3D
+  results. A body drawn in RustGIS or loaded from a file keeps no
+  heights, such bodies are built in the QGIS plugin. 2.13 (a raster on
+  input) stays in the plugin, RustGIS does not give rasters to plugins.
+- Several items of a list (the 2.14 statistics) are typed comma
+  separated, the field's hint lists the items.
 - The scene follows the layers at the press of the button. A RustGIS
   with plugin sessions will let it follow them by itself.
 
