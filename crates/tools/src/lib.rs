@@ -26,6 +26,8 @@
 pub mod boolean;
 pub mod boolean_shells;
 pub mod colnames;
+pub mod contour_crown;
+pub mod crown;
 pub mod desurvey_holes;
 pub mod fill;
 pub mod fill_volume;
@@ -49,6 +51,7 @@ pub type RunFn = fn(&Values, &mut dyn Report) -> Result<BTreeMap<String, Output>
 /// Расчёты по имени Processing.
 pub const RUNS: &[(&str, RunFn)] = &[
     ("boolean_shells", boolean_shells::run),
+    ("contour_crown", contour_crown::run),
     ("desurvey_holes", desurvey_holes::run),
     ("fill_to_volume", fill_volume::run),
     ("hole_intervals", hole_intervals::run),
