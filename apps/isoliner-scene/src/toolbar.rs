@@ -22,7 +22,6 @@ pub enum Icon {
     Undo,
     Done,
     Line,
-    Eye,
     Clear,
     Export,
     Spin,
@@ -35,7 +34,7 @@ pub enum Icon {
 
 /// Все значки: для проверки, что каждый рисуется.
 #[cfg(test)]
-pub const ALL: [Icon; 17] = [
+pub const ALL: [Icon; 16] = [
     Icon::Reload,
     Icon::Top,
     Icon::Home,
@@ -44,7 +43,6 @@ pub const ALL: [Icon; 17] = [
     Icon::Undo,
     Icon::Done,
     Icon::Line,
-    Icon::Eye,
     Icon::Clear,
     Icon::Export,
     Icon::Spin,
@@ -228,11 +226,6 @@ pub fn paint(icon: Icon, rect: Rect, dark: bool) -> Vec<Shape> {
             p.rect(0.18, 0.18, 0.64, 0.64, None);
             p.line((0.50, 0.10), (0.50, 0.90), p.teal, 1.4);
             p.line((0.10, 0.50), (0.90, 0.50), p.teal, 1.4);
-        }
-        Icon::Eye => {
-            p.arc([0.08, 0.24, 0.84, 0.52], 20.0, 140.0, p.ink);
-            p.arc([0.08, 0.24, 0.84, 0.52], 200.0, 140.0, p.ink);
-            p.ellipse((0.50, 0.50), 0.13, 0.13, Some(ORANGE));
         }
         Icon::Clear => {
             p.path(

@@ -55,7 +55,9 @@ fn fs_mesh(v: VsOut) -> @location(0) vec4<f32> {
     for (var i = 0; i < 3; i++) {
         p += u.lights[i].w * abs(dot(n, u.lights[i].xyz));
     }
-    let rgb = clamp(v.color.rgb * (0.32 + 0.78 * p), vec3<f32>(0.0), vec3<f32>(1.0));
+    // params.z - сила отмывки: 0 - ровный цвет, 1 - свет окна модуля
+    let k = mix(1.0, 0.32 + 0.78 * p, u.params.z);
+    let rgb = clamp(v.color.rgb * k, vec3<f32>(0.0), vec3<f32>(1.0));
     return vec4<f32>(rgb, v.color.a * u.params.y);
 }
 

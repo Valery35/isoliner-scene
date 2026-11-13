@@ -155,6 +155,106 @@ fn pick(lo: V3, hi: V3, axis: usize, side: bool) -> f64 {
     if side { hi[axis] } else { lo[axis] }
 }
 
+/// Рёбра короба, как `box_edges` модуля. `mode` - `all` (двенадцать
+/// рёбер), `axes` (три ребра по сторонам подписей, как оси на чертеже),
+/// `none` (без рёбер). Незнакомый режим - все рёбра.
+pub fn box_edges(lo: V3, hi: V3, mode: &str, sides: Sides) -> Vec<(V3, V3)> {
+    match mode {
+        "none" => Vec::new(),
+        "axes" => {
+            let (ya, za) = (pick(lo, hi, 1, sides.x[0]), pick(lo, hi, 2, sides.x[1]));
+            let (xb, zb) = (pick(lo, hi, 0, sides.y[0]), pick(lo, hi, 2, sides.y[1]));
+            let (xc, yc) = (pick(lo, hi, 0, sides.z[0]), pick(lo, hi, 1, sides.z[1]));
+            vec![
+                ([lo[0], ya, za], [hi[0], ya, za]),
+                ([xb, lo[1], zb], [xb, hi[1], zb]),
+                ([xc, yc, lo[2]], [xc, yc, hi[2]]),
+            ]
+        }
+        _ => {
+            let mut pts = Vec::with_capacity(8);
+            for x in [lo[0], hi[0]] {
+                for y in [lo[1], hi[1]] {
+                    for z in [lo[2], hi[2]] {
+                        pts.push([x, y, z]);
+                    }
+                }
+            }
+            let mut segs = Vec::with_capacity(12);
+            for (i, a) in pts.iter().enumerate() {
+                for b in &pts[i + 1..] {
+                    let same = (0..3).filter(|&k| (a[k] - b[k]).abs() < 1e-12).count();
+                    if same == 2 {
+                        segs.push((*a, *b));
+                    }
+                }
+            }
+            segs
+        }
+    }
+}
+
+/// Потолок по линиям сетки, как `MAX_GRID_LINES` модуля.
+pub const MAX_GRID_LINES: usize = 4000;
+
+/// Координатная сетка на плоскостях короба, как `grid_lines` модуля.
+/// `planes` - через запятую `floor` (пол) и `walls` (две вертикальные
+/// стены у начала), пусто - без сетки. Шаг ноль - круглый шаг
+/// от размаха. Мелкий шаг удваивается, пока линий больше потолка.
+pub fn grid_lines(lo: V3, hi: V3, step: f64, planes: &str) -> Vec<(V3, V3)> {
+    let floor = planes.split(',').any(|p| p.trim() == "floor");
+    let walls = planes.split(',').any(|p| p.trim() == "walls");
+    if !floor && !walls {
+        return Vec::new();
+    }
+    let mut span = (0..3).map(|k| hi[k] - lo[k]).fold(0.0, f64::max);
+    if span <= 0.0 || !span.is_finite() {
+        span = 1.0;
+    }
+    let mut st = if step > 0.0 { step } else { nice_step(span, 8) };
+    loop {
+        let n: f64 = (0..3).map(|k| ((hi[k] - lo[k]) / st).floor() + 1.0).sum();
+        if n * 2.0 <= MAX_GRID_LINES as f64 || st > span {
+            break;
+        }
+        st *= 2.0;
+    }
+    let seq = |k: usize| {
+        let mut out = Vec::new();
+        let mut x = (lo[k] / st).ceil() * st;
+        while x <= hi[k] + st * 1e-9 {
+            out.push(x);
+            x += st;
+        }
+        out
+    };
+    let mut segs = Vec::new();
+    if floor {
+        let z = lo[2];
+        for x in seq(0) {
+            segs.push(([x, lo[1], z], [x, hi[1], z]));
+        }
+        for y in seq(1) {
+            segs.push(([lo[0], y, z], [hi[0], y, z]));
+        }
+    }
+    if walls {
+        for x in seq(0) {
+            segs.push(([x, lo[1], lo[2]], [x, lo[1], hi[2]]));
+        }
+        for z in seq(2) {
+            segs.push(([lo[0], lo[1], z], [hi[0], lo[1], z]));
+        }
+        for y in seq(1) {
+            segs.push(([lo[0], y, lo[2]], [lo[0], y, hi[2]]));
+        }
+        for z in seq(2) {
+            segs.push(([lo[0], lo[1], z], [lo[0], hi[1], z]));
+        }
+    }
+    segs
+}
+
 /// Деление короба: ось, значение, штрих от ребра `a` наружу к `b`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tick {
@@ -382,6 +482,26 @@ mod tests {
         assert!(!edge_on(0, 90.0, 0.0));
         assert!(!edge_on(2, 0.0, 0.0));
         assert_eq!(north_arrow(lo, hi)[0].0, [-12.0, 0.0, -30.0]);
+    }
+
+    /// Рёбра и сетка как у модуля: 12 рёбер, три оси, без рёбер,
+    /// пол с шагом 25 и пустая сетка.
+    #[test]
+    fn edges_and_grid_like_the_module() {
+        let (lo, hi) = ([0.0, 0.0, -30.0], [100.0, 50.0, 0.0]);
+        assert_eq!(box_edges(lo, hi, "all", ORIGIN_SIDES).len(), 12);
+        assert!(box_edges(lo, hi, "none", ORIGIN_SIDES).is_empty());
+        let axes = box_edges(lo, hi, "axes", ORIGIN_SIDES);
+        assert_eq!(axes[0], ([0.0, 0.0, -30.0], [100.0, 0.0, -30.0]));
+        assert_eq!(axes[2], ([0.0, 0.0, -30.0], [0.0, 0.0, 0.0]));
+        let floor = grid_lines(lo, hi, 25.0, "floor");
+        // X: 0, 25, 50, 75, 100; Y: 0, 25, 50
+        assert_eq!(floor.len(), 8);
+        assert_eq!(
+            grid_lines(lo, hi, 25.0, "floor,walls").len(),
+            8 + 5 + 2 + 3 + 2
+        );
+        assert!(grid_lines(lo, hi, 25.0, "").is_empty());
     }
 
     /// Неровная верхняя кромка: глубины справа округлены по шагу,

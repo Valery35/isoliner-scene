@@ -263,12 +263,23 @@ pub struct Target {
     pub height: u32,
     pub color: wgpu::Texture,
     pub color_view: wgpu::TextureView,
-    msaa_view: wgpu::TextureView,
+    /// Кадр со сглаживанием. None - сглаживание выключено, рисуется
+    /// прямо в `color`.
+    msaa_view: Option<wgpu::TextureView>,
     depth_view: wgpu::TextureView,
+    /// Отсчётов на пиксель: 1 - без сглаживания.
+    pub samples: u32,
 }
 
 impl Target {
     pub fn new(device: &wgpu::Device, width: u32, height: u32) -> Self {
+        Self::with_samples(device, width, height, SAMPLES)
+    }
+
+    /// Кадр с `samples` отсчётами на пиксель: 1 - без сглаживания
+    /// краёв, как снятая галка «Сглаживать края» модуля.
+    pub fn with_samples(device: &wgpu::Device, width: u32, height: u32, samples: u32) -> Self {
+        let samples = samples.max(1);
         let (width, height) = (width.max(1), height.max(1));
         let size = wgpu::Extent3d {
             width,
@@ -295,16 +306,18 @@ impl Target {
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC,
         );
-        let msaa = make(
-            "кадр со сглаживанием",
-            COLOR_FORMAT,
-            SAMPLES,
-            wgpu::TextureUsages::RENDER_ATTACHMENT,
-        );
+        let msaa = (samples > 1).then(|| {
+            make(
+                "кадр со сглаживанием",
+                COLOR_FORMAT,
+                samples,
+                wgpu::TextureUsages::RENDER_ATTACHMENT,
+            )
+        });
         let depth = make(
             "глубина",
             DEPTH_FORMAT,
-            SAMPLES,
+            samples,
             wgpu::TextureUsages::RENDER_ATTACHMENT,
         );
         Self {
@@ -312,8 +325,9 @@ impl Target {
             height,
             color_view: color.create_view(&wgpu::TextureViewDescriptor::default()),
             color,
-            msaa_view: msaa.create_view(&wgpu::TextureViewDescriptor::default()),
+            msaa_view: msaa.map(|m| m.create_view(&wgpu::TextureViewDescriptor::default())),
             depth_view: depth.create_view(&wgpu::TextureViewDescriptor::default()),
+            samples,
         }
     }
 }
@@ -327,6 +341,9 @@ pub struct Look {
     pub vex: f64,
     /// Общая непрозрачность тел, 0..1.
     pub opacity: f32,
+    /// Сила отмывки тел светом: 0 - ровный цвет, 1 - свет окна модуля
+    /// при отмывке 55 процентов, больше - резче.
+    pub light: f32,
     /// Фон кадра.
     pub background: Background,
     /// Пикселей кадра на пиксель значка: размер точки в пакете задан
@@ -343,10 +360,18 @@ pub struct Renderer {
     lines: wgpu::RenderPipeline,
     uniforms: wgpu::Buffer,
     bind: wgpu::BindGroup,
+    /// Отсчётов на пиксель у конвейеров: кадр нужен такой же.
+    samples: u32,
 }
 
 impl Renderer {
     pub fn new(device: &wgpu::Device) -> Self {
+        Self::with_samples(device, SAMPLES)
+    }
+
+    /// Конвейеры под кадр с `samples` отсчётами на пиксель.
+    pub fn with_samples(device: &wgpu::Device, samples: u32) -> Self {
+        let samples = samples.max(1);
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("сцена"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
@@ -412,7 +437,7 @@ impl Renderer {
                     bias: Default::default(),
                 }),
                 multisample: wgpu::MultisampleState {
-                    count: SAMPLES,
+                    count: samples,
                     ..Default::default()
                 },
                 fragment: Some(wgpu::FragmentState {
@@ -448,7 +473,7 @@ impl Renderer {
                 bias: Default::default(),
             }),
             multisample: wgpu::MultisampleState {
-                count: SAMPLES,
+                count: samples,
                 ..Default::default()
             },
             fragment: Some(wgpu::FragmentState {
@@ -488,7 +513,7 @@ impl Renderer {
                 bias: Default::default(),
             }),
             multisample: wgpu::MultisampleState {
-                count: SAMPLES,
+                count: samples,
                 ..Default::default()
             },
             fragment: Some(wgpu::FragmentState {
@@ -530,7 +555,13 @@ impl Renderer {
             ),
             uniforms,
             bind,
+            samples,
         }
+    }
+
+    /// Отсчётов на пиксель у конвейеров.
+    pub fn samples(&self) -> u32 {
+        self.samples
     }
 
     /// Нарисовать кадр в `target`.
@@ -557,7 +588,12 @@ impl Renderer {
         let u = Uniforms {
             view_proj: view.view_proj().as_mat4().to_cols_array_2d(),
             lights,
-            params: [look.vex as f32, look.opacity.clamp(0.0, 1.0), 0.0, 0.0],
+            params: [
+                look.vex as f32,
+                look.opacity.clamp(0.0, 1.0),
+                look.light.max(0.0),
+                0.0,
+            ],
             bg_top: [bg.top[0], bg.top[1], bg.top[2], 1.0],
             bg_bottom: [bg.bottom[0], bg.bottom[1], bg.bottom[2], 1.0],
             screen: [
@@ -591,12 +627,17 @@ impl Renderer {
             let mut pass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("сцена"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &target.msaa_view,
+                    view: target.msaa_view.as_ref().unwrap_or(&target.color_view),
                     depth_slice: None,
-                    resolve_target: Some(&target.color_view),
+                    resolve_target: target.msaa_view.as_ref().map(|_| &target.color_view),
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
-                        store: wgpu::StoreOp::Discard,
+                        // без сглаживания кадр пишется прямо в текстуру
+                        store: if target.msaa_view.is_some() {
+                            wgpu::StoreOp::Discard
+                        } else {
+                            wgpu::StoreOp::Store
+                        },
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {

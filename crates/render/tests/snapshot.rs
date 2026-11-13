@@ -71,6 +71,7 @@ fn point_marks_render_in_screen_pixels() {
         camera: frame.camera_to_view(&pkg.meta.camera.unwrap()),
         vex: frame.vex,
         opacity: 1.0,
+        light: 1.0,
         background: BG_PLAIN,
         pixels_per_point: 1.0,
     };
@@ -151,6 +152,7 @@ fn demo_scene_renders_with_its_camera() {
         camera: frame.camera_to_view(&pkg.meta.camera.unwrap()),
         vex: frame.vex,
         opacity: 1.0,
+        light: 1.0,
         background: BG_PLAIN,
         pixels_per_point: 1.0,
     };

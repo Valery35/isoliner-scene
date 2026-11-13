@@ -43,7 +43,7 @@ const TABLE: &[(&str, &str)] = &[
     ("Пакет сцены Isoliner3D", "Isoliner3D scene package"),
     ("Вписать", "Fit"),
     ("Камера пакета", "Package camera"),
-    ("Параллельная проекция", "Parallel projection"),
+    ("Параллельная проекция", "Orthographic projection"),
     ("Преувеличение", "Exaggeration"),
     ("Непрозрачность", "Opacity"),
     ("Части", "Parts"),
@@ -188,39 +188,61 @@ const TABLE: &[(&str, &str)] = &[
         "Вертикальное преувеличение. Единица - натуральный масштаб.",
         "Vertical exaggeration. One is true scale.",
     ),
-    // окно «Параметры сцены»
+    // окно «Параметры сцены»: подписи и переводы - из списка модуля
+    // fixtures/SCENE_PARAMS.md, тест окна сверяет их с ним
     (
-        "Параметры сцены: камера, вертикальный масштаб, короб, оформление, обрезка",
-        "Scene settings: camera, vertical scale, box, appearance, clipping",
+        "Параметры сцены: камера, вертикальное преувеличение, короб, оформление, обрезка",
+        "Scene settings: camera, vertical exaggeration, box, look, clip",
     ),
     ("Параметры сцены", "Scene settings"),
-    ("Камера", "Camera"),
     ("Вид", "View"),
+    ("Оформление", "Look"),
     ("Короб", "Box"),
+    ("Вертикальное преувеличение", "Vertical exaggeration"),
+    ("Прозрачность, %", "Transparency, %"),
     ("Азимут, °", "Azimuth, °"),
     ("Наклон, °", "Elevation, °"),
     ("Удаление, м", "Distance, m"),
     ("Угол обзора, °", "Field of view, °"),
-    ("Центр X, м", "Center X, m"),
-    ("Центр Y, м", "Center Y, m"),
-    ("Центр Z, м", "Center Z, m"),
-    ("Вертикальный масштаб, Z ×", "Vertical scale, Z ×"),
+    ("Отмывка, %", "Hillshade, %"),
+    ("Сглаживать края", "Smooth edges"),
+    ("Показывать разметку", "Show sketch"),
+    (
+        "Нарисованный контур и линия разреза поверх сцены. Обрезка по ним остаётся и при снятой галке.",
+        "The drawn contour and section line over the scene. Clipping by them stays when unchecked.",
+    ),
     ("Тема", "Theme"),
     ("Светлая", "Light"),
     ("Тёмная", "Dark"),
-    (
-        "Подписи на ближних к камере рёбрах",
-        "Labels on the edges nearest to the camera",
-    ),
-    ("в плане", "in plan"),
-    ("по высоте", "vertical"),
-    ("Шаг делений, м (0 - сам)", "Tick step, m (0 - auto)"),
-    ("Множитель подписи", "Label multiplier"),
+    ("Координатный короб", "Coordinate box"),
+    ("Рёбра", "Edges"),
+    ("все", "all"),
+    ("три оси", "three axes"),
+    ("без рёбер", "none"),
+    ("Подписи к ближним", "Labels on near edges"),
+    ("Сетка", "Grid"),
+    ("только короб", "box only"),
+    ("пол", "floor"),
+    ("пол и стены", "floor and walls"),
+    ("стены", "walls"),
+    ("Шаг сетки, м", "Grid step, m"),
+    ("Шаг делений", "Tick step"),
+    ("план", "plan"),
+    ("Множитель подписей", "Label factor"),
     (
         "0.001 - километры, -1 - глубина положительными числами.",
         "0.001 gives kilometres, -1 gives depth as positive numbers.",
     ),
-    ("Свои границы короба", "Custom box extent"),
+    ("Свой охват", "Custom extent"),
+    ("X, Y, Z от и до", "X, Y, Z from and to"),
+    ("внутри", "inside"),
+    ("снаружи", "outside"),
+    ("слева", "left"),
+    ("справа", "right"),
+    ("коридор", "corridor"),
+    ("По отметке", "By elevation"),
+    ("от", "from"),
+    ("до", "to"),
     ("Запомнить текущий вид", "Remember the current view"),
     (
         "Кадр %s x %s в буфере обмена.",
@@ -291,7 +313,7 @@ const TABLE: &[(&str, &str)] = &[
         "Видеокарта недоступна: окно не может рисовать сцену.",
         "No graphics adapter: the window cannot draw the scene.",
     ),
-    ("Обрезка", "Clipping"),
+    ("Обрезка", "Clip"),
     (
         "Контур и линия берутся из измерения: щелчками поставьте точки, двойной щелчок замыкает контур.",
         "The outline and the line come from the measurement: click to place points, double-click closes the outline.",
@@ -356,6 +378,13 @@ pub fn tr(lang: Lang, ru: &'static str) -> &'static str {
         Lang::Ru => ru,
         Lang::En => TABLE.iter().find(|(r, _)| *r == ru).map_or(ru, |(_, e)| e),
     }
+}
+
+/// Английский перевод строки, которой нет в коде: для сверки подписей
+/// со списком модуля.
+#[cfg(test)]
+pub fn english(ru: &str) -> Option<&'static str> {
+    TABLE.iter().find(|(r, _)| *r == ru).map(|(_, e)| *e)
 }
 
 #[cfg(test)]

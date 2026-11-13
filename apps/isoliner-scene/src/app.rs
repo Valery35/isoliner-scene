@@ -24,7 +24,7 @@ use crate::i18n::{Lang, tr};
 use crate::{share, shot};
 
 mod params;
-use params::{BoxOpts, Tab};
+use params::{BoxOpts, LookOpts};
 
 /// Подставить значения в шаблон по порядку: `%s`, `%d`, `%.0f`.
 fn fill(template: &str, args: &[String]) -> String {
@@ -205,6 +205,68 @@ impl Default for ClipUi {
     }
 }
 
+/// По чему построен короб: изменилось - строится заново.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct BoxKey {
+    opts: BoxOpts,
+    sides: scene_core::axes::Sides,
+    lo: [f64; 3],
+    hi: [f64; 3],
+    dark: bool,
+}
+
+/// Короб частью-линиями, как `_add_axes_box` окна модуля: рёбра,
+/// сетка, штрихи делений, стрелка севера, каждое своим цветом. Цвета
+/// модуля, в тёмной теме - светлые.
+fn box_part(k: &BoxKey) -> Part {
+    use scene_core::axes;
+    let o = &k.opts;
+    let shade = |c: [f32; 4]| {
+        if k.dark {
+            [1.0 - c[0] * 0.6, 1.0 - c[1] * 0.6, 1.0 - c[2] * 0.5, c[3]]
+        } else {
+            c
+        }
+    };
+    let ticks: Vec<_> = axes::tick_marks(k.lo, k.hi, 5, [o.step_xy, o.step_xy, o.step_z], k.sides)
+        .into_iter()
+        .map(|t| (t.a, t.b))
+        .collect();
+    let groups = [
+        (
+            axes::box_edges(k.lo, k.hi, o.edges.key(), k.sides),
+            [0.35, 0.38, 0.45, 0.65],
+        ),
+        (
+            axes::grid_lines(k.lo, k.hi, o.grid_step, o.grid.key()),
+            [0.45, 0.48, 0.55, 0.35],
+        ),
+        (ticks, [0.25, 0.28, 0.36, 0.9]),
+        (
+            axes::north_arrow(k.lo, k.hi).to_vec(),
+            [0.20, 0.24, 0.38, 0.95],
+        ),
+    ];
+    let mut verts = Vec::new();
+    let mut colors = Vec::new();
+    let mut lines = Vec::new();
+    for (segs, c) in groups {
+        for (a, b) in segs {
+            let n = verts.len() as u32;
+            verts.extend([a, b]);
+            colors.extend([shade(c); 2]);
+            lines.push([n, n + 1]);
+        }
+    }
+    Part {
+        name: "box".to_string(),
+        verts,
+        indices: scene_format::Indices::Lines(lines),
+        colors: Some(colors),
+        sizes: None,
+    }
+}
+
 /// Строка списка частей.
 struct Row {
     info: Option<PartInfo>,
@@ -265,9 +327,15 @@ pub struct SceneApp {
     shot_copy: bool,
     /// Окно «Параметры сцены» открыто и его вкладка.
     params_open: bool,
-    params_tab: Tab,
+    params_tab: usize,
     /// Настройки координатного короба.
     box_opts: BoxOpts,
+    /// Отмывка и сглаживание краёв.
+    look_opts: LookOpts,
+    /// Короб, построенный окном: номер в частях видеокарты и то,
+    /// по чему он построен. Изменилось - строится заново.
+    box_slot: Option<usize>,
+    box_key: Option<BoxKey>,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     film: Film,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -344,8 +412,11 @@ impl SceneApp {
             marks: true,
             shot_copy: false,
             params_open: false,
-            params_tab: Tab::default(),
+            params_tab: 0,
             box_opts: BoxOpts::default(),
+            look_opts: LookOpts::default(),
+            box_slot: None,
+            box_key: None,
             film: Film::default(),
             film_open: false,
             #[cfg(not(target_arch = "wasm32"))]
@@ -494,6 +565,7 @@ impl SceneApp {
             camera,
             vex: self.vex,
             opacity: self.opacity,
+            light: self.look_opts.strength(),
             background: match (self.gradient, self.dark) {
                 (true, false) => render::BG_GRADIENT,
                 (false, false) => render::BG_PLAIN,
@@ -607,7 +679,8 @@ impl SceneApp {
         let (Some(gpu), Some(view)) = (&self.gpu, &self.target) else {
             return;
         };
-        let target = Target::new(&gpu.device, view.width, view.height);
+        let target =
+            Target::with_samples(&gpu.device, view.width, view.height, gpu.renderer.samples());
         self.spin = false;
         self.anim = None;
         self.recording = Some(Recording {
@@ -1016,20 +1089,18 @@ impl SceneApp {
             .gpu
             .as_ref()
             .map(|g| GpuScene::upload(&g.device, &pkg.parts, self.frame));
-        // показ частей как в окне QGIS: короб выключен - оформление
-        // скрыто. Подписи короба буквами из отрезков (оформление-меш)
-        // пакет несёт для других просмотрщиков, окно ставит их само
-        // поверх кадра, как окно модуля.
+        // Оформление из пакета (короб линиями, подписи буквами из
+        // отрезков) пакет несёт для других просмотрщиков. Окно строит
+        // короб само по параметрам сцены, как окно модуля, поэтому
+        // готовое оформление скрыто, а в списке частей его нет.
         if let Some(scene) = self.scene.as_mut() {
             for (p, row) in scene.parts.iter_mut().zip(&self.rows) {
-                let glyphs = row
-                    .info
-                    .as_ref()
-                    .is_some_and(|i| i.decor && i.kind == scene_format::PartKind::Mesh);
-                p.visible = pkg.meta.part_shown(row.info.as_ref()) && !glyphs;
+                p.visible = !row.info.as_ref().is_some_and(|i| i.decor);
             }
         }
-        self.box_opts = BoxOpts::from_state(&pkg.meta.state);
+        self.box_key = None;
+        self.box_slot = None;
+        self.params_from_state(&pkg.meta.state);
         self.pkg = Some(pkg);
         self.status.clone_from(&name);
         self.name = Some(name);
@@ -1152,49 +1223,55 @@ impl SceneApp {
         }
     }
 
-    /// Короб с подписями виден: в пакете есть линии оформления и они
-    /// показаны.
-    fn box_visible(&self) -> bool {
-        self.box_shown_now()
-    }
-
-    /// Строки оформления-линий: короб, штрихи, сетка. Подписи буквами
-    /// из пакета (оформление-меш) сюда не входят: окно ставит свои
-    /// поверх кадра.
-    fn box_rows(&self) -> Vec<usize> {
-        (0..self.rows.len())
-            .filter(|&i| {
-                self.rows[i]
-                    .info
-                    .as_ref()
-                    .is_some_and(|info| info.decor && info.kind != scene_format::PartKind::Mesh)
-            })
-            .collect()
-    }
-
-    /// Короб сейчас показан.
-    fn box_shown_now(&self) -> bool {
-        let Some(scene) = self.scene.as_ref() else {
-            return false;
-        };
-        self.box_rows()
-            .iter()
-            .any(|&i| scene.parts.get(i).is_some_and(|p| p.visible))
-    }
-
-    /// Показать или скрыть короб.
-    fn show_box(&mut self, on: bool) {
-        let rows = self.box_rows();
-        if let Some(s) = self.scene.as_mut() {
-            for i in rows {
-                if let Some(p) = s.parts.get_mut(i) {
-                    p.visible = on;
-                }
-            }
+    /// Стороны короба для подписей и рёбер «три оси»: ближние к камере
+    /// или у начала, как выбрано в окне параметров.
+    fn box_sides(&self, lo: [f64; 3], hi: [f64; 3]) -> scene_core::axes::Sides {
+        if self.box_opts.near {
+            let eye = camera::eye(&self.view_camera());
+            scene_core::axes::near_sides(lo, hi, self.frame_now().to_world(eye))
+        } else {
+            scene_core::axes::ORIGIN_SIDES
         }
+    }
+
+    /// Построить короб заново, если изменились его параметры, охват,
+    /// стороны подписей или тема. Короб - последняя часть в видеокарте,
+    /// после частей пакета: строки списка частей его не касаются.
+    fn update_box(&mut self) {
+        let Some((lo, hi)) = self.box_range() else {
+            return;
+        };
+        let key = BoxKey {
+            opts: self.box_opts,
+            sides: self.box_sides(lo, hi),
+            lo,
+            hi,
+            dark: self.dark,
+        };
+        if self.box_key == Some(key) {
+            return;
+        }
+        let (Some(gpu), Some(scene)) = (&self.gpu, self.scene.as_mut()) else {
+            return;
+        };
+        let part = box_part(&key);
+        let slot = self.box_slot.filter(|&i| i < scene.parts.len());
+        match (GpuPart::upload(&gpu.device, &part, scene.frame), slot) {
+            (Some(mut p), Some(i)) => {
+                p.visible = key.opts.on;
+                scene.parts[i] = p;
+            }
+            (Some(mut p), None) => {
+                p.visible = key.opts.on;
+                self.box_slot = Some(scene.parts.len());
+                scene.parts.push(p);
+            }
+            (None, Some(i)) => scene.parts[i].visible = false,
+            (None, None) => {}
+        }
+        self.box_key = Some(key);
         self.dirty = true;
     }
-
     /// Охват координатного короба в настоящих координатах, как
     /// `_box_scene` модуля: тела сцены целиком, до обрезки, и свои
     /// границы короба из окна QGIS, если они были заданы.
@@ -1214,52 +1291,39 @@ impl SceneApp {
     }
 
     /// Подписи координатного короба поверх кадра, как в окне модуля:
-    /// штрихи и числа на рёбрах, ближних к камере, стрелка севера.
+    /// числа делений на рёбрах, ближних к камере, буква у стрелки севера.
     /// Шаг, множитель подписи и выбор рёбер - из окна параметров,
     /// при открытии пакета они берутся из состояния окна QGIS. Подписи
     /// оси, смотрящей на камеру торцом, и налезающие на соседние
     /// не ставятся.
     fn box_marks(&self, ui: &egui::Ui, rect: egui::Rect) {
         use scene_core::axes;
-        if !self.box_visible() {
+        if !self.box_opts.on {
             return;
         }
         let Some((lo, hi)) = self.box_range() else {
             return;
         };
         let b = self.box_opts;
-        let (sxy, sz, mxy, mz, near) = (b.step_xy, b.step_z, b.mult_xy, b.mult_z, b.near);
+        let (sxy, sz, mxy, mz) = (b.step_xy, b.step_z, b.mult_xy, b.mult_z);
         let view = self.view_camera();
         let frame = self.frame_now();
-        let sides = if near {
-            axes::near_sides(lo, hi, frame.to_world(camera::eye(&view)))
-        } else {
-            axes::ORIGIN_SIDES
-        };
+        let sides = self.box_sides(lo, hi);
         let (w, h) = (f64::from(rect.width()), f64::from(rect.height()));
         let at = |p: [f64; 3]| {
             camera::to_screen(&view, w, h, frame.to_view(p))
                 .map(|[x, y]| rect.min + egui::vec2(x as f32, y as f32))
         };
         let painter = ui.painter_at(rect);
-        let dark = self.dark;
-        let ink = if dark {
-            egui::Color32::from_rgb(200, 206, 220)
-        } else {
-            egui::Color32::from_rgba_unmultiplied(64, 71, 92, 230)
-        };
-        let (text, halo) = if dark {
+        let (text, halo) = if self.dark {
             (egui::Color32::from_gray(235), egui::Color32::from_gray(20))
         } else {
             (egui::Color32::from_gray(30), egui::Color32::WHITE)
         };
         let ticks = axes::tick_marks(lo, hi, 5, [sxy, sxy, sz], sides);
+        // штрихи и стрелку рисует видеокарта частью короба (`box_part`),
+        // здесь только текст
         let arrow = axes::north_arrow(lo, hi);
-        for (p, q) in ticks.iter().map(|t| (t.a, t.b)).chain(arrow) {
-            if let (Some(p), Some(q)) = (at(p), at(q)) {
-                painter.line_segment([p, q], egui::Stroke::new(1.4, ink));
-            }
-        }
         let font = egui::FontId::proportional(11.0);
         let put = |pos: egui::Pos2, align: egui::Align2, s: &str| {
             for o in [
@@ -1327,7 +1391,9 @@ impl SceneApp {
             zlo: c.use_lo.then_some(c.zlo),
             zhi: c.use_hi.then_some(c.zhi),
         };
-        match c.side {
+        // без точек измерения в плане не режется: остаются отметки
+        let plan = if pts.is_empty() { None } else { c.side };
+        match plan {
             Some(Side::In | Side::Out) => {
                 if !closed || pts.len() < 3 {
                     return Err(
@@ -1347,7 +1413,7 @@ impl SceneApp {
             }
             None => {}
         }
-        if c.side.is_none() && spec.zlo.is_none() && spec.zhi.is_none() {
+        if plan.is_none() && spec.zlo.is_none() && spec.zhi.is_none() {
             return Err("Нечего обрезать: выберите, что оставить, или отметки.");
         }
         Ok(spec)
@@ -1855,7 +1921,14 @@ impl SceneApp {
             .id_salt("parts")
             .show(ui, |ui| {
                 if let Some(scene) = self.scene.as_mut() {
-                    for (p, row) in scene.parts.iter_mut().zip(&self.rows) {
+                    // оформление пакета не показывается: короб строит
+                    // окно, он - в окне параметров
+                    for (p, row) in scene
+                        .parts
+                        .iter_mut()
+                        .zip(&self.rows)
+                        .filter(|(_, r)| !r.info.as_ref().is_some_and(|i| i.decor))
+                    {
                         ui.horizontal(|ui| {
                             let [r, g, b, a] = row.swatch;
                             let col = egui::Color32::from_rgba_unmultiplied(
@@ -1876,9 +1949,7 @@ impl SceneApp {
                         } else {
                             tr(lang, "тело").to_string()
                         };
-                        if row.info.as_ref().is_some_and(|i| i.decor) {
-                            note = tr(lang, "оформление").to_string();
-                        } else if p.points {
+                        if p.points {
                             note = fill(tr(lang, "точки: %s"), &[row.count.to_string()]);
                         } else if row.info.as_ref().is_some_and(|i| i.shape.is_some()) {
                             // значки скважин и реперов - плоские фигуры
@@ -2002,13 +2073,25 @@ impl SceneApp {
             );
             return;
         }
+        // «Сглаживать края»: конвейеры и кадр с другим числом отсчётов
+        let samples = if self.look_opts.smooth {
+            render::SAMPLES
+        } else {
+            1
+        };
+        if let Some(gpu) = self.gpu.as_mut()
+            && gpu.renderer.samples() != samples
+        {
+            gpu.renderer = Renderer::with_samples(&gpu.device, samples);
+            self.target = None;
+        }
         if let Some(gpu) = &self.gpu
             && self
                 .target
                 .as_ref()
                 .is_none_or(|t| t.width != pw || t.height != ph)
         {
-            let target = Target::new(&gpu.device, pw, ph);
+            let target = Target::with_samples(&gpu.device, pw, ph, gpu.renderer.samples());
             let mut eg = gpu.egui.write();
             match self.tex {
                 Some(id) => eg.update_egui_texture_from_wgpu_texture(
@@ -2157,6 +2240,7 @@ impl SceneApp {
             ui.ctx().request_repaint();
         }
 
+        self.update_box();
         if self.dirty {
             if let (Some(gpu), Some(scene), Some(target)) = (&self.gpu, &self.scene, &self.target) {
                 let look = self.look(self.view_camera(), ppp);
@@ -2353,17 +2437,6 @@ impl SceneApp {
                         }
                         if button(
                             ui,
-                            Icon::Eye,
-                            t("Показывать разметку: контур и линию разреза"),
-                            self.marks,
-                            true,
-                        )
-                        .clicked()
-                        {
-                            self.marks = !self.marks;
-                        }
-                        if button(
-                            ui,
                             Icon::Clear,
                             t("Снять обрезку, наброски и точку опроса"),
                             false,
@@ -2454,13 +2527,16 @@ impl SceneApp {
                         if button(
                             ui,
                             Icon::Params,
-                            t("Параметры сцены: камера, вертикальный масштаб, короб, оформление, обрезка"),
+                            t("Параметры сцены: камера, вертикальное преувеличение, короб, оформление, обрезка"),
                             self.params_open,
                             loaded,
                         )
                         .clicked()
                         {
                             self.params_open = !self.params_open;
+                            // окно egui меряет себя первым кадром и видно
+                            // со второго: второй нужен сразу
+                            ui.ctx().request_repaint();
                         }
                     });
                 });
