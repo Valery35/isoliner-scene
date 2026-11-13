@@ -30,6 +30,8 @@ pub mod boolean_shells;
 pub mod colnames;
 pub mod contour_crown;
 pub mod crown;
+pub mod density3d;
+pub mod density_3d;
 pub mod desurvey_holes;
 pub mod fill;
 pub mod fill_volume;
@@ -55,6 +57,7 @@ pub const RUNS: &[(&str, RunFn)] = &[
     ("bench_report", bench_report::run),
     ("boolean_shells", boolean_shells::run),
     ("contour_crown", contour_crown::run),
+    ("density_3d", density_3d::run),
     ("desurvey_holes", desurvey_holes::run),
     ("fill_to_volume", fill_volume::run),
     ("hole_intervals", hole_intervals::run),
