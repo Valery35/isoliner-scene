@@ -29,8 +29,11 @@ struct U {
     light_vp: mat4x4<f32>,
     // направление на Солнце, w - сила тени (0 - теней нет)
     sun: vec4<f32>,
-    // x - шаг карты теней в долях, y - сдвиг глубины
+    // x - шаг карты теней в долях, y - сдвиг глубины, z - Солнце есть,
+    // w - ячейка карты в метрах просмотра
     shadow: vec4<f32>,
+    // глаз камеры в координатах просмотра
+    eye: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> u: U;
@@ -85,15 +88,32 @@ fn vs(@location(0) p: vec3<f32>, @location(1) c: vec4<f32>) -> VsOut {
 @fragment
 fn fs_mesh(v: VsOut) -> @location(0) vec4<f32> {
     let n = normalize(cross(dpdx(v.world), dpdy(v.world)));
-    var p = 0.0;
-    for (var i = 0; i < 3; i++) {
-        p += u.lights[i].w * abs(dot(n, u.lights[i].xyz));
-    }
-    // params.z - сила отмывки: 0 - ровный цвет, 1 - свет окна модуля
-    var k = mix(1.0, 0.32 + 0.78 * p, u.params.z);
-    // тень от Солнца: в тени остаётся рассеянный свет
-    if u.sun.w > 0.0 {
-        k *= 1.0 - u.sun.w * 0.6 * (1.0 - lit(v.world));
+    // params.z - отмывка, доля: 0 - ровный цвет
+    let s = u.params.z;
+    var k = 1.0;
+    if u.shadow.z > 0.5 {
+        // Солнце модуля (shadow.py): отмывка (1 - s) + s |n·солнце|.
+        // Нормаль повёрнута к камере, к видимой стороне: «вверх» модуля
+        // у отвесной стенки вырождается, и знак скакал бы рябью.
+        let nu = select(n, -n, dot(n, u.eye.xyz - v.world) < 0.0);
+        let ndl = dot(nu, u.sun.xyz);
+        k = (1.0 - s) + s * abs(ndl);
+        if u.sun.w > 0.0 {
+            // склон от Солнца - в собственной тени, плавно до -0.15;
+            // на скользящем свете брошенная тень гаснет
+            let own = clamp(-ndl / 0.15, 0.0, 1.0);
+            // точка сверки сдвинута по нормали на две ячейки карты:
+            // иначе крутой склон затеняет сам себя рябью
+            let thrown = (1.0 - lit(v.world + nu * u.shadow.w * 2.0)) * smoothstep(0.0, 0.23, ndl);
+            k *= 1.0 - u.sun.w * max(own, thrown);
+        }
+    } else {
+        // без Солнца - мягкий свет окна модуля от камеры
+        var p = 0.0;
+        for (var i = 0; i < 3; i++) {
+            p += u.lights[i].w * abs(dot(n, u.lights[i].xyz));
+        }
+        k = mix(1.0, 0.32 + 0.78 * p, s);
     }
     let rgb = clamp(v.color.rgb * k, vec3<f32>(0.0), vec3<f32>(1.0));
     return vec4<f32>(rgb, v.color.a * u.params.y);

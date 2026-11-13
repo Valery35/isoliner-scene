@@ -234,6 +234,87 @@ fn sun_casts_a_shadow() {
     std::fs::write(format!("{dir}/shadow.ppm"), ppm).unwrap();
 }
 
+/// Цена теней на большой сцене: рельеф 1000 x 1000 ячеек (два
+/// миллиона треугольников), кадр 1600 x 900 с тенями и без. Замер,
+/// а не проверка: `cargo test -p render --release -- --ignored
+/// shadow_cost --nocapture`.
+#[test]
+#[ignore]
+fn shadow_cost() {
+    use scene_format::{Indices, Part};
+    let _turn = gpu_turn();
+    let Ok((device, queue)) = headless() else {
+        return;
+    };
+    let n = 1000u32;
+    let mut verts = Vec::new();
+    for j in 0..=n {
+        for i in 0..=n {
+            let (x, y) = (f64::from(i), f64::from(j));
+            verts.push([x, y, 40.0 * (x / 90.0).sin() * (y / 70.0).cos()]);
+        }
+    }
+    let mut faces = Vec::new();
+    for j in 0..n {
+        for i in 0..n {
+            let a = j * (n + 1) + i;
+            faces.push([a, a + 1, a + n + 2]);
+            faces.push([a, a + n + 2, a + n + 1]);
+        }
+    }
+    let part = Part {
+        name: String::new(),
+        colors: None,
+        verts,
+        indices: Indices::Triangles(faces),
+        sizes: None,
+    };
+    let frame = Frame {
+        cx: 500.0,
+        cy: 500.0,
+        cz: 0.0,
+        vex: 1.0,
+    };
+    let scene = GpuScene::upload(&device, &[part], frame);
+    let renderer = Renderer::new(&device);
+    let target = Target::new(&device, 1600, 900);
+    let mut look = Look {
+        camera: scene_core::Camera {
+            center: [0.0, 0.0, 0.0],
+            distance: 1500.0,
+            azimuth: 30.0,
+            elevation: 35.0,
+            fov: 60.0,
+            ortho: false,
+        },
+        vex: 1.0,
+        opacity: 1.0,
+        light: 0.55,
+        sun: Some(render::Sun {
+            azimuth: 218.0,
+            altitude: 35.0,
+            strength: 0.0,
+        }),
+        background: BG_PLAIN,
+        pixels_per_point: 1.0,
+    };
+    let time = |look: &Look| {
+        // первый кадр - прогрев
+        renderer.render(&device, &queue, &target, &scene, look);
+        read_rgba(&device, &queue, &target).unwrap();
+        let t = std::time::Instant::now();
+        for _ in 0..10 {
+            renderer.render(&device, &queue, &target, &scene, look);
+            read_rgba(&device, &queue, &target).unwrap();
+        }
+        t.elapsed().as_secs_f64() * 100.0
+    };
+    let plain = time(&look);
+    look.sun = look.sun.map(|s| render::Sun { strength: 0.5, ..s });
+    let shadow = time(&look);
+    eprintln!("кадр: без теней {plain:.1} мс, с тенями {shadow:.1} мс");
+}
+
 #[test]
 fn demo_scene_renders_with_its_camera() {
     let _turn = gpu_turn();

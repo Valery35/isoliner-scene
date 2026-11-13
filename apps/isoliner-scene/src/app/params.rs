@@ -292,33 +292,34 @@ impl LookOpts {
         }
     }
 
-    /// Сила отмывки для шейдера: 55 процентов - свет окна модуля.
+    /// Отмывка для шейдера, доля: s модуля, light / 100.
     pub fn strength(&self) -> f32 {
-        (self.light / 55.0).clamp(0.0, 1.4) as f32
+        (self.light / 100.0).clamp(0.0, 1.0) as f32
     }
 }
 
-/// Солнце: тени от рельефа и тел, отмывка от него же. Ключи
-/// `shadows`, `sun_azimuth`, `sun_altitude`, `shadow_strength`.
+/// Солнце - одно на отмывку и тени, как в модуле (`shadow.py`): ключи
+/// `sun_az`, `sun_alt`, `shadows_on`, `shadow_k` группы «Освещение».
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct SunOpts {
-    pub on: bool,
     /// Азимут, градусы от севера по часовой стрелке.
     pub azimuth: f64,
     /// Высота над горизонтом, градусы.
     pub altitude: f64,
+    /// Тени включены.
+    pub shadows: bool,
     /// Сила тени, проценты.
     pub strength: f64,
 }
 
 impl Default for SunOpts {
     fn default() -> Self {
-        // свет с северо-запада, как у отмывки карт
+        // значения новой сцены модуля
         Self {
-            on: false,
-            azimuth: 315.0,
-            altitude: 45.0,
-            strength: 70.0,
+            azimuth: 218.0,
+            altitude: 55.0,
+            shadows: false,
+            strength: 50.0,
         }
     }
 }
@@ -327,23 +328,26 @@ impl SunOpts {
     pub fn from_state(st: &serde_json::Value) -> Self {
         let d = Self::default();
         Self {
-            on: flag(st, "shadows", d.on),
-            azimuth: num(st, "sun_azimuth", d.azimuth),
-            altitude: num(st, "sun_altitude", d.altitude).clamp(1.0, 90.0),
-            strength: num(st, "shadow_strength", d.strength).clamp(0.0, 100.0),
+            azimuth: num(st, "sun_az", d.azimuth).rem_euclid(360.0),
+            altitude: num(st, "sun_alt", d.altitude).clamp(1.0, 90.0),
+            shadows: flag(st, "shadows_on", d.shadows),
+            strength: num(st, "shadow_k", d.strength).clamp(0.0, 100.0),
         }
     }
 
-    /// Солнце для рендера. Выключено - None.
-    pub fn look(&self) -> Option<render::Sun> {
-        self.on.then(|| render::Sun {
+    /// Солнце для рендера: отмывка от него всегда, тени - если включены.
+    pub fn look(&self) -> render::Sun {
+        render::Sun {
             azimuth: self.azimuth,
             altitude: self.altitude,
-            strength: (self.strength / 100.0) as f32,
-        })
+            strength: if self.shadows {
+                (self.strength / 100.0) as f32
+            } else {
+                0.0
+            },
+        }
     }
 }
-
 /// Непрозрачность из `opacity` модуля: там это прозрачность в процентах.
 pub(super) fn opacity_from_state(st: &serde_json::Value) -> f32 {
     let t = num(st, "opacity", 0.0).clamp(0.0, 95.0);
@@ -423,10 +427,10 @@ impl SceneApp {
             "bg_grad" => Val::Flag(self.gradient),
             "smooth_edges" => Val::Flag(self.look_opts.smooth),
             "sketch_on" => Val::Flag(self.marks),
-            "shadows" => Val::Flag(self.sun.on),
-            "sun_azimuth" => Val::Num(self.sun.azimuth),
-            "sun_altitude" => Val::Num(self.sun.altitude),
-            "shadow_strength" => Val::Num(self.sun.strength),
+            "shadows_on" => Val::Flag(self.sun.shadows),
+            "sun_az" => Val::Num(self.sun.azimuth),
+            "sun_alt" => Val::Num(self.sun.altitude),
+            "shadow_k" => Val::Num(self.sun.strength),
             "theme" => Val::Text(if self.dark { "dark" } else { "light" }.into()),
             "axes_on" => Val::Flag(b.on),
             "box_edges" => Val::Text(b.edges.key().into()),
@@ -464,10 +468,10 @@ impl SceneApp {
             ("bg_grad", Val::Flag(x)) => self.gradient = x,
             ("smooth_edges", Val::Flag(x)) => self.look_opts.smooth = x,
             ("sketch_on", Val::Flag(x)) => self.marks = x,
-            ("shadows", Val::Flag(x)) => self.sun.on = x,
-            ("sun_azimuth", Val::Num(x)) => self.sun.azimuth = x.rem_euclid(360.0),
-            ("sun_altitude", Val::Num(x)) => self.sun.altitude = x.clamp(1.0, 90.0),
-            ("shadow_strength", Val::Num(x)) => self.sun.strength = x.clamp(0.0, 100.0),
+            ("shadows_on", Val::Flag(x)) => self.sun.shadows = x,
+            ("sun_az", Val::Num(x)) => self.sun.azimuth = x.rem_euclid(360.0),
+            ("sun_alt", Val::Num(x)) => self.sun.altitude = x.clamp(1.0, 90.0),
+            ("shadow_k", Val::Num(x)) => self.sun.strength = x.clamp(0.0, 100.0),
             ("theme", Val::Text(x)) => self.dark = x == "dark",
             ("axes_on", Val::Flag(x)) => b.on = x,
             ("box_edges", Val::Text(x)) => b.edges = Edges::from_key(&x),
@@ -728,7 +732,7 @@ mod tests {
         );
         let l = LookOpts::from_state(&st);
         assert_eq!((l.light, l.smooth), (30.0, false));
-        assert!((LookOpts::default().strength() - 1.0).abs() < 1e-6);
+        assert!((LookOpts::default().strength() - 0.55).abs() < 1e-6);
         assert!((opacity_from_state(&st) - 0.6).abs() < 1e-6);
         for s in [Side::In, Side::Out, Side::Left, Side::Right, Side::Corridor] {
             assert_eq!(side_from_key(side_key(s)), Some(s));
@@ -749,7 +753,7 @@ mod tests {
         let s = spec().expect("scene_params.json разбирается");
         assert_eq!(s.version, 1);
         let ids: Vec<&str> = s.groups.iter().map(|g| g.id.as_str()).collect();
-        assert_eq!(ids, ["view", "look", "box", "clip"]);
+        assert_eq!(ids, ["view", "look", "light", "box", "clip"]);
         let mut keys = Vec::new();
         for p in s
             .groups
@@ -800,7 +804,16 @@ mod tests {
         )
         .expect("поле с row_with разбирается");
         assert_eq!(p.row_with.as_deref(), Some("box_edges"));
-        for k in ["vex", "camera.azimuth", "axes_on", "side", "zlo", "theme"] {
+        for k in [
+            "vex",
+            "camera.azimuth",
+            "axes_on",
+            "side",
+            "zlo",
+            "theme",
+            "sun_az",
+            "shadows_on",
+        ] {
             assert!(keys.contains(&k), "{k} нет в списке модуля");
         }
     }

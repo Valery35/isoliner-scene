@@ -5,7 +5,7 @@
    "key": "rebuild",
    "icon": "rebuild",
    "ru": "Обновить сцену",
-   "where": "pro",
+   "where": "both",
    "en": "Update the scene",
    "svg": "icons/rebuild.svg"
   },
@@ -109,8 +109,16 @@
    "key": "export",
    "icon": "export",
    "ru": "Выгрузить сцену в файл: GLB, STL или OBJ",
-   "where": "both",
+   "where": "pro",
    "en": "Export the scene to a file: GLB, STL or OBJ",
+   "svg": "icons/export.svg"
+  },
+  {
+   "key": "export_package",
+   "icon": "export",
+   "ru": "Сохранить пакет сцены (.i3dscene)",
+   "where": "lite",
+   "en": "Save the scene package (.i3dscene)",
    "svg": "icons/export.svg"
   },
   {

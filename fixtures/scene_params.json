@@ -133,17 +133,6 @@
      "en": "Appearance",
      "params": [
       {
-       "key": "light",
-       "ru": "Отмывка",
-       "en": "Hillshade",
-       "kind": "int",
-       "where": "both",
-       "min": 0,
-       "max": 100,
-       "step": 5,
-       "default": 55
-      },
-      {
        "key": "bg_grad",
        "ru": "Градиентный фон",
        "en": "Gradient background",
@@ -213,6 +202,78 @@
        "min": 100,
        "max": 8000,
        "step": 100
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "light",
+   "ru": "Освещение",
+   "en": "Lighting",
+   "sections": [
+    {
+     "ru": "Солнце",
+     "en": "Sun",
+     "params": [
+      {
+       "key": "sun_az",
+       "ru": "Азимут Солнца, °",
+       "en": "Sun azimuth, °",
+       "kind": "float",
+       "where": "both",
+       "min": 0.0,
+       "max": 360.0,
+       "step": 15.0,
+       "default": 218.0
+      },
+      {
+       "key": "sun_alt",
+       "ru": "Высота Солнца, °",
+       "en": "Sun altitude, °",
+       "kind": "float",
+       "where": "both",
+       "min": 1.0,
+       "max": 90.0,
+       "step": 5.0,
+       "default": 55.0
+      },
+      {
+       "key": "light",
+       "ru": "Отмывка",
+       "en": "Hillshade",
+       "kind": "int",
+       "where": "both",
+       "min": 0,
+       "max": 100,
+       "step": 5,
+       "default": 55
+      }
+     ]
+    },
+    {
+     "ru": "Тени",
+     "en": "Shadows",
+     "toggle": "shadows_on",
+     "params": [
+      {
+       "key": "shadows_on",
+       "ru": "Тени",
+       "en": "Shadows",
+       "kind": "bool",
+       "where": "both",
+       "default": false
+      },
+      {
+       "key": "shadow_k",
+       "ru": "Сила тени, %",
+       "en": "Shadow strength, %",
+       "kind": "int",
+       "where": "both",
+       "min": 0,
+       "max": 100,
+       "step": 5,
+       "default": 50
       }
      ]
     }

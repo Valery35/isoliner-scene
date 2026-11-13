@@ -106,8 +106,11 @@ struct Uniforms {
     /// Направление на Солнце в координатах просмотра, w - сила тени
     /// (0 - теней нет).
     sun: [f32; 4],
-    /// x - шаг карты теней в долях, y - сдвиг глубины против «угрей».
+    /// x - шаг карты теней в долях, y - сдвиг глубины против «угрей»,
+    /// z - Солнце есть, w - ячейка карты в метрах просмотра.
     shadow: [f32; 4],
+    /// Глаз камеры в координатах просмотра: к нему поворачивается нормаль.
+    eye: [f32; 4],
 }
 
 /// Сторона карты теней, пиксели.
@@ -120,7 +123,7 @@ pub struct Sun {
     pub azimuth: f64,
     /// Высота над горизонтом, градусы.
     pub altitude: f64,
-    /// Сила тени: 0 - тени нет, 1 - в тени остаётся рассеянный свет.
+    /// Сила тени, доля: цвет в тени умножается на 1 - сила.
     pub strength: f32,
 }
 
@@ -417,10 +420,9 @@ pub struct Look {
     pub vex: f64,
     /// Общая непрозрачность тел, 0..1.
     pub opacity: f32,
-    /// Сила отмывки тел светом: 0 - ровный цвет, 1 - свет окна модуля
-    /// при отмывке 55 процентов, больше - резче.
+    /// Отмывка, доля (light модуля / 100): 0 - ровный цвет.
     pub light: f32,
-    /// Солнце: тени от рельефа и тел, главный свет отмывки. None -
+    /// Солнце: отмывка от него и тени (сила больше нуля). None - мягкий
     /// свет окна модуля от камеры, без теней.
     pub sun: Option<Sun>,
     /// Фон кадра.
@@ -765,7 +767,7 @@ impl Renderer {
         // «залипает» на модели при вращении. В шейдер он идёт
         // в координатах просмотра: поворот вида, обращённый.
         let to_view = DMat3::from_mat4(view.view).transpose();
-        let mut lights = LIGHTS.map(|(d, w)| {
+        let lights = LIGHTS.map(|(d, w)| {
             let l = (to_view * DVec3::from(d)).normalize_or_zero();
             [l.x as f32, l.y as f32, l.z as f32, w]
         });
@@ -783,23 +785,24 @@ impl Renderer {
             let (lo, hi) = (lo.min(hi), lo.max(hi));
             Some(acc.map_or((lo, hi), |(a, b)| (a.min(lo), b.max(hi))))
         });
-        let sun = look.sun.zip(bounds);
-        let (light_vp, sun_u) = match sun {
-            Some((s, (lo, hi))) => {
-                let d = sun_dir(s.azimuth, s.altitude);
-                lights[0] = [d.x as f32, d.y as f32, d.z as f32, lights[0][3]];
-                (
-                    sun_view_proj(d, lo, hi),
-                    [
-                        d.x as f32,
-                        d.y as f32,
-                        d.z as f32,
-                        s.strength.clamp(0.0, 1.0),
-                    ],
-                )
-            }
-            None => (DMat4::IDENTITY, [0.0, 0.0, 1.0, 0.0]),
-        };
+        // карта теней нужна, только если тень видна
+        let sun = look.sun.filter(|s| s.strength > 0.0).zip(bounds);
+        let sun_u = look.sun.map_or([0.0, 0.0, 1.0, 0.0], |s| {
+            let d = sun_dir(s.azimuth, s.altitude);
+            let w = if sun.is_some() {
+                s.strength.clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            [d.x as f32, d.y as f32, d.z as f32, w]
+        });
+        // ячейка карты теней в метрах просмотра: на неё сдвигается сверка
+        let cell = sun.map_or(0.0, |(_, (lo, hi))| {
+            (hi - lo).length() / f64::from(SHADOW_SIZE)
+        });
+        let light_vp = sun.map_or(DMat4::IDENTITY, |(s, (lo, hi))| {
+            sun_view_proj(sun_dir(s.azimuth, s.altitude), lo, hi)
+        });
         let bg = look.background;
         let u = Uniforms {
             view_proj: view.view_proj().as_mat4().to_cols_array_2d(),
@@ -820,7 +823,13 @@ impl Renderer {
             ],
             light_vp: light_vp.as_mat4().to_cols_array_2d(),
             sun: sun_u,
-            shadow: [1.0 / SHADOW_SIZE as f32, 0.0005, 0.0, 0.0],
+            shadow: [
+                1.0 / SHADOW_SIZE as f32,
+                0.0005,
+                if look.sun.is_some() { 1.0 } else { 0.0 },
+                cell as f32,
+            ],
+            eye: [e.x as f32, e.y as f32, e.z as f32, 1.0],
         };
         queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&u));
 
