@@ -1763,10 +1763,11 @@ mod tests {
             };
             for (key, want) in outs {
                 let label = tool.param(key).map(|p| p.label.get(Lang::Ru).to_string());
-                let layer = ls
+                let found = ls
                     .iter()
-                    .find(|l| label.as_deref().is_none_or(|t| l["name"] == t))
-                    .unwrap_or_else(|| panic!("{name} {k}: нет выхода {key}"));
+                    .find(|l| label.as_deref().is_none_or(|t| l["name"] == t));
+                assert!(found.is_some(), "{name} {k}: нет выхода {key}");
+                let layer = found.unwrap();
                 if want.get("fields").is_some() {
                     same_values(&format!("{name} {k} {key}"), &layer["geojson"], want);
                 } else {
