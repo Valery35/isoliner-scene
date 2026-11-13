@@ -34,6 +34,19 @@ RUSTGIS = "https://github.com/opengeos/RustGIS"
 
 # Лента выпусков: свежие сверху.
 FEED = (
+    ("2026-11-13", "scene", "0.2.0",
+     "Связь с QGIS. Кнопка модуля открывает сцену, пакет перечитывается "
+     "сам, камера остаётся на месте. Обрезка с замкнутыми телами, вид по "
+     "разрезу со шкалами, светлая и тёмная тема, видео MP4.",
+     "Link with QGIS. The plugin button opens the scene, the package "
+     "reloads by itself and the camera stays in place. Clipping with closed "
+     "bodies, a section view with scales, light and dark themes, MP4 "
+     "video."),
+    ("2026-11-13", "pro", "1.5.1",
+     "Кнопка «Открыть в Isoliner Scene» в окне просмотра. Модуль сам "
+     "находит установленную программу.",
+     "The «Open in Isoliner Scene» button in the viewer window. The plugin "
+     "finds the installed program by itself."),
     ("2026-11-12", "pro", "1.5.0",
      "Инструменты переведены на общее описание, которое читают модуль "
      "и Isoliner Scene. Растры на входе и выходе инструментов, обрезка "
@@ -435,9 +448,9 @@ def scene(b):
                b.btn("cta.code", "Исходный код на GitHub",
                      "Source code on GitHub", SCENE_CODE),
                b.el("cta.note",
-                    "Пробный выпуск 0.1.0. Пакет в браузере читается на месте "
+                    "Выпуск 0.2.0. Пакет в браузере читается на месте "
                     "и никуда не отправляется. Apache 2.0.",
-                    "Trial release 0.1.0. In the browser the package is read "
+                    "Release 0.2.0. In the browser the package is read "
                     "locally and is not sent anywhere. Apache 2.0.",
                     cls="note"),
                picture(),
