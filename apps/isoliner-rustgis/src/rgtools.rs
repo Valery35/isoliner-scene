@@ -46,6 +46,9 @@ pub const OFFERED: &[&str] = &[
     "desurvey_holes",
     "fill_to_volume",
     "hole_intervals",
+    "select_by_shell",
+    "zonal_shell_stats",
+    "boolean_shells",
 ];
 
 /// Слой-таблица с X и Y в метрах своей системы: устья 2.17. Если у слоя
@@ -125,6 +128,8 @@ fn rg_kind(p: &Param) -> Option<&'static str> {
         ParamKind::Field => "field",
         ParamKind::Number | ParamKind::Integer => "number",
         ParamKind::Enum if !p.multiple => "choice",
+        // несколько пунктов: у RustGIS такого вида нет, пункты - текстом
+        ParamKind::Enum => "text",
         ParamKind::Bool => "bool",
         ParamKind::String => "text",
         _ => return None,
@@ -186,7 +191,44 @@ fn manifest_tools(catalog: &Catalog) -> (Vec<J>, serde_json::Map<String, J>) {
                 o["help"] = json!(hint);
                 say(hint, p.hint.get(Lang::Ru));
             }
-            if p.kind == ParamKind::Enum {
+            if p.kind == ParamKind::Enum && p.multiple {
+                // пункты через запятую, их перечень - в подсказке
+                let pick = |l: Lang| -> String {
+                    let ix: Vec<usize> = match &p.default {
+                        Some(J::Array(a)) => {
+                            a.iter().filter_map(J::as_u64).map(|i| i as usize).collect()
+                        }
+                        Some(J::Number(n)) => {
+                            n.as_u64().map(|i| vec![i as usize]).unwrap_or_default()
+                        }
+                        _ => Vec::new(),
+                    };
+                    ix.iter()
+                        .filter_map(|&i| p.options.get(i))
+                        .map(|o| o.get(l).to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+                let all = |l: Lang| -> String {
+                    p.options
+                        .iter()
+                        .map(|o| o.get(l).to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+                let help_en = format!("{} Comma-separated, from {}.", hint, all(Lang::En));
+                let help_ru = format!(
+                    "{} Через запятую, из списка {}.",
+                    p.hint.get(Lang::Ru),
+                    all(Lang::Ru)
+                );
+                say(&help_en, &help_ru);
+                o["help"] = json!(help_en);
+                let d = pick(Lang::En);
+                if !d.is_empty() {
+                    o["default"] = json!(d);
+                }
+            } else if p.kind == ParamKind::Enum {
                 let choices: Vec<&str> = p.options.iter().map(|c| c.get(Lang::En)).collect();
                 for c in &p.options {
                     say(c.get(Lang::En), c.get(Lang::Ru));
@@ -285,6 +327,12 @@ fn zone_of(layers: &[&J]) -> Utm {
     }
 }
 
+/// Метры входа до микрометра: градусы туда и обратно дают шум около
+/// 1e-9 м, а ячейка расчёта на ровной границе от него сдвигается.
+fn snap(x: f64) -> f64 {
+    (x * 1e6).round() / 1e6
+}
+
 /// Тело из треугольников с высотой (кольца по 3 вершины, как модуль пишет
 /// тела) в метрах зоны: `{"verts", "faces"}`. Одинаковые вершины
 /// склеиваются - по номерам вершин расчёт проверяет замкнутость тела.
@@ -305,7 +353,7 @@ fn body_of(geoms: &[&J], utm: &Utm) -> Option<J> {
             }
             let mut f = [0u32; 3];
             for (k, p) in ring.iter().enumerate() {
-                let [e, n] = utm.forward(p[0], p[1]);
+                let [e, n] = utm.forward(p[0], p[1]).map(snap);
                 let key = [e.to_bits(), n.to_bits(), p[2].to_bits()];
                 let next = u32::try_from(verts.len()).ok()?;
                 f[k] = *index.entry(key).or_insert_with(|| {
@@ -358,7 +406,7 @@ fn layer_value(p: &Param, fc: &J, utm: &Utm) -> J {
                 .map(|part| {
                     part.into_iter()
                         .map(|[x, y, z]| {
-                            let [e, n] = utm.forward(x, y);
+                            let [e, n] = utm.forward(x, y).map(snap);
                             [e, n, z]
                         })
                         .collect()
@@ -440,11 +488,15 @@ fn number(v: &J) -> Option<f64> {
     })
 }
 
+/// Геометрии входов по ключу поля-слоя и номеру объекта: их берут
+/// выходы «объект источника».
+type Sources = HashMap<String, HashMap<i64, J>>;
+
 /// Входная ошибка запроса: ключ поля.
 type BadKey = String;
 
 /// Значения полей в виде прогонов модуля и зона пересчёта.
-fn values(tool: &Tool, req: &J) -> Result<(J, Utm, HashMap<i64, J>), BadKey> {
+fn values(tool: &Tool, req: &J) -> Result<(J, Utm, Sources), BadKey> {
     let params = &req["params"];
     let layers = &req["layers"];
     // слои входа: имя слоя - в поле, объекты - в layers
@@ -466,13 +518,14 @@ fn values(tool: &Tool, req: &J) -> Result<(J, Utm, HashMap<i64, J>), BadKey> {
     }
     let utm = zone_of(&inputs.iter().map(|(_, fc)| fc).collect::<Vec<_>>());
     let mut out = serde_json::Map::new();
-    let mut geoms = HashMap::new();
+    let mut geoms: Sources = HashMap::new();
     for (p, fc) in &inputs {
         let info = layer_info(params[param_name(&p.key)].as_str().unwrap_or(""), fc);
         out.insert(format!("@{}", p.key), info);
         out.insert(p.key.clone(), layer_value(p, fc, &utm));
+        let by_id = geoms.entry(p.key.clone()).or_default();
         for (i, f) in fc["features"].as_array().into_iter().flatten().enumerate() {
-            geoms
+            by_id
                 .entry(feature_id(f, i))
                 .or_insert_with(|| f["geometry"].clone());
         }
@@ -483,6 +536,21 @@ fn values(tool: &Tool, req: &J) -> Result<(J, Utm, HashMap<i64, J>), BadKey> {
             continue;
         }
         let got = match p.kind {
+            // несколько пунктов - текстом через запятую или списком
+            ParamKind::Enum if p.multiple => {
+                let items: Vec<J> = match v {
+                    J::Array(a) => a.clone(),
+                    J::String(s) => s
+                        .split([',', ';'])
+                        .map(str::trim)
+                        .filter(|x| !x.is_empty())
+                        .map(|x| json!(x))
+                        .collect(),
+                    _ => return Err(p.key.clone()),
+                };
+                let idx: Option<Vec<usize>> = items.iter().map(|x| choice(p, x)).collect();
+                json!(idx.ok_or_else(|| p.key.clone())?)
+            }
             ParamKind::Enum => json!(choice(p, v).ok_or_else(|| p.key.clone())?),
             ParamKind::Number => json!(number(v).ok_or_else(|| p.key.clone())?),
             ParamKind::Integer => {
@@ -642,6 +710,19 @@ pub fn run(
             },
             |p| p.label.get(lang).to_string(),
         );
+        // объекты источника - геометрией своего входа
+        let empty = HashMap::new();
+        let src = o
+            .keep_source
+            .as_ref()
+            .and_then(|k| geoms.get(k))
+            .or_else(|| {
+                tool.params
+                    .iter()
+                    .find(|p| is_layer(p.kind) && geoms.contains_key(&p.key))
+                    .and_then(|p| geoms.get(&p.key))
+            })
+            .unwrap_or(&empty);
         let features: Vec<J> = o
             .features
             .iter()
@@ -664,16 +745,31 @@ pub fn run(
                 json!({
                     "type": "Feature",
                     "properties": props,
-                    "geometry": out_geometry(&f.geom, &frame, &geoms),
+                    "geometry": strip_z(&out_geometry(&f.geom, &frame, src)),
                 })
             })
             .collect();
-        let solid = matches!(
-            o.geometry,
-            OutGeometry::Mesh | OutGeometry::Line | OutGeometry::Point
-        );
+        // объекты источника с высотой (итог Isoliner3D на входе) - тоже
+        // в сцену и следующим инструментам
+        let src_z = o.geometry == OutGeometry::Source
+            && o.features.iter().any(|f| match f.geom {
+                Geom::Source(id) => src.get(&id).is_some_and(has_z),
+                _ => false,
+            });
+        let solid = src_z
+            || matches!(
+                o.geometry,
+                OutGeometry::Mesh | OutGeometry::Line | OutGeometry::Point
+            );
         if solid && let Frame::Utm(u) = &frame {
-            let g3 = geoms_3d(o, u);
+            let g3: Vec<J> = o
+                .features
+                .iter()
+                .map(|f| match f.geom {
+                    Geom::Source(id) => src.get(&id).cloned().unwrap_or(J::Null),
+                    ref g => geom_3d(g, u),
+                })
+                .collect();
             keep_bodies(&bodies_dir(), &name, &features, g3.clone());
             // в сцену - итог с высотой, поля - как у слоя RustGIS
             let feats3: Vec<J> = features
@@ -812,8 +908,32 @@ fn geom_3d(g: &Geom, utm: &Utm) -> J {
     }
 }
 
+/// Есть ли у геометрии высоты.
+fn has_z(g: &J) -> bool {
+    parts(g).iter().flatten().any(|p| p[2].is_finite())
+}
+
+/// Геометрия без высот: план для слоя RustGIS.
+fn strip_z(g: &J) -> J {
+    fn walk(v: &J) -> J {
+        match v.as_array() {
+            Some(a) if a.first().is_some_and(J::is_number) => {
+                J::Array(a.iter().take(2).cloned().collect())
+            }
+            Some(a) => J::Array(a.iter().map(walk).collect()),
+            None => v.clone(),
+        }
+    }
+    let mut out = g.clone();
+    if let Some(c) = g.get("coordinates") {
+        out["coordinates"] = walk(c);
+    }
+    out
+}
+
 /// Геометрии итога с высотой по объектам: их берут сцена и следующие
 /// инструменты, слой RustGIS высоты не держит.
+#[cfg(test)]
 fn geoms_3d(o: &tool_spec::Output, utm: &Utm) -> Vec<J> {
     o.features.iter().map(|f| geom_3d(&f.geom, utm)).collect()
 }
@@ -1031,7 +1151,7 @@ mod tests {
             .unwrap();
         // ось 1 прогона: Z из поля z, её и берём; кладём в Уфу
         let utm = Utm::at(56.0, 54.7);
-        let [e0, n0] = utm.forward(56.0, 54.7);
+        let [e0, n0] = utm.forward(56.0, 54.7).map(f64::round);
         let f = &r["input"][0];
         let coords: Vec<J> = f["parts"][0]
             .as_array()
@@ -1284,7 +1404,7 @@ mod tests {
     /// `layer` около Уфы. Ответ - план слоя, каким его отдаст RustGIS.
     fn body_layer(layer: &str, verts: &J, faces: &J) -> (J, Utm, [f64; 2]) {
         let utm = Utm::at(56.0, 54.7);
-        let [e0, n0] = utm.forward(56.0, 54.7);
+        let [e0, n0] = utm.forward(56.0, 54.7).map(f64::round);
         let verts: Vec<[f64; 3]> = verts
             .as_array()
             .unwrap()
@@ -1372,7 +1492,7 @@ mod tests {
     /// каким его отдаст RustGIS.
     fn line_layer(layer: &str, feats: &J) -> J {
         let utm = Utm::at(56.0, 54.7);
-        let [e0, n0] = utm.forward(56.0, 54.7);
+        let [e0, n0] = utm.forward(56.0, 54.7).map(f64::round);
         let mut plan = Vec::new();
         let mut g3 = Vec::new();
         for (i, f) in feats.as_array().unwrap().iter().enumerate() {
@@ -1423,8 +1543,17 @@ mod tests {
         let wf = want["features"].as_array().unwrap();
         assert_eq!(feats.len(), wf.len(), "{name}");
         for (g, w) in feats.iter().zip(wf) {
-            for (i, n) in names.iter().enumerate() {
-                let (a, b) = (&g["properties"][*n], &w["values"][i]);
+            // выход, заменяющий поля источника, - значения по именам
+            let pairs: Vec<(&str, &J)> = match &w["values"] {
+                J::Object(m) => m.iter().map(|(k, x)| (k.as_str(), x)).collect(),
+                vals => names
+                    .iter()
+                    .enumerate()
+                    .map(|(i, n)| (*n, &vals[i]))
+                    .collect(),
+            };
+            for (n, b) in pairs {
+                let a = &g["properties"][n];
                 match (a.as_f64(), b.as_f64()) {
                     (Some(x), Some(y)) => {
                         assert!(
@@ -1490,6 +1619,193 @@ mod tests {
                 assert_eq!(*m, &w[1], "{k}");
             }
         }
+    }
+
+    /// Слой образца модуля - слоем RustGIS по виду поля: тела и линии
+    /// с высотой - итогом Isoliner3D в хранилище, таблица - без геометрии.
+    fn sample_layer(kind: ParamKind, layer: &str, input: &J) -> J {
+        let utm = Utm::at(56.0, 54.7);
+        let [e0, n0] = utm.forward(56.0, 54.7).map(f64::round);
+        let at = |p: &J| -> [f64; 3] {
+            [
+                e0 + p[0].as_f64().unwrap(),
+                n0 + p[1].as_f64().unwrap(),
+                p[2].as_f64().unwrap_or(f64::NAN),
+            ]
+        };
+        let body = |v: &J, f: &J| -> Geom {
+            Geom::Mesh(tool_spec::Body {
+                verts: v.as_array().unwrap().iter().map(at).collect(),
+                faces: f
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|t| {
+                        [
+                            t[0].as_u64().unwrap() as u32,
+                            t[1].as_u64().unwrap() as u32,
+                            t[2].as_u64().unwrap() as u32,
+                        ]
+                    })
+                    .collect(),
+            })
+        };
+        // объекты образца: (номер, поля, геометрия в метрах)
+        let items: Vec<(J, J, Geom)> = match kind {
+            ParamKind::Table => return table_layer(input),
+            ParamKind::Mesh => vec![(json!(0), json!({}), body(&input["verts"], &input["faces"]))],
+            ParamKind::Meshes => input
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|f| {
+                    (
+                        f["id"].clone(),
+                        f["attrs"].clone(),
+                        body(&f["verts"], &f["faces"]),
+                    )
+                })
+                .collect(),
+            _ => input
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|f| {
+                    let pts: Vec<[f64; 3]> = match f.get("xyz") {
+                        Some(p) if !p.is_null() => vec![at(p)],
+                        _ => f["parts"][0].as_array().unwrap().iter().map(at).collect(),
+                    };
+                    let g = if pts.len() == 1 {
+                        Geom::Point(pts[0])
+                    } else {
+                        Geom::Line(pts)
+                    };
+                    (f["id"].clone(), f["attrs"].clone(), g)
+                })
+                .collect(),
+        };
+        let mut plan = Vec::new();
+        let mut g3 = Vec::new();
+        for (id, attrs, g) in &items {
+            plan.push(json!({"type": "Feature", "row": id, "properties": attrs,
+                "geometry": out_geometry(g, &Frame::Utm(utm), &HashMap::new())}));
+            g3.push(geom_3d(g, &utm));
+        }
+        keep_bodies(&bodies_dir(), layer, &plan, g3);
+        json!({"type": "FeatureCollection", "features": plan})
+    }
+
+    /// Все прогоны модуля для `name` через RustGIS: вход - слоями, выходы
+    /// и сообщения - как у модуля (числа до 1e-6).
+    fn runs_through_rustgis(name: &str) {
+        let cat = catalog();
+        let tool = cat.tool(name).unwrap();
+        let runs = runs_of(name);
+        assert!(!runs.is_empty(), "{name}: нет прогонов");
+        for (k, r) in runs.iter().enumerate() {
+            let v = &r["values"];
+            let mut params = serde_json::Map::new();
+            let mut layers = serde_json::Map::new();
+            let input = &r["input"];
+            let by_key = input
+                .as_object()
+                .is_some_and(|o| o.keys().all(|key| tool.param(key).is_some()));
+            for p in &tool.params {
+                let pn = param_name(&p.key);
+                if is_layer(p.kind) {
+                    let data = if by_key { &input[&p.key] } else { input };
+                    if data.is_null() || (!by_key && p.key != first_layer_key(tool)) {
+                        continue;
+                    }
+                    let lname = v[format!("@{}", p.key)]["name"]
+                        .as_str()
+                        .map_or_else(|| format!("{} {k}", p.key), str::to_string);
+                    layers.insert(lname.clone(), sample_layer(p.kind, &lname, data));
+                    params.insert(pn, json!(lname));
+                    continue;
+                }
+                let x = &v[&p.key];
+                if x.is_null() || p.kind == ParamKind::Sink && !p.optional {
+                    continue;
+                }
+                let val = match p.kind {
+                    ParamKind::Enum if !p.multiple => {
+                        json!(p.options[x.as_u64().unwrap() as usize].en)
+                    }
+                    ParamKind::Field if p.multiple => {
+                        json!(
+                            x.as_array()
+                                .unwrap()
+                                .iter()
+                                .filter_map(J::as_str)
+                                .collect::<Vec<_>>()
+                                .join(",")
+                        )
+                    }
+                    _ => x.clone(),
+                };
+                params.insert(pn, val);
+            }
+            let req = json!({"kind": "tool", "id": name.replace('_', "-"), "lang": "ru",
+                "params": params, "layers": layers});
+            let got = run_t(&req, &cat, Lang::Ru);
+            assert!(got["ok"].is_object(), "{name} {k}: {got}");
+            let ls = got["ok"]["layers"].as_array().unwrap();
+            let outs: Vec<(&str, &J)> = if r["output"].get("features").is_some() {
+                vec![("OUTPUT", &r["output"])]
+            } else {
+                r["output"]
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .map(|(a, b)| (a.as_str(), b))
+                    .collect()
+            };
+            for (key, want) in outs {
+                let label = tool.param(key).map(|p| p.label.get(Lang::Ru).to_string());
+                let layer = ls
+                    .iter()
+                    .find(|l| label.as_deref().is_none_or(|t| l["name"] == t))
+                    .unwrap_or_else(|| panic!("{name} {k}: нет выхода {key}"));
+                if want.get("fields").is_some() {
+                    same_values(&format!("{name} {k} {key}"), &layer["geojson"], want);
+                } else {
+                    let n = layer["geojson"]["features"].as_array().unwrap().len();
+                    assert_eq!(
+                        n,
+                        want["features"].as_array().unwrap().len(),
+                        "{name} {k} {key}"
+                    );
+                }
+            }
+            let msgs: Vec<&J> = got["ok"]["messages"].as_array().unwrap().iter().collect();
+            for (m, w) in msgs.iter().zip(r["report"].as_array().unwrap()) {
+                assert_eq!(*m, &w[1], "{name} {k}");
+            }
+        }
+    }
+
+    fn first_layer_key(tool: &Tool) -> String {
+        tool.params
+            .iter()
+            .find(|p| is_layer(p.kind))
+            .map(|p| p.key.clone())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn select_by_shell_through_rustgis() {
+        runs_through_rustgis("select_by_shell");
+    }
+
+    #[test]
+    fn zonal_shell_stats_through_rustgis() {
+        runs_through_rustgis("zonal_shell_stats");
+    }
+
+    #[test]
+    fn boolean_shells_through_rustgis() {
+        runs_through_rustgis("boolean_shells");
     }
 
     #[test]

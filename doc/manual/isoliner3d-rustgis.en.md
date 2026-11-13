@@ -197,3 +197,80 @@ There are two outputs. Pieces of the trace with Z are shown in the scene as tube
 | **Interval length, m** | The length of an equal interval or a composite, metres. The last interval to the end of hole is shorter when the length does not divide evenly. |
 | **Intervals** | Intervals: pieces of the trace with Z from the start to the end of the interval, with the from, to, length and value fields. In the scene they are shown as tubes with the thickness or colour by grade. |
 | **Interval midpoints** | Interval midpoints: points with Z and the same fields. This is the input for 2.02, 2.06 and 2.07. |
+
+## 2.12 Selection by a shell
+
+Selects the features that fell into a closed shell and computes a summary over them.
+
+That is how reserves are obtained: a block model, the shell of an ore body or of a mined-out zone, and out come the volume, the tonnage and the volume-weighted grade of the selection. Selecting the outside gives the remainder without building a difference of bodies.
+
+Not only points can be selected. Lines and polygons with height go the same way: holes that pierced the body, traces of workings, shells of other bodies.
+
+A point counts as inside by the parity rule: a ray is sent up from it, and if the shell is crossed an odd number of times the point is inside. No cells are needed for that, and the answer comes out exact rather than to within a cell, as with the boolean operations.
+
+For lines and polygons the vertices are looked at. A segment that goes right through the body between two of its own vertices is not caught by vertices - the sampling step along is there for that.
+
+The volume of the selected blocks is checked against the volume of the shell itself: the difference shows how coarse the model is for this body.
+
+The shell must be closed: one that is not has no inside.
+
+| Field | What it sets |
+|---|---|
+| **What to select (features with Z)** | What to select: points, lines or polygons with height. A block model from 2.03 and 1.03, samples, traces of workings, shells of other bodies - as long as the geometry has Z. |
+| **The shell (polygons with Z)** | The closed shell the selection is made by: an ore body, a mined-out zone, a block of reserves. The shells button in the viewer, 2.04 and 2.11 give such shells. |
+| **What to keep** | Entirely inside - every vertex of the feature is inside the shell. Crosses - at least one is: that is how holes and workings going right through the body are caught. Outside - the remainder, everything that does not cross. |
+| **Sampling step along lines, m (0 - vertices)** | The sampling step along lines and around the edge of polygons. Without it only the vertices are looked at, and a segment that goes right through the body between two of its own vertices will not be found. Zero - vertices only. |
+| **Field of the block volume** | The field of the block volume, if a block model is being selected. With it the volume of the selection is computed and checked against the volume of the shell itself: the difference shows how coarse the model is for this body. |
+| **Field of the grade** | The field of the grade. The mean over the selection is weighted by volume rather than plain: blocks come in different sizes, and a plain mean gives the small ones too much say. |
+| **Density, t/m3 (0 - no tonnage)** | The density of the ore. With it the volume turns into tonnes and the grade into the tonnage of metal. |
+| **Selected features** | The selected features with all their own fields. The summary goes to the log. |
+
+## 2.14 Zonal statistics of shells
+
+Counts for every body how many features fell into it and writes the numbers into the attributes of the body.
+
+Points: the number inside and the sum of an attribute. Lines: the number of lines that touched the body and the length of their parts inside. Polygons: the number of polygons with at least one vertex inside.
+
+A line is cut by the body: a segment is intersected with the surface, the points are sorted along it, and only the part inside goes into the length. A segment that goes right through the body between its own vertices is not lost.
+
+Zero and empty are different things. A body with nothing inside gets zero: that is a measured fact. A body that is not closed gets empty and goes into a warning: it has no inside.
+
+Repeated runs over one layer of bodies add up: the result of the previous run is given as the layer of bodies to the next, and every run adds its own fields. A clash of names is refused unless overwriting is allowed.
+
+The attribute gets a sum, a mean, a minimum, a maximum, a standard deviation, a median and quantiles, as chosen. Points and polygons weigh one each, lines weigh the length of their part inside the body: a sample interval half inside the body weighs half. Empty attribute values take no part.
+
+The sum over the bodies agrees: the length of lines inside all the bodies plus the length outside equals the total length, and that is printed to the log.
+
+The second, optional result is the objects themselves with the body they fell into: the fields zone, zone_ids and zone_n. It shows which samples gave the total of a body.
+
+| Field | What it sets |
+|---|---|
+| **Bodies (polygons with Z)** | A layer of bodies: closed shells, one per feature. Every body gets its own count fields. A body that is not closed gets empty rather than zero: it has no inside, and there is nothing to count. |
+| **What to count (features with Z)** | What to count: points, lines or polygons with height. A block model, holes, traces of workings, faults. |
+| **Name of the result fields (empty - from the layer)** | The name for the result fields. Empty - from the name of the layer, turned into Latin letters. Suffixes are added to it: _n the number of features inside, _len the length of lines inside, _sum, _mean, _std and others by the chosen statistics. Give your own when you run the tool over one layer of bodies several times with different data. |
+| **Attribute for statistics** | A numeric attribute for statistics: the metal or the volume of a block, a thickness, a grade. Empty - count only. |
+| **Statistics of the attribute** | What to compute from the attribute. The sum is the reserve when the attribute is already the metal of a block. A grade needs the mean, the spread and quantiles. For lines the mean and quantiles are weighted by the length inside the body, as with composites. |
+| **Allow overwriting of fields** | Allow overwriting fields of the same name. Without it a repeated run with the same name is refused: otherwise the second result would silently wipe out the first. |
+| **Bodies with statistics** | The bodies with all their previous fields and the new count fields. To accumulate several runs, give the result of the previous run as the layer of bodies to the next. |
+| **Body field for the objects (empty - number)** | The body field written to the objects: the name or code of the body. Empty - the number of the body feature in the layer. |
+| **Objects with a body** | The objects themselves with the body they fell into: zone is the first body, zone_ids all of them separated by semicolons, zone_n how many bodies. An object outside the bodies gets empty and zero. Without this layer only the total per body is seen, not which samples gave it. |
+
+## 2.11 Boolean operations on shells
+
+Subtracts, unites and intersects two bodies.
+
+This is how mining is accounted for: the shell of a mined-out chamber is subtracted from the shell of an ore body and the remaining reserves come out. An intersection gives what fell inside a zone, a union takes two bodies as one.
+
+The work goes not over meshes but over cells: both shells are turned into the occupancy of a common cube, the operation is done over the occupancy, and the result is turned back into a body. An exact operation over meshes cuts triangles against each other and on touches regularly gives a result that is not closed, and no volume can be taken from it.
+
+The price of this decision: the body comes out stepped, and the accuracy is limited by the cell. The error follows the surface area and falls with the cell: on a ten-metre cube a cell of 0.5 m gave a volume error of five per cent, 0.25 m two and a half, 0.1 m landed exactly. The memory meanwhile grows as a cube.
+
+The shells on input must be closed: one that is not has no inside, and there is nothing to tell what is within. A shell that is not closed on input is refused with the object named.
+
+| Field | What it sets |
+|---|---|
+| **The first body (polygons with Z)** | The first body: a closed shell from a layer of polygons with Z. The shells button in the viewer and the tool 2.04 give such layers. |
+| **The second body (polygons with Z)** | The second body. For a difference this is what is cut out of the first: a mined-out chamber, a flooded zone. |
+| **Action** | A difference leaves of the first body what the second does not hold. A union takes both, an intersection only the common part. |
+| **Side of the cell, m** | The side of the cell. It sets the accuracy: the error follows the surface area and halves with every halving of the cell. On a ten-metre cube a cell of 0.5 m gave a volume error of 5 per cent, 0.25 m two and a half, 0.1 m landed exactly. The memory grows as a cube, so do not take it finer than needed. |
+| **The result (bodies)** | The bodies of the result: polygons with Z, the volume of each in the attributes. The shell is always closed, so the volume can be computed from it. |
