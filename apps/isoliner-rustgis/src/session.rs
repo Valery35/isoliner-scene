@@ -99,12 +99,25 @@ impl<R: BufRead, W: Write> Host<R, W> {
     }
 }
 
+/// Слои проекта для сцены и их система: `crs` - код системы, в метрах
+/// которой лежат объекты, None - объекты в градусах WGS 84.
+pub struct Layers {
+    pub list: Vec<(String, J)>,
+    pub crs: Option<String>,
+}
+
 /// Слои проекта для сцены: видимые векторные, сверху вниз, с объектами.
-pub fn project_layers<R: BufRead, W: Write>(
-    host: &mut Host<R, W>,
-) -> Result<Vec<(String, J)>, String> {
+///
+/// Сцена строится в метрах системы первого слоя, если она метрическая:
+/// RustGIS выгружает слой Shapefile в системе, в которой его прочитал,
+/// и называет её код, остальные слои - выгрузкой в ту же систему.
+/// Слой в градусах, итог тел Isoliner3D или неудачная выгрузка - сцена
+/// в метрах зоны UTM по градусам `host.features`.
+pub fn project_layers<R: BufRead, W: Write>(host: &mut Host<R, W>) -> Result<Layers, String> {
     let list = host.call("host.layers", json!({}))?;
     let mut out = Vec::new();
+    let mut ids = Vec::new();
+    let mut bodies = false;
     for l in list.as_array().into_iter().flatten() {
         let visible = l["visible"].as_bool().unwrap_or(true);
         let raster = l["raster"].as_bool().unwrap_or(false);
@@ -115,10 +128,83 @@ pub fn project_layers<R: BufRead, W: Write>(
         let fc = host.call("host.features", json!({"layer": id}))?;
         let name = l["name"].as_str().unwrap_or("").to_string();
         // итог тел Isoliner3D - телами с высотой, а не контуром плана
-        let fc = crate::rgtools::with_bodies(&name, fc);
-        out.push((name, fc));
+        let with = crate::rgtools::with_bodies(&name, fc.clone());
+        bodies |= with != fc;
+        ids.push(id);
+        out.push((name, with));
     }
-    Ok(out)
+    if !bodies && let Some((list, crs)) = native(host, &ids, &out) {
+        return Ok(Layers {
+            list,
+            crs: Some(crs),
+        });
+    }
+    Ok(Layers {
+        list: out,
+        crs: None,
+    })
+}
+
+/// Слои в метрах своей системы выгрузкой RustGIS. None - система первого
+/// слоя в градусах или выгрузка не удалась.
+fn native<R: BufRead, W: Write>(
+    host: &mut Host<R, W>,
+    ids: &[i64],
+    named: &[(String, J)],
+) -> Option<(Vec<(String, J)>, String)> {
+    let dir = scene_path().with_extension("export");
+    std::fs::create_dir_all(&dir).ok()?;
+    let mut crs: Option<String> = None;
+    let mut out = Vec::new();
+    for (id, (name, _)) in ids.iter().zip(named) {
+        let shp = dir.join(format!("layer-{id}.shp"));
+        for ext in ["shp", "shx", "dbf", "prj", "cpg"] {
+            let _ = std::fs::remove_file(shp.with_extension(ext));
+        }
+        let mut params = json!({"layer": id, "path": shp.display().to_string().replace('\\', "/")});
+        if let Some(c) = &crs {
+            params["crs"] = json!(c);
+        }
+        let answer = host.call("share.exportLayer", params).ok()?;
+        let fc = std::fs::read(&shp)
+            .ok()
+            .and_then(|b| crate::shp::read(&b).ok())?;
+        if crs.is_none() {
+            let code = answer["crs"].as_str()?.to_string();
+            if degrees(&fc) {
+                return None;
+            }
+            crs = Some(code);
+        }
+        out.push((name.clone(), fc));
+    }
+    Some((out, crs?))
+}
+
+/// Все координаты в пределах градусов: слой в долготе и широте.
+fn degrees(fc: &J) -> bool {
+    let mut all = true;
+    let mut any = false;
+    fn walk(v: &J, f: &mut dyn FnMut(f64, f64)) {
+        if let Some(a) = v.as_array() {
+            if let (Some(x), Some(y)) =
+                (a.first().and_then(J::as_f64), a.get(1).and_then(J::as_f64))
+            {
+                f(x, y);
+            } else {
+                for x in a {
+                    walk(x, f);
+                }
+            }
+        }
+    }
+    for feat in fc["features"].as_array().into_iter().flatten() {
+        walk(&feat["geometry"]["coordinates"], &mut |x, y| {
+            any = true;
+            all &= x.abs() <= 180.0 && y.abs() <= 90.0;
+        });
+    }
+    any && all
 }
 
 /// Куда пишется сцена из слоёв проекта: временная папка, как пакет
@@ -131,9 +217,12 @@ pub fn scene_path() -> PathBuf {
 
 /// Записать пакет из слоёв проекта: сначала во временный файл, потом
 /// заменой, чтобы окно не прочло его наполовину.
-pub fn write_scene(layers: &[(String, J)], path: &Path, title: &str) -> Result<usize, String> {
-    let pkg = layers::package(layers, title)
-        .ok_or_else(|| "no features in visible layers".to_string())?;
+pub fn write_scene(layers: &Layers, path: &Path, title: &str) -> Result<usize, String> {
+    let pkg = match &layers.crs {
+        Some(c) => layers::package_native(&layers.list, title, c),
+        None => layers::package(&layers.list, title),
+    }
+    .ok_or_else(|| "no features in visible layers".to_string())?;
     let bytes = scene_format::write_package(&pkg).map_err(|e| e.to_string())?;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
@@ -385,8 +474,10 @@ mod tests {
         assert_eq!(said[1]["call"]["op"], "host.layers");
         assert_eq!(said[2]["call"]["op"], "host.features");
         assert_eq!(said[2]["call"]["params"]["layer"], 3);
-        assert_eq!(said[3]["id"], 2);
-        assert_eq!(said[3]["ok"]["parts"], 1, "{}", said[3]);
+        // выгрузка в системе слоя не ответила - сцена по градусам
+        assert_eq!(said[3]["call"]["op"], "share.exportLayer");
+        assert_eq!(said[4]["id"], 2);
+        assert_eq!(said[4]["ok"]["parts"], 1, "{}", said[4]);
         assert_eq!(launched.get(), 1);
         let pkg = scene_format::read_package(&std::fs::read(scene_path()).unwrap()).unwrap();
         assert_eq!(pkg.parts[0].name, "Линии");

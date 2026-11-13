@@ -167,6 +167,11 @@ impl Acc {
 /// Слои проекта в части сцены: имя слоя и его GeoJSON. Каждый слой -
 /// до трёх частей (тело, линии, точки) своего цвета, метры зоны `utm`.
 pub fn parts(layers: &[(String, J)], utm: Utm) -> Vec<Part> {
+    parts_with(layers, &|x, y| utm.forward(x, y))
+}
+
+/// Части сцены с переводом координат слоя `to_m` в метры сцены.
+fn parts_with(layers: &[(String, J)], to_m: &dyn Fn(f64, f64) -> [f64; 2]) -> Vec<Part> {
     let mut out = Vec::new();
     for (k, (name, fc)) in layers.iter().enumerate() {
         let mut acc = Acc::default();
@@ -177,7 +182,7 @@ pub fn parts(layers: &[(String, J)], utm: Utm) -> Vec<Part> {
         let to_m = |v: Vec<[f64; 3]>| -> Vec<[f64; 3]> {
             v.into_iter()
                 .map(|p| {
-                    let [x, y] = utm.forward(p[0], p[1]);
+                    let [x, y] = to_m(p[0], p[1]);
                     [x, y, p[2]]
                 })
                 .collect()
@@ -203,11 +208,21 @@ pub fn parts(layers: &[(String, J)], utm: Utm) -> Vec<Part> {
     out
 }
 
-/// Пакет сцены из слоёв проекта. Слоёв с объектами нет - None.
+/// Пакет сцены из слоёв проекта в градусах: метры зоны UTM по середине.
+/// Слоёв с объектами нет - None.
 pub fn package(layers: &[(String, J)], title: &str) -> Option<Package> {
     let [lon, lat] = middle(layers)?;
     let utm = Utm::at(lon, lat);
-    let parts = parts(layers, utm);
+    wrap(parts(layers, utm), title, &format!("EPSG:{}", utm.epsg()))
+}
+
+/// Пакет сцены из слоёв, уже лежащих в метрах системы `authid` (выгрузка
+/// RustGIS в системе слоя).
+pub fn package_native(layers: &[(String, J)], title: &str, authid: &str) -> Option<Package> {
+    wrap(parts_with(layers, &|x, y| [x, y]), title, authid)
+}
+
+fn wrap(parts: Vec<Part>, title: &str, authid: &str) -> Option<Package> {
     if parts.is_empty() {
         return None;
     }
@@ -216,7 +231,7 @@ pub fn package(layers: &[(String, J)], title: &str) -> Option<Package> {
         version: env!("CARGO_PKG_VERSION").to_string(),
         name: title.to_string(),
         crs: Crs {
-            authid: format!("EPSG:{}", utm.epsg()),
+            authid: authid.to_string(),
             wkt: String::new(),
         },
         ..SceneMeta::default()

@@ -22,6 +22,7 @@ mod layers;
 mod plugin;
 mod rgtools;
 mod session;
+mod shp;
 
 use std::io::{BufRead, Write};
 use std::path::Path;
