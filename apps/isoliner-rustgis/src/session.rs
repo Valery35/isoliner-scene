@@ -321,6 +321,7 @@ fn once_with<R: BufRead, W: Write>(
 
 /// Замок окна сцены из слоёв: окно держит файл открытым без общего
 /// доступа, пока живо.
+#[cfg(windows)]
 pub fn lock_path() -> PathBuf {
     scene_path().with_extension("lock")
 }
