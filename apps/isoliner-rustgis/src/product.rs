@@ -44,6 +44,86 @@ pub const OPTIONS: Options = Options {
     xy_tables: &[("desurvey_holes", "COLLARS")],
 };
 
+/// Своя вкладка ленты RustGIS для plugin.json. Манифест собирает тест
+/// (`ISOLINER_MANIFEST=1`), поэтому вкладка есть только в тестовой сборке.
+#[cfg(test)]
+pub mod ribbon {
+    use rustgis_kit::manifest::{Group, Item, Label, Layout, Menu, Tab};
+
+    const fn l(en: &'static str, ru: &'static str) -> Label {
+        Label { en, ru }
+    }
+
+    const fn menu(label: Label, icon: &'static str, items: &'static [Item]) -> Menu {
+        Menu {
+            label,
+            icon: Some(icon),
+            help: None,
+            layout: None,
+            items,
+        }
+    }
+
+    static BODIES: Menu = menu(
+        l("Bodies", "Тела"),
+        "polygon_tool",
+        &[Item::Tool("sweep_body"), Item::Tool("contour_crown")],
+    );
+    static SHELLS: Menu = menu(
+        l("Shells", "Оболочки"),
+        "intersect",
+        &[
+            Item::Tool("boolean_shells"),
+            Item::Tool("select_by_shell"),
+            Item::Tool("zonal_shell_stats"),
+            Item::Tool("fill_to_volume"),
+        ],
+    );
+    static HOLES: Menu = menu(
+        l("Boreholes", "Скважины"),
+        "line_layer",
+        &[Item::Tool("desurvey_holes"), Item::Tool("hole_intervals")],
+    );
+    static REPORTS: Menu = menu(
+        l("Reports", "Отчёты"),
+        "table",
+        &[Item::Tool("bench_report")],
+    );
+    static DENSITY: Menu = menu(
+        l("Density", "Плотность"),
+        "stats",
+        &[Item::Tool("density_3d")],
+    );
+
+    /// Своя вкладка ленты RustGIS: сцена и «О программе» кнопками, десять
+    /// инструментов - в меню по смыслу. Без неё RustGIS кладёт каждый
+    /// инструмент отдельной кнопкой со значком по умолчанию.
+    pub static TAB: Tab = Tab {
+        label: l("Isoliner3D", "Isoliner3D"),
+        groups: &[
+            Group {
+                label: l("Scene", "Сцена"),
+                layout: Layout::Large,
+                items: &[Item::Command("scene"), Item::Command("about")],
+            },
+            Group {
+                label: l("Tools", "Инструменты"),
+                layout: Layout::Large,
+                items: &[
+                    Item::Menu(&BODIES),
+                    Item::Menu(&SHELLS),
+                    Item::Menu(&HOLES),
+                    Item::Menu(&REPORTS),
+                    Item::Menu(&DENSITY),
+                ],
+            },
+        ],
+    };
+
+    /// Команды расширения, как в `commands` plugin.json.
+    pub const COMMANDS: &[&str] = &["scene", "tools", "run", "about"];
+}
+
 /// Папка данных расширения во временной папке системы.
 pub fn home() -> PathBuf {
     rustgis_kit::store::temp_home("isoliner3d")

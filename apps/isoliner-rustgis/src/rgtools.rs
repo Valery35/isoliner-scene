@@ -124,22 +124,34 @@ mod tests {
         serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
     }
 
-    /// Раздел tools манифеста - из tools.json, у каждой строки перевод.
-    /// `ISOLINER_MANIFEST=1 cargo test -p isoliner-rustgis` переписывает
-    /// раздел и строки в plugin.json.
+    /// Разделы tab и tools манифеста - из product::TAB и tools.json, у каждой
+    /// строки перевод. `ISOLINER_MANIFEST=1 cargo test -p isoliner-rustgis`
+    /// переписывает разделы и строки в plugin.json.
     #[test]
     fn manifest_tools_follow_tools_json() {
+        use crate::product::OPTIONS;
+        use crate::product::ribbon::{COMMANDS, TAB};
         let kit = rustgis_kit::Catalog::parse(crate::TOOLS_JSON).unwrap();
-        let (tools, ru) = rustgis_kit::manifest::tools_section(&kit, &crate::product::OPTIONS);
+        let (tools, mut ru) = rustgis_kit::manifest::tools_section(&kit, &OPTIONS);
+        let (tab, tab_ru) =
+            rustgis_kit::manifest::tab_section(&TAB, &kit, &OPTIONS, COMMANDS).unwrap();
+        ru.extend(tab_ru);
         let mut m = manifest();
         if std::env::var_os("ISOLINER_MANIFEST").is_some() {
             let path = format!("{}/plugin.json", env!("CARGO_MANIFEST_DIR"));
             let text = std::fs::read_to_string(&path).unwrap();
-            let text = rustgis_kit::manifest::splice(&text, &tools, &ru).unwrap();
+            let text = rustgis_kit::manifest::splice_all(&text, &tools, Some(&tab), &ru).unwrap();
             std::fs::write(&path, text).unwrap();
             m = manifest();
         }
         assert_eq!(m["tools"], json!(tools), "plugin.json: ISOLINER_MANIFEST=1");
+        assert_eq!(m["tab"], tab, "plugin.json: ISOLINER_MANIFEST=1");
+        // во вкладке все десять инструментов, каждый по разу
+        let text = tab.to_string();
+        for name in OPTIONS.offered {
+            let id = format!("\"tool:{}\"", name.replace('_', "-"));
+            assert_eq!(text.matches(&id).count(), 1, "{id}");
+        }
         for (k, v) in &ru {
             assert_eq!(&m["i18n"]["ru"][k], v, "нет перевода: {k}");
         }
