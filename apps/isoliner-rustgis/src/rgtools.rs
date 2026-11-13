@@ -44,6 +44,7 @@ use crate::i18n::tr;
 pub const OFFERED: &[&str] = &[
     "sweep_body",
     "contour_crown",
+    "bench_report",
     "desurvey_holes",
     "fill_to_volume",
     "hole_intervals",
@@ -702,6 +703,7 @@ pub fn run(
         }
     };
     let mut layers = Vec::new();
+    let mut tables = Vec::new();
     let mut in_scene: Vec<(String, J)> = Vec::new();
     for (key, o) in &out {
         // имя слоя - подпись выхода на языке RustGIS, у выхода без поля -
@@ -790,7 +792,12 @@ pub fn run(
         if let Frame::Native(code) = &frame {
             fc["crs"] = json!({"type": "name", "properties": {"name": code}});
         }
-        layers.push(json!({"name": name, "geojson": fc}));
+        // таблица без геометрии - в tables, RustGIS кладёт её таблицей
+        if o.geometry == OutGeometry::None {
+            tables.push(json!({"name": name, "geojson": fc}));
+        } else {
+            layers.push(json!({"name": name, "geojson": fc}));
+        }
         if o.geometry == OutGeometry::Mesh {
             messages.push(tr(
                 lang,
@@ -812,7 +819,7 @@ pub fn run(
     ) {
         messages.push(m);
     }
-    json!({"ok": {"layers": layers, "messages": messages}})
+    json!({"ok": {"layers": layers, "tables": tables, "messages": messages}})
 }
 
 /// Пакет объёмного итога инструмента `name` и окно сцены с ним: окно
@@ -1752,8 +1759,22 @@ mod tests {
             let req = json!({"kind": "tool", "id": name.replace('_', "-"), "lang": "ru",
                 "params": params, "layers": layers});
             let got = run_t(&req, &cat, Lang::Ru);
+            if let Some(e) = r.get("error") {
+                // отказ модуля - отказ и здесь
+                let t = e["template"].as_str().unwrap_or("");
+                let g = got["error"].as_str().unwrap_or("");
+                assert!(!g.is_empty() && !t.is_empty(), "{name} {k}: {got}");
+                continue;
+            }
             assert!(got["ok"].is_object(), "{name} {k}: {got}");
-            let ls = got["ok"]["layers"].as_array().unwrap();
+            // слои и таблицы итога вместе
+            let ls: Vec<J> = got["ok"]["layers"]
+                .as_array()
+                .into_iter()
+                .chain(got["ok"]["tables"].as_array())
+                .flatten()
+                .cloned()
+                .collect();
             let outs: Vec<(&str, &J)> = if r["output"].get("features").is_some() {
                 vec![("OUTPUT", &r["output"])]
             } else {
@@ -1880,6 +1901,11 @@ mod tests {
             .unwrap_or("")
             .to_string();
         assert!(e.contains("Нужен слой полигонов"), "{e}");
+    }
+
+    #[test]
+    fn bench_report_through_rustgis() {
+        runs_through_rustgis("bench_report");
     }
 
     #[test]

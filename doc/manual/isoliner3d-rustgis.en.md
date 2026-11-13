@@ -166,6 +166,39 @@ The idea comes from the QGIS 3D Studio plugin.
 | **Cell, m (0 - from outline size)** | The body grid step. Zero takes about one hundred twenty cells along the long side of the outline. Finer gives a more exact boundary but more faces. |
 | **Bodies from outlines** | Bodies, one per outline, with all outline fields and the fields of volume, area, elevations and crown rise. The bodies are closed, 2.11, 2.12, 2.14 and 2.23 take them. |
 
+## 1.09 Bench report
+
+Cuts the block model into horizontal benches and computes for each: rock mass, ore and waste, mean ore grade, metal, stripping ratio, revenue, cost and margin. The last row is the total.
+
+Benches go from the base elevation with the bench height step, the report runs top down, the way a pit is mined. A block crossing a bench boundary is split between benches by the share of its height. The block height comes from the top and bottom fields (z_from and z_to of 1.03), otherwise from the dz field (of 2.03) around the point elevation, otherwise the whole block goes to the bench of its centre.
+
+Ore is blocks with a grade not below the cut-off. A block without grade counts as waste, and their number goes to the log.
+
+Metal depends on the grade unit: for percent it is in tonnes, for g/t in grams. The price is per the same metal unit. Revenue is metal with recovery at the price, cost is mining of all rock plus processing of ore. Zero economics gives only tonnage and metal.
+
+The volume and density fields are guessed by the names vol and dens, as 1.03 and 2.03 write them. A foreign Micromine, Datamine or Surpac model goes first to a cube with 2.20, then to blocks with 2.03, or set the fields yourself.
+
+The idea comes from the QGIS 3D Studio plugin.
+
+| Field | What it sets |
+|---|---|
+| **Block model (points with Z)** | Block centres as points with elevation: the output of 1.03 or 2.03, or your own model with volume and grade fields. |
+| **Field of the grade** | The grade of the useful component in the block. The unit is in the field below, the metal unit depends on it. |
+| **Grade unit** | Percent gives metal in tonnes, g/t gives metal in grams. The metal price below is set per the same unit. |
+| **Cut-off grade** | Blocks with a grade not below this are ore, the rest is waste. |
+| **Bench height, m** | Bench height in metres. A smaller bench gives a finer report, but more rows and more split blocks. |
+| **Bench base elevation, m** | The elevation benches are counted from: bench boundaries lie on it and every bench height up and down. |
+| **Block volume field (empty - vol)** | Block volume, m³. Empty takes the vol or volume field when present. |
+| **Density field (empty - dens)** | Block density, t/m³. Empty takes the dens or density field when present, otherwise the constant below. |
+| **Density, t/m³, if no field** | Density for blocks that have no density field or an empty one. |
+| **Block top field (empty - z_from)** | Block top elevation. Empty takes the z_from field when present. Without top and bottom the block height comes from the dz field around the point elevation. |
+| **Block bottom field (empty - z_to)** | Block bottom elevation. Empty takes the z_to field when present. |
+| **Price per metal unit** | The price of a tonne of metal for percent or of a gram for g/t. Zero gives no revenue. |
+| **Recovery, %** | The share of metal that reaches the product. |
+| **Mining, per tonne of rock** | The cost of mining a tonne of rock: ore and waste. |
+| **Processing, per tonne of ore** | The cost of processing a tonne of ore. Waste does not carry it, only mining. |
+| **Bench report** | A table without geometry: a row per bench top down and the total. |
+
 ## 2.17 Borehole traces from downhole surveys
 
 Builds borehole traces from collars and downhole surveys the way they are exported from a database: a collar layer and a survey table, matched by the hole ID.
