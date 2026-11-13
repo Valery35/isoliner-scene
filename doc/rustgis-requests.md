@@ -6,6 +6,15 @@ RustGIS 0.4.0 на RustGIS 0.6.0, 13 ноября 2026 года. Примеры 
 RustPlanetX в запросах 2-4 дало управление PlanetX, просьба идёт от обеих
 линеек.
 
+Отправлено 13 ноября 2026 года по слову автора:
+- запрос 3, растры, - https://github.com/opengeos/RustGIS/issues/1933;
+- запрос 1, система координат, - https://github.com/opengeos/RustGIS/issues/1934;
+- запрос 2, Z, - комментарием в уже открытый
+  https://github.com/opengeos/RustGIS/issues/726 («Full 3D scenes: heights
+  in the data»), отдельная заявка была бы дублем;
+- запрос 4, сессии, не отправлен. Сессии расширений уже влиты в main
+  (PR #1553, 9 ноября, после выпуска 0.6.0) и выйдут со следующим выпуском.
+
 ---
 
 ## 1. Plugin API: layer CRS for plugins and tools
