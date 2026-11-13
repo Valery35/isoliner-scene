@@ -5,7 +5,8 @@
 [package]
 name = "isoliner-rustgis"
 description = "Isoliner3D для RustGIS: расширение-процесс, сцена .i3dscene и инструменты 2.23, 2.24"
-version.workspace = true
+# своя версия: выпуски расширения - теги rustgis-v<версия>
+version = "0.5.0"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
@@ -19,8 +20,9 @@ tool-spec.workspace = true
 tools.workspace = true
 scene-app.workspace = true
 scene-core.workspace = true
-# общая основа расширений RustGIS линейки, отдельный репозиторий рядом
-rustgis-kit = { path = "../../../rustgis-kit" }
+# общая основа расширений RustGIS линейки, отдельное хранилище. Правка
+# крейта на месте - [patch] в .cargo/config.toml или путь вместо git.
+rustgis-kit = { git = "https://github.com/Valery35/rustgis-kit", tag = "v0.1.0" }
 
 [lints]
 workspace = true

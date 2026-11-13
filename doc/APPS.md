@@ -148,15 +148,14 @@ RustPlanetX: `isoliner-rustgis rustgis-plugin`, манифест
   выпуск, кнопка модуля «Открыть в Isoliner Scene».
 
 С 13 ноября 2026 года всё, что не зависит от продукта, - в крейте
-`rustgis-kit` (`C:\Dev\rustgis-kit`, своё хранилище, Apache 2.0, на
-GitHub пока не отправлен). Протокол RustGIS, раздел `tools` манифеста
+`rustgis-kit` (`C:\Dev\rustgis-kit`, своё хранилище
+https://github.com/Valery35/rustgis-kit, Apache 2.0). Протокол RustGIS, раздел `tools` манифеста
 и разбор полей по `tools.json`, системы координат, итог слоем,
 хранилище высот, окно своим процессом, ретранслятор MCP, упаковка
-`.rgplugin`. Расширение подключает его зависимостью по пути
-`../../../rustgis-kit`, своё у продукта - `src/product.rs`. Тот же
-крейт берут Isoliner, Topoliner и Routeliner, как - `README.md` крейта.
-Сборке нужен `C:\Dev\rustgis-kit` рядом с хранилищем, CI GitHub его
-не видит, пока крейт не на GitHub.
+`.rgplugin`. Расширение подключает его зависимостью git с тегом
+(`v0.1.0`), своё у продукта - `src/product.rs`. Новая версия крейта -
+новый тег в его хранилище и новый тег здесь. Тот же крейт берут
+Isoliner, Topoliner и Routeliner, как - `README.md` крейта.
 
 Расширение ведёт своя сессия Claude Code - подсессия «RustGIS»,
 с 13 ноября 2026 года. Окно сцены и связь со сценой (крейт
