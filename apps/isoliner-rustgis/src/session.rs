@@ -319,18 +319,23 @@ fn once_with<R: BufRead, W: Write>(
     scene_from_layers(host, &req, ctx)
 }
 
-/// Замок окна сцены из слоёв: окно держит файл открытым без общего
+/// Замок окна сцены с пакетом `pkg`: окно держит файл открытым без общего
 /// доступа, пока живо.
 #[cfg(windows)]
-pub fn lock_path() -> PathBuf {
-    scene_path().with_extension("lock")
+pub fn lock_path(pkg: &Path) -> PathBuf {
+    pkg.with_extension("lock")
 }
 
-/// Открыто ли окно сцены из слоёв: замок занят.
-#[cfg(windows)]
+/// Открыто ли окно сцены из слоёв.
 fn window_open() -> bool {
+    window_open_for(&scene_path())
+}
+
+/// Открыто ли окно сцены с пакетом `pkg`: замок занят.
+#[cfg(windows)]
+pub fn window_open_for(pkg: &Path) -> bool {
     use std::os::windows::fs::OpenOptionsExt;
-    let path = lock_path();
+    let path = lock_path(pkg);
     path.exists()
         && std::fs::OpenOptions::new()
             .write(true)
@@ -340,16 +345,16 @@ fn window_open() -> bool {
 }
 
 #[cfg(not(windows))]
-fn window_open() -> bool {
+pub fn window_open_for(_pkg: &Path) -> bool {
     false
 }
 
-/// Занять замок на время жизни окна. None - не вышло, окно живёт без
-/// замка.
+/// Занять замок пакета `pkg` на время жизни окна. None - не вышло, окно
+/// живёт без замка.
 #[cfg(windows)]
-pub fn hold_lock() -> Option<std::fs::File> {
+pub fn hold_lock(pkg: &Path) -> Option<std::fs::File> {
     use std::os::windows::fs::OpenOptionsExt;
-    let path = lock_path();
+    let path = lock_path(pkg);
     std::fs::create_dir_all(path.parent()?).ok()?;
     std::fs::OpenOptions::new()
         .write(true)
@@ -361,7 +366,7 @@ pub fn hold_lock() -> Option<std::fs::File> {
 }
 
 #[cfg(not(windows))]
-pub fn hold_lock() -> Option<std::fs::File> {
+pub fn hold_lock(_pkg: &Path) -> Option<std::fs::File> {
     None
 }
 

@@ -49,6 +49,14 @@ pub const TABLE: &[(&str, &str)] = &[
         "A collar table without points needs the EPSG code of its X and Y, for example EPSG:28410.",
     ),
     (
+        "%s: объёмный итог - в окне сцены.",
+        "%s: the result in 3D is in the scene window.",
+    ),
+    (
+        "Слой «%s» - не тела Isoliner3D. Тела с высотой дают инструменты 2.24 и 2.26, слой RustGIS их не хранит.",
+        "Layer '%s' holds no Isoliner3D bodies. Bodies with heights come from tools 2.24 and 2.26, a RustGIS layer does not keep them.",
+    ),
+    (
         "%s: тела в плане, верхними гранями, метры зоны UTM %s.",
         "%s: bodies in plan by their top faces, metres of UTM zone %s.",
     ),

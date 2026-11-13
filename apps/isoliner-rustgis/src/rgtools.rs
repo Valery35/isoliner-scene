@@ -41,7 +41,7 @@ use crate::i18n::tr;
 /// числа. 2.17 берёт устья точками или таблицей с X и Y, отметку устья -
 /// из поля. Остальным нужны тела (2.11, 2.12, 2.14, 2.23) или линии с Z
 /// (2.18), а слой RustGIS их не держит.
-pub const OFFERED: &[&str] = &["sweep_body", "desurvey_holes"];
+pub const OFFERED: &[&str] = &["sweep_body", "desurvey_holes", "fill_to_volume"];
 
 /// Слой-таблица с X и Y в метрах своей системы: устья 2.17. Если у слоя
 /// нет геометрии, расчёт идёт в его метрах, итог уходит в RustGIS в тех
@@ -114,6 +114,8 @@ fn rg_kind(p: &Param) -> Option<&'static str> {
         ParamKind::Lines | ParamKind::Features => "vectorLayer",
         ParamKind::Points => "pointLayer",
         ParamKind::Table => "layer",
+        // тела - слой итога Isoliner3D, в RustGIS это полигоны плана
+        ParamKind::Mesh | ParamKind::Meshes => "polygonLayer",
         ParamKind::Field if p.numeric => "numericField",
         ParamKind::Field => "field",
         ParamKind::Number | ParamKind::Integer => "number",
@@ -127,7 +129,12 @@ fn rg_kind(p: &Param) -> Option<&'static str> {
 fn is_layer(kind: ParamKind) -> bool {
     matches!(
         kind,
-        ParamKind::Lines | ParamKind::Features | ParamKind::Points | ParamKind::Table
+        ParamKind::Lines
+            | ParamKind::Features
+            | ParamKind::Points
+            | ParamKind::Table
+            | ParamKind::Mesh
+            | ParamKind::Meshes
     )
 }
 
@@ -273,9 +280,68 @@ fn zone_of(layers: &[&J]) -> Utm {
     }
 }
 
+/// Тело из треугольников с высотой (кольца по 3 вершины, как модуль пишет
+/// тела) в метрах зоны: `{"verts", "faces"}`. Одинаковые вершины
+/// склеиваются - по номерам вершин расчёт проверяет замкнутость тела.
+/// Треугольника нет - None.
+fn body_of(geoms: &[&J], utm: &Utm) -> Option<J> {
+    let mut verts: Vec<[f64; 3]> = Vec::new();
+    let mut index: HashMap<[u64; 3], u32> = HashMap::new();
+    let mut faces: Vec<[u32; 3]> = Vec::new();
+    for g in geoms {
+        for ring in parts(g) {
+            let ring: Vec<[f64; 3]> = if ring.len() == 4 && ring[0] == ring[3] {
+                ring[..3].to_vec()
+            } else {
+                ring
+            };
+            if ring.len() != 3 || ring.iter().any(|p| !p[2].is_finite()) {
+                continue;
+            }
+            let mut f = [0u32; 3];
+            for (k, p) in ring.iter().enumerate() {
+                let [e, n] = utm.forward(p[0], p[1]);
+                let key = [e.to_bits(), n.to_bits(), p[2].to_bits()];
+                let next = u32::try_from(verts.len()).ok()?;
+                f[k] = *index.entry(key).or_insert_with(|| {
+                    verts.push([e, n, p[2]]);
+                    next
+                });
+            }
+            faces.push(f);
+        }
+    }
+    (!faces.is_empty()).then(|| json!({"verts": verts, "faces": faces}))
+}
+
 /// Слой RustGIS в вид прогонов модуля, в метрах зоны.
 fn layer_value(p: &Param, fc: &J, utm: &Utm) -> J {
     let feats = fc["features"].as_array().cloned().unwrap_or_default();
+    match p.kind {
+        // одно тело из всех объектов слоя
+        ParamKind::Mesh => {
+            let gs: Vec<&J> = feats.iter().map(|f| &f["geometry"]).collect();
+            return body_of(&gs, utm).unwrap_or(J::Null);
+        }
+        // тело на объект
+        ParamKind::Meshes => {
+            return J::Array(
+                feats
+                    .iter()
+                    .enumerate()
+                    .map(|(i, f)| {
+                        let mut o = json!({"id": feature_id(f, i), "attrs": f["properties"]});
+                        if let Some(b) = body_of(&[&f["geometry"]], utm) {
+                            o["verts"] = b["verts"].clone();
+                            o["faces"] = b["faces"].clone();
+                        }
+                        o
+                    })
+                    .collect(),
+            );
+        }
+        _ => {}
+    }
     let list: Vec<J> = feats
         .iter()
         .enumerate()
@@ -339,7 +405,14 @@ fn layer_info(name: &str, fc: &J) -> J {
         }
     }
     let numeric: Vec<&String> = fields.iter().filter(|k| !text.contains(k)).collect();
-    json!({"name": name, "geometry": geometry, "hasz": false, "fields": fields, "numeric": numeric})
+    // Z есть только у итогов Isoliner3D, слой RustGIS его не держит
+    let hasz = feats.iter().any(|f| {
+        parts(&f["geometry"])
+            .iter()
+            .flatten()
+            .any(|p| p[2].is_finite())
+    });
+    json!({"name": name, "geometry": geometry, "hasz": hasz, "fields": fields, "numeric": numeric})
 }
 
 /// Пункт списка: номер, английский или русский текст пункта.
@@ -370,16 +443,23 @@ fn values(tool: &Tool, req: &J) -> Result<(J, Utm, HashMap<i64, J>), BadKey> {
     let params = &req["params"];
     let layers = &req["layers"];
     // слои входа: имя слоя - в поле, объекты - в layers
-    let mut inputs: Vec<(&Param, &J)> = Vec::new();
+    let mut inputs: Vec<(&Param, J)> = Vec::new();
     for p in tool.params.iter().filter(|p| is_layer(p.kind)) {
         let name = params[param_name(&p.key)].as_str().unwrap_or("");
         if name.is_empty() {
             continue;
         }
         let fc = layers.get(name).ok_or_else(|| p.key.clone())?;
-        inputs.push((p, fc));
+        // тела нужны с высотой: слой RustGIS их не держит, берутся из
+        // итога Isoliner3D, иначе ошибка с объяснением
+        let mesh = matches!(p.kind, ParamKind::Mesh | ParamKind::Meshes);
+        if mesh && !has_3d(&bodies_dir(), name) {
+            return Err(format!("!{name}"));
+        }
+        // итог Isoliner3D - геометрия с высотой, поля слоя RustGIS
+        inputs.push((p, with_bodies(name, fc.clone())));
     }
-    let utm = zone_of(&inputs.iter().map(|(_, fc)| *fc).collect::<Vec<_>>());
+    let utm = zone_of(&inputs.iter().map(|(_, fc)| fc).collect::<Vec<_>>());
     let mut out = serde_json::Map::new();
     let mut geoms = HashMap::new();
     for (p, fc) in &inputs {
@@ -471,7 +551,12 @@ fn out_geometry(g: &Geom, frame: &Frame, geoms: &HashMap<i64, J>) -> J {
 
 /// Запуск инструмента по запросу RustGIS. Ответ - `{"ok": ...}` или
 /// `{"error": "..."}`.
-pub fn run(req: &J, catalog: &Catalog, lang: Lang) -> J {
+pub fn run(
+    req: &J,
+    catalog: &Catalog,
+    lang: Lang,
+    launch: &dyn Fn(&std::path::Path) -> Result<(), String>,
+) -> J {
     let id = req["id"].as_str().unwrap_or("");
     let name = id.replace('-', "_");
     let found = OFFERED
@@ -482,6 +567,13 @@ pub fn run(req: &J, catalog: &Catalog, lang: Lang) -> J {
         return json!({"error": tr(lang, "Инструмента «%s» нет.", &[Arg::Text(id.to_string())])});
     };
     let bad = |key: String| {
+        if let Some(layer) = key.strip_prefix('!') {
+            return json!({"error": tr(
+                lang,
+                "Слой «%s» - не тела Isoliner3D. Тела с высотой дают инструменты 2.24 и 2.26, слой RustGIS их не хранит.",
+                &[Arg::Text(layer.to_string())],
+            )});
+        }
         let label = tool
             .param(&key)
             .map_or(key.clone(), |p| p.label.get(lang).to_string());
@@ -534,6 +626,7 @@ pub fn run(req: &J, catalog: &Catalog, lang: Lang) -> J {
         }
     };
     let mut layers = Vec::new();
+    let mut in_scene: Vec<(String, J)> = Vec::new();
     for (key, o) in &out {
         // имя слоя - подпись выхода на языке RustGIS, у выхода без поля -
         // имя из расчёта
@@ -558,6 +651,11 @@ pub fn run(req: &J, catalog: &Catalog, lang: Lang) -> J {
                 if let Some(s) = f.source {
                     props.entry("source").or_insert(json!(s));
                 }
+                // отметки тела и линии: высоты слой RustGIS не держит
+                if let Some((lo, hi)) = z_range(&f.geom) {
+                    props.entry("z_min").or_insert(json!(lo));
+                    props.entry("z_max").or_insert(json!(hi));
+                }
                 json!({
                     "type": "Feature",
                     "properties": props,
@@ -565,10 +663,23 @@ pub fn run(req: &J, catalog: &Catalog, lang: Lang) -> J {
                 })
             })
             .collect();
-        if o.geometry == OutGeometry::Mesh
-            && let Frame::Utm(u) = &frame
-        {
-            keep_bodies(&bodies_dir(), &name, &features, bodies_3d(o, u));
+        let solid = matches!(
+            o.geometry,
+            OutGeometry::Mesh | OutGeometry::Line | OutGeometry::Point
+        );
+        if solid && let Frame::Utm(u) = &frame {
+            let g3 = geoms_3d(o, u);
+            keep_bodies(&bodies_dir(), &name, &features, g3.clone());
+            // в сцену - итог с высотой, поля - как у слоя RustGIS
+            let feats3: Vec<J> = features
+                .iter()
+                .zip(g3)
+                .map(|(f, g)| json!({"type": "Feature", "properties": f["properties"], "geometry": g}))
+                .collect();
+            in_scene.push((
+                name.clone(),
+                json!({"type": "FeatureCollection", "features": feats3}),
+            ));
         }
         let mut fc = json!({"type": "FeatureCollection", "features": features});
         // метры таблицы: RustGIS читает член crs и пересчитывает сам
@@ -587,7 +698,58 @@ pub fn run(req: &J, catalog: &Catalog, lang: Lang) -> J {
             ));
         }
     }
+    // объёмный итог - сразу в окно сцены своим пакетом
+    if let Some(m) = show_in_scene(
+        &tool.name,
+        &tool.display_name(lang),
+        &in_scene,
+        launch,
+        lang,
+    ) {
+        messages.push(m);
+    }
     json!({"ok": {"layers": layers, "messages": messages}})
+}
+
+/// Пакет объёмного итога инструмента `name` и окно сцены с ним: окно
+/// открыто - оно перечитывает пакет само, иначе запускается. Сообщение
+/// для журнала RustGIS, None - объёмного итога нет.
+fn show_in_scene(
+    name: &str,
+    title: &str,
+    layers: &[(String, J)],
+    launch: &dyn Fn(&std::path::Path) -> Result<(), String>,
+    lang: Lang,
+) -> Option<String> {
+    if layers.is_empty() {
+        return None;
+    }
+    let path = results_dir().join(format!("{name}.i3dscene"));
+    let set = crate::session::Layers {
+        list: layers.to_vec(),
+        crs: None,
+    };
+    let written = crate::session::write_scene(&set, &path, title);
+    let shown = written.and_then(|_| {
+        if crate::session::window_open_for(&path) {
+            Ok(())
+        } else {
+            launch(&path)
+        }
+    });
+    Some(match shown {
+        Ok(()) => tr(
+            lang,
+            "%s: объёмный итог - в окне сцены.",
+            &[Arg::Text(title.to_string())],
+        ),
+        Err(e) => tr(lang, "Окно сцены не запустилось: %s", &[Arg::Text(e)]),
+    })
+}
+
+/// Где лежат пакеты объёмных итогов инструментов.
+pub fn results_dir() -> std::path::PathBuf {
+    crate::session::scene_path().with_extension("results")
 }
 
 /// Где лежат тела итогов для сцены: рядом с пакетом сцены из слоёв.
@@ -610,40 +772,68 @@ fn bodies_file(dir: &std::path::Path, layer: &str) -> std::path::PathBuf {
     dir.join(format!("{safe}.json"))
 }
 
-/// Тела итога в градусах с высотой: треугольниками MultiPolygon, как
-/// модуль пишет тела. По ним сцена из слоёв покажет тело, а не контур.
-fn bodies_3d(o: &tool_spec::Output, utm: &Utm) -> Vec<J> {
-    o.features
-        .iter()
-        .map(|f| {
-            let tris: Vec<J> = match &f.geom {
-                Geom::Mesh(b) => b
-                    .faces
-                    .iter()
-                    .filter_map(|t| {
-                        let p = |i: u32| -> Option<J> {
-                            let v = b.verts.get(i as usize)?;
-                            let [lon, lat] = utm.inverse(v[0], v[1]);
-                            Some(json!([lon, lat, v[2]]))
-                        };
-                        Some(json!([[p(t[0])?, p(t[1])?, p(t[2])?, p(t[0])?]]))
-                    })
-                    .collect(),
-                _ => Vec::new(),
-            };
-            json!({"type": "Feature", "properties": {},
-                   "geometry": {"type": "MultiPolygon", "coordinates": tris}})
-        })
-        .collect()
+/// Точка с высотой в градусах GeoJSON. Высоты нет - без третьей координаты.
+fn lonlat_z(utm: &Utm, v: &[f64; 3]) -> J {
+    let [lon, lat] = utm.inverse(v[0], v[1]);
+    if v[2].is_finite() {
+        json!([lon, lat, v[2]])
+    } else {
+        json!([lon, lat])
+    }
 }
 
-/// Сохранить тела итога слоя `layer`: план, который ушёл в RustGIS, и тела
-/// с высотой. Не вышло - сцена покажет контуры, расчёт от этого не страдает.
-fn keep_bodies(dir: &std::path::Path, layer: &str, plan: &[J], bodies: Vec<J>) {
+/// Геометрия итога с высотой в градусах: тело - треугольниками
+/// MultiPolygon, как модуль пишет тела, линия и точка - с Z. Объект
+/// источника - None, у него своя геометрия слоя.
+fn geom_3d(g: &Geom, utm: &Utm) -> J {
+    match g {
+        Geom::Mesh(b) => {
+            let tris: Vec<J> = b
+                .faces
+                .iter()
+                .filter_map(|t| {
+                    let p = |i: u32| b.verts.get(i as usize).map(|v| lonlat_z(utm, v));
+                    Some(json!([[p(t[0])?, p(t[1])?, p(t[2])?, p(t[0])?]]))
+                })
+                .collect();
+            json!({"type": "MultiPolygon", "coordinates": tris})
+        }
+        Geom::Line(p) => json!({
+            "type": "LineString",
+            "coordinates": p.iter().map(|q| lonlat_z(utm, q)).collect::<Vec<_>>(),
+        }),
+        Geom::Point(p) => json!({"type": "Point", "coordinates": lonlat_z(utm, p)}),
+        Geom::Source(_) => J::Null,
+    }
+}
+
+/// Геометрии итога с высотой по объектам: их берут сцена и следующие
+/// инструменты, слой RustGIS высоты не держит.
+fn geoms_3d(o: &tool_spec::Output, utm: &Utm) -> Vec<J> {
+    o.features.iter().map(|f| geom_3d(&f.geom, utm)).collect()
+}
+
+/// Сохранить 3D итога слоя `layer`: план, который ушёл в RustGIS, и
+/// геометрии с высотой. Не вышло - сцена покажет план, расчёт от этого
+/// не страдает.
+fn keep_bodies(dir: &std::path::Path, layer: &str, plan: &[J], geoms: Vec<J>) {
     let firsts: Vec<J> = plan.iter().map(|f| first_point(&f["geometry"])).collect();
-    let doc = json!({"plan": firsts, "bodies": bodies});
+    let doc = json!({"plan": firsts, "geoms": geoms});
     let _ = std::fs::create_dir_all(dir);
     let _ = std::fs::write(bodies_file(dir, layer), doc.to_string());
+}
+
+/// Отметки геометрии итога: наименьшая и наибольшая Z.
+fn z_range(g: &Geom) -> Option<(f64, f64)> {
+    let pts: Vec<f64> = match g {
+        Geom::Mesh(b) => b.verts.iter().map(|v| v[2]).collect(),
+        Geom::Line(p) => p.iter().map(|v| v[2]).collect(),
+        _ => return None,
+    };
+    let z: Vec<f64> = pts.into_iter().filter(|z| z.is_finite()).collect();
+    let lo = z.iter().copied().fold(f64::INFINITY, f64::min);
+    let hi = z.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    (lo <= hi).then_some((lo, hi))
 }
 
 /// Первая точка геометрии - метка объекта плана.
@@ -691,7 +881,34 @@ fn with_bodies_in(dir: &std::path::Path, layer: &str, fc: J) -> J {
     if !same {
         return fc;
     }
-    json!({"type": "FeatureCollection", "features": doc["bodies"]})
+    // геометрии с высотой на место плана, поля - слоя RustGIS
+    let geoms: Vec<J> = match doc.get("geoms") {
+        Some(J::Array(g)) => g.clone(),
+        _ => doc["bodies"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|f| f["geometry"].clone())
+            .collect(),
+    };
+    let features: Vec<J> = feats
+        .into_iter()
+        .zip(geoms)
+        .map(|(mut f, g)| {
+            if !g.is_null() {
+                f["geometry"] = g;
+            }
+            f
+        })
+        .collect();
+    let mut out = fc;
+    out["features"] = J::Array(features);
+    out
+}
+
+/// Есть ли у слоя 3D итога Isoliner3D.
+fn has_3d(dir: &std::path::Path, layer: &str) -> bool {
+    bodies_file(dir, layer).is_file()
 }
 
 fn out_value(v: &tool_spec::OutValue) -> J {
@@ -707,6 +924,11 @@ fn out_value(v: &tool_spec::OutValue) -> J {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Запуск без окна сцены.
+    fn run_t(req: &J, cat: &Catalog, lang: Lang) -> J {
+        run(req, cat, lang, &|_| Ok(()))
+    }
 
     fn catalog() -> Catalog {
         tool_spec::parse_catalog(include_bytes!("../../../fixtures/tools.json")).unwrap()
@@ -837,7 +1059,7 @@ mod tests {
                 "anchor": 0, "segments": v["SEGMENTS"]},
             "layers": {"Оси": fc},
         });
-        let got = run(&req, &cat, Lang::Ru);
+        let got = run_t(&req, &cat, Lang::Ru);
         assert!(got["ok"].is_object(), "{got}");
         let layers = got["ok"]["layers"].as_array().unwrap();
         assert_eq!(layers.len(), 1);
@@ -915,7 +1137,7 @@ mod tests {
                 "Инклинометрия": {"type": "FeatureCollection", "features": survey},
             },
         });
-        let got = run(&req, &catalog(), Lang::Ru);
+        let got = run_t(&req, &catalog(), Lang::Ru);
         assert!(got["ok"].is_object(), "{got}");
         let feats = got["ok"]["layers"][0]["geojson"]["features"]
             .as_array()
@@ -958,7 +1180,7 @@ mod tests {
         assert!(msgs[0].contains("X точка, Y точка, Z z"), "{}", msgs[0]);
 
         // строковые аргументы сообщений переводятся, как в QGIS
-        let en = run(&req, &catalog(), Lang::En);
+        let en = run_t(&req, &catalog(), Lang::En);
         let first = en["ok"]["messages"][0].as_str().unwrap_or("");
         assert!(first.contains("X point, Y point"), "{first}");
 
@@ -974,9 +1196,9 @@ mod tests {
         req["layers"]["Устья"] = json!({"type": "FeatureCollection", "features": table});
         req["params"]["zfield"] = J::Null;
         // без кода системы - ошибка, а не стволы неизвестно где
-        assert!(run(&req, &catalog(), Lang::En)["error"].is_string());
+        assert!(run_t(&req, &catalog(), Lang::En)["error"].is_string());
         req["params"]["crs"] = json!("28410");
-        let got = run(&req, &catalog(), Lang::Ru);
+        let got = run_t(&req, &catalog(), Lang::Ru);
         let fc = &got["ok"]["layers"][0]["geojson"];
         assert_eq!(fc["crs"]["properties"]["name"], "EPSG:28410", "{got}");
         let msgs: Vec<&J> = got["ok"]["messages"].as_array().unwrap().iter().collect();
@@ -1021,7 +1243,7 @@ mod tests {
         };
         let plan = vec![json!({"type": "Feature", "properties": {},
             "geometry": out_geometry(&out.features[0].geom, &Frame::Utm(utm), &HashMap::new())})];
-        keep_bodies(&dir, "Тела выработок", &plan, bodies_3d(&out, &utm));
+        keep_bodies(&dir, "Тела выработок", &plan, geoms_3d(&out, &utm));
         let fc = json!({"type": "FeatureCollection", "features": plan});
         let got = with_bodies_in(&dir, "Тела выработок", fc.clone());
         let tri = &got["features"][0]["geometry"]["coordinates"][0][0];
@@ -1034,13 +1256,119 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// Прогоны модуля для инструмента `tool`.
+    fn runs_of(tool: &str) -> Vec<J> {
+        let runs: J = serde_json::from_slice(
+            &std::fs::read(format!(
+                "{}/../../fixtures/tool_runs.json",
+                env!("CARGO_MANIFEST_DIR")
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        runs["runs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["tool"] == tool)
+            .cloned()
+            .collect()
+    }
+
+    /// Тело в метрах образца - итогом Isoliner3D в хранилище слоя
+    /// `layer` около Уфы. Ответ - план слоя, каким его отдаст RustGIS.
+    fn body_layer(layer: &str, verts: &J, faces: &J) -> (J, Utm, [f64; 2]) {
+        let utm = Utm::at(56.0, 54.7);
+        let [e0, n0] = utm.forward(56.0, 54.7);
+        let verts: Vec<[f64; 3]> = verts
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| {
+                [
+                    e0 + v[0].as_f64().unwrap(),
+                    n0 + v[1].as_f64().unwrap(),
+                    v[2].as_f64().unwrap(),
+                ]
+            })
+            .collect();
+        let faces: Vec<[u32; 3]> = faces
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| {
+                [
+                    f[0].as_u64().unwrap() as u32,
+                    f[1].as_u64().unwrap() as u32,
+                    f[2].as_u64().unwrap() as u32,
+                ]
+            })
+            .collect();
+        let g = Geom::Mesh(tool_spec::Body { verts, faces });
+        let plan = vec![json!({"type": "Feature", "row": 0, "properties": {},
+            "geometry": out_geometry(&g, &Frame::Utm(utm), &HashMap::new())})];
+        keep_bodies(&bodies_dir(), layer, &plan, vec![geom_3d(&g, &utm)]);
+        (
+            json!({"type": "FeatureCollection", "features": plan}),
+            utm,
+            [e0, n0],
+        )
+    }
+
+    /// 2.23 по итогу тел в RustGIS: уровень и объёмы как у модуля, слой
+    /// без тел Isoliner3D - понятная ошибка.
+    #[test]
+    fn fill_to_volume_from_a_body_layer() {
+        let cat = catalog();
+        let tool = cat.tool("fill_to_volume").unwrap();
+        for (k, r) in runs_of("fill_to_volume").iter().enumerate() {
+            let layer = format!("Тело {k}");
+            let (fc, _, _) = body_layer(&layer, &r["input"]["verts"], &r["input"]["faces"]);
+            let v = &r["values"];
+            let opt = |key: &str| {
+                let p = tool.param(key).unwrap();
+                json!(p.options[v[key].as_u64().unwrap() as usize].en)
+            };
+            let req = json!({"kind": "tool", "id": "fill-to-volume", "lang": "ru",
+                "params": {"shell": layer, "mode": opt("MODE"), "target": v["TARGET"],
+                    "unit": opt("UNIT"), "cell": v["CELL"]},
+                "layers": {layer.clone(): fc}});
+            let got = run_t(&req, &cat, Lang::Ru);
+            assert!(got["ok"].is_object(), "{k}: {got}");
+            let f = &got["ok"]["layers"][0]["geojson"]["features"][0]["properties"];
+            let want = &r["output"]["features"][0]["values"];
+            let tol = &r["tolerance"];
+            let lvl = (f["level"].as_f64().unwrap() - want[1].as_f64().unwrap()).abs();
+            assert!(lvl < tol["level"].as_f64().unwrap(), "{k}: уровень {f}");
+            let (a, b) = (f["volume"].as_f64().unwrap(), want[2].as_f64().unwrap());
+            assert!(
+                (a - b).abs() / b.abs().max(1.0) < tol["volume_rel"].as_f64().unwrap(),
+                "{k}: {a} {b}"
+            );
+            assert_eq!(f["mode"], want[0]);
+            // заполненная часть - в проект планом с отметками, в сцену телом
+            assert!(f["z_min"].is_number() && f["z_max"].is_number(), "{f}");
+        }
+        // слой RustGIS без тел - объяснение, а не «значение не того вида»
+        let plain = json!({"type": "FeatureCollection", "features": [
+            {"type": "Feature", "properties": {}, "geometry": {"type": "Polygon",
+             "coordinates": [[[56.0, 54.7], [56.001, 54.7], [56.0, 54.701], [56.0, 54.7]]]}}]});
+        let req = json!({"kind": "tool", "id": "fill-to-volume", "lang": "ru",
+            "params": {"shell": "Контур"}, "layers": {"Контур": plain}});
+        let e = run_t(&req, &cat, Lang::Ru)["error"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+        assert!(e.starts_with("Слой «Контур» - не тела Isoliner3D"), "{e}");
+    }
+
     #[test]
     fn bad_requests_get_an_error() {
         let cat = catalog();
-        let r = run(&json!({"id": "fill-to-volume"}), &cat, Lang::En);
-        assert_eq!(r["error"], "No tool 'fill-to-volume'.");
+        let r = run_t(&json!({"id": "grid-to-shell"}), &cat, Lang::En);
+        assert_eq!(r["error"], "No tool 'grid-to-shell'.");
         // слоя с таким именем нет в запросе
-        let r = run(
+        let r = run_t(
             &json!({"id": "sweep-body", "params": {"input": "x"}, "layers": {}}),
             &cat,
             Lang::En,
@@ -1053,13 +1381,13 @@ mod tests {
         );
         // пункт списка не из списка, число текстом не число
         let fc = json!({"type": "FeatureCollection", "features": []});
-        let r = run(
+        let r = run_t(
             &json!({"id": "sweep-body", "params": {"input": "a", "profile": "Square"}, "layers": {"a": fc}}),
             &cat,
             Lang::En,
         );
         assert!(r["error"].is_string(), "{r}");
-        let r = run(
+        let r = run_t(
             &json!({"id": "sweep-body", "params": {"input": "a", "width": "wide"}, "layers": {"a": fc}}),
             &cat,
             Lang::En,
@@ -1069,7 +1397,7 @@ mod tests {
         let junk = json!({"type": "FeatureCollection", "features": [
             {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [["a"], [1]]}},
             {"type": "Feature", "geometry": null}, 5]});
-        let r = run(
+        let r = run_t(
             &json!({"id": "sweep-body", "params": {"input": "a"}, "layers": {"a": junk}}),
             &cat,
             Lang::En,

@@ -64,7 +64,7 @@ pub fn answer(line: &str, ctx: &Context<'_>) -> J {
     let id = request["id"].as_str().unwrap_or("");
     // инструмент панели Tools RustGIS: окно рисует RustGIS по plugin.json
     if request["kind"] == "tool" {
-        return crate::rgtools::run(&request, ctx.catalog, lang);
+        return crate::rgtools::run(&request, ctx.catalog, lang, ctx.launch);
     }
     match id {
         "scene" => scene(&params, lang, ctx),

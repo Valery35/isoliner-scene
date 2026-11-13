@@ -74,11 +74,17 @@ fn main() -> ExitCode {
     // окно сцены, его запускает команда scene отдельным процессом
     if first == Some("scene") {
         let launch = scene_app::Launch::from_args(args.into_iter().skip(2));
-        // окно сцены из слоёв проекта держит замок, пока живо: команда
-        // scene тогда только переписывает пакет
-        let _lock = (launch.path.as_deref() == Some(session::scene_path().as_path()))
-            .then(session::hold_lock)
-            .flatten();
+        // окно сцены из слоёв и окно объёмного итога держат замок своего
+        // пакета, пока живы: команда scene и инструмент тогда только
+        // переписывают пакет, окно перечитывает его само
+        let ours = session::scene_path()
+            .parent()
+            .map(std::path::Path::to_path_buf);
+        let _lock = launch
+            .path
+            .as_deref()
+            .filter(|p| ours.as_deref().is_some_and(|d| p.starts_with(d)))
+            .and_then(session::hold_lock);
         return match scene_app::run(launch) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
