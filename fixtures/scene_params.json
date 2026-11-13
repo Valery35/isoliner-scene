@@ -267,7 +267,8 @@
        "en": "labels to the near edges",
        "kind": "bool",
        "where": "both",
-       "default": true
+       "default": true,
+       "row_with": "box_edges"
       },
       {
        "key": "grid_planes",
