@@ -114,6 +114,8 @@ pub fn project_layers<R: BufRead, W: Write>(
         }
         let fc = host.call("host.features", json!({"layer": id}))?;
         let name = l["name"].as_str().unwrap_or("").to_string();
+        // итог тел Isoliner3D - телами с высотой, а не контуром плана
+        let fc = crate::rgtools::with_bodies(&name, fc);
         out.push((name, fc));
     }
     Ok(out)

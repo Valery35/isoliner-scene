@@ -513,6 +513,9 @@ pub fn run(req: &J, catalog: &Catalog, lang: Lang) -> J {
                 })
             })
             .collect();
+        if o.geometry == OutGeometry::Mesh {
+            keep_bodies(&bodies_dir(), &name, &features, bodies_3d(o, &utm));
+        }
         layers.push(json!({
             "name": name,
             "geojson": {"type": "FeatureCollection", "features": features},
@@ -529,6 +532,110 @@ pub fn run(req: &J, catalog: &Catalog, lang: Lang) -> J {
         }
     }
     json!({"ok": {"layers": layers, "messages": messages}})
+}
+
+/// Где лежат тела итогов для сцены: рядом с пакетом сцены из слоёв.
+fn bodies_dir() -> std::path::PathBuf {
+    crate::session::scene_path().with_extension("bodies")
+}
+
+/// Имя файла тел слоя: имя слоя без знаков, которых не любят папки.
+fn bodies_file(dir: &std::path::Path, layer: &str) -> std::path::PathBuf {
+    let safe: String = layer
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == ' ' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    dir.join(format!("{safe}.json"))
+}
+
+/// Тела итога в градусах с высотой: треугольниками MultiPolygon, как
+/// модуль пишет тела. По ним сцена из слоёв покажет тело, а не контур.
+fn bodies_3d(o: &tool_spec::Output, utm: &Utm) -> Vec<J> {
+    o.features
+        .iter()
+        .map(|f| {
+            let tris: Vec<J> = match &f.geom {
+                Geom::Mesh(b) => b
+                    .faces
+                    .iter()
+                    .filter_map(|t| {
+                        let p = |i: u32| -> Option<J> {
+                            let v = b.verts.get(i as usize)?;
+                            let [lon, lat] = utm.inverse(v[0], v[1]);
+                            Some(json!([lon, lat, v[2]]))
+                        };
+                        Some(json!([[p(t[0])?, p(t[1])?, p(t[2])?, p(t[0])?]]))
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            json!({"type": "Feature", "properties": {},
+                   "geometry": {"type": "MultiPolygon", "coordinates": tris}})
+        })
+        .collect()
+}
+
+/// Сохранить тела итога слоя `layer`: план, который ушёл в RustGIS, и тела
+/// с высотой. Не вышло - сцена покажет контуры, расчёт от этого не страдает.
+fn keep_bodies(dir: &std::path::Path, layer: &str, plan: &[J], bodies: Vec<J>) {
+    let firsts: Vec<J> = plan.iter().map(|f| first_point(&f["geometry"])).collect();
+    let doc = json!({"plan": firsts, "bodies": bodies});
+    let _ = std::fs::create_dir_all(dir);
+    let _ = std::fs::write(bodies_file(dir, layer), doc.to_string());
+}
+
+/// Первая точка геометрии - метка объекта плана.
+fn first_point(g: &J) -> J {
+    let mut c = &g["coordinates"];
+    while c
+        .as_array()
+        .is_some_and(|a| a.first().is_some_and(J::is_array))
+    {
+        c = &c[0];
+    }
+    c.clone()
+}
+
+/// Слой проекта для сцены: если это итог тел Isoliner3D (то же имя, те же
+/// объекты плана), его объекты - тела с высотой, иначе слой как есть.
+pub fn with_bodies(layer: &str, fc: J) -> J {
+    with_bodies_in(&bodies_dir(), layer, fc)
+}
+
+fn with_bodies_in(dir: &std::path::Path, layer: &str, fc: J) -> J {
+    let Ok(text) = std::fs::read_to_string(bodies_file(dir, layer)) else {
+        return fc;
+    };
+    let Ok(doc) = serde_json::from_str::<J>(&text) else {
+        return fc;
+    };
+    let feats = fc["features"].as_array().cloned().unwrap_or_default();
+    let plan = doc["plan"].as_array().cloned().unwrap_or_default();
+    let close = |a: &J, b: &J| {
+        let (a, b) = (a.as_array(), b.as_array());
+        match (a, b) {
+            (Some(a), Some(b)) if a.len() >= 2 && b.len() >= 2 => (0..2).all(|i| {
+                let (x, y) = (a[i].as_f64(), b[i].as_f64());
+                x.zip(y).is_some_and(|(x, y)| (x - y).abs() < 1e-7)
+            }),
+            _ => false,
+        }
+    };
+    let same = feats.len() == plan.len()
+        && feats
+            .iter()
+            .zip(&plan)
+            .all(|(f, p)| close(&first_point(&f["geometry"]), p));
+    if !same {
+        return fc;
+    }
+    json!({"type": "FeatureCollection", "features": doc["bodies"]})
 }
 
 fn out_value(v: &tool_spec::OutValue) -> J {
@@ -798,6 +905,45 @@ mod tests {
         let mut req = req;
         req["layers"]["Устья"] = req["layers"]["Инклинометрия"].clone();
         assert!(run(&req, &catalog(), Lang::En)["error"].is_string());
+    }
+
+    /// Тела итога идут в сцену телами: слой проекта с тем же именем и теми
+    /// же объектами плана заменяется телами с высотой. Другой слой или
+    /// слой после правки - как есть.
+    #[test]
+    fn scene_gets_bodies_of_a_result_layer() {
+        let dir = std::env::temp_dir().join(format!("isoliner-bodies-{}", std::process::id()));
+        let utm = Utm::at(56.0, 54.7);
+        let [e, n] = utm.forward(56.0, 54.7);
+        let out = tool_spec::Output {
+            fields: Vec::new(),
+            features: vec![tool_spec::OutFeature {
+                geom: Geom::Mesh(tool_spec::Body {
+                    verts: vec![[e, n, -300.0], [e + 10.0, n, -300.0], [e, n + 10.0, -297.0]],
+                    faces: vec![[0, 1, 2]],
+                }),
+                source: Some(1),
+                values: Vec::new(),
+                named: Vec::new(),
+            }],
+            keep_source: None,
+            name: None,
+            geometry: OutGeometry::Mesh,
+            replace: false,
+        };
+        let plan = vec![json!({"type": "Feature", "properties": {},
+            "geometry": out_geometry(&out.features[0].geom, &utm, &HashMap::new())})];
+        keep_bodies(&dir, "Тела выработок", &plan, bodies_3d(&out, &utm));
+        let fc = json!({"type": "FeatureCollection", "features": plan});
+        let got = with_bodies_in(&dir, "Тела выработок", fc.clone());
+        let tri = &got["features"][0]["geometry"]["coordinates"][0][0];
+        assert_eq!(tri[2][2], -297.0);
+        // другое имя или другие объекты - слой как есть
+        assert_eq!(with_bodies_in(&dir, "axes", fc.clone()), fc);
+        let moved = json!({"type": "FeatureCollection", "features": [
+            {"type": "Feature", "geometry": {"type": "Point", "coordinates": [10.0, 10.0]}}]});
+        assert_eq!(with_bodies_in(&dir, "Тела выработок", moved.clone()), moved);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
