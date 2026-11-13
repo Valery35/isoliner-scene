@@ -428,14 +428,15 @@ pub fn run(req: &J, catalog: &Catalog, lang: Lang) -> J {
     };
     let mut layers = Vec::new();
     for (key, o) in &out {
-        let label = tool
-            .param(key)
-            .map(|p| p.label.get(lang).to_string())
-            .unwrap_or_else(|| key.clone());
-        let name = o
-            .name
-            .map(|n| tool.translate(n, lang).to_string())
-            .unwrap_or(label);
+        // имя слоя - подпись выхода на языке RustGIS, у выхода без поля -
+        // имя из расчёта
+        let name = tool.param(key).map_or_else(
+            || {
+                o.name
+                    .map_or(key.clone(), |n| tool.translate(n, lang).to_string())
+            },
+            |p| p.label.get(lang).to_string(),
+        );
         let features: Vec<J> = o
             .features
             .iter()
@@ -622,6 +623,7 @@ mod tests {
         assert!(got["ok"].is_object(), "{got}");
         let layers = got["ok"]["layers"].as_array().unwrap();
         assert_eq!(layers.len(), 1);
+        assert_eq!(layers[0]["name"], "Тела выработок");
         let feats = layers[0]["geojson"]["features"].as_array().unwrap();
         assert_eq!(feats.len(), 1);
         let want = &r["output"]["features"][0]["values"];
