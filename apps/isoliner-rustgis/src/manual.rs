@@ -39,7 +39,9 @@ fn heads(lang: &str) -> (&'static str, &'static str) {
 fn build(lang: &str) -> String {
     let root = root();
     let read = |p: std::path::PathBuf| {
-        std::fs::read_to_string(&p).unwrap_or_else(|e| format!("<!-- {}: {e} -->", p.display()))
+        std::fs::read_to_string(&p)
+            .map(|t| t.replace("\r\n", "\n"))
+            .unwrap_or_else(|e| format!("<!-- {}: {e} -->", p.display()))
     };
     let chapter = read(root.join(format!("doc/manual/rustgis.{lang}.md")));
     // служебные комментарии главы - не для читателя
@@ -106,7 +108,10 @@ fn manual_is_built_from_the_chapter_and_the_tool_pages() {
             .collect::<Vec<_>>()
             .join("\n");
         assert!(!prose.contains('—'), "{lang}: длинное тире");
-        let saved = std::fs::read_to_string(&path).unwrap_or_default();
+        // git на Windows может отдать файл с \r\n (core.autocrlf)
+        let saved = std::fs::read_to_string(&path)
+            .unwrap_or_default()
+            .replace("\r\n", "\n");
         assert_eq!(
             saved, got,
             "{lang}: руководство устарело, ISOLINER_MANUAL=1"
