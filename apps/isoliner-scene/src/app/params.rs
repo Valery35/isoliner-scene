@@ -64,6 +64,10 @@ pub(super) struct Param {
     pub step: Option<f64>,
     #[serde(default)]
     pub choices: Vec<Choice>,
+    /// Ключ поля, в строке которого стоит эта галка: «подписи к ближним»
+    /// справа от выбора рёбер, как в окне модуля.
+    #[serde(default)]
+    pub row_with: Option<String>,
 }
 
 impl Param {
@@ -530,6 +534,13 @@ impl SceneApp {
         // флажки отдельно, под таблицей: так строки таблицы ровные
         let (flags, rows): (Vec<&Param>, Vec<&Param>) =
             params.into_iter().partition(|p| p.kind == "bool");
+        // галки, стоящие в строке другого поля, и остальные
+        let in_row = |p: &&Param| {
+            p.row_with
+                .as_ref()
+                .is_some_and(|k| rows.iter().any(|r| &r.key == k))
+        };
+        let (attached, flags): (Vec<&Param>, Vec<&Param>) = flags.into_iter().partition(in_row);
         ui.add_enabled_ui(on, |ui| {
             egui::Grid::new(("p", s.text.ru.as_str()))
                 .num_columns(2)
@@ -547,22 +558,32 @@ impl SceneApp {
                         i += same.len();
                         ui.label(head.text.get(lang));
                         ui.horizontal(|ui| {
-                            for p in same {
+                            for p in &same {
                                 self.field(ui, p, lang);
+                            }
+                            for p in attached.iter().filter(|a| {
+                                same.iter().any(|r| a.row_with.as_ref() == Some(&r.key))
+                            }) {
+                                self.flag(ui, p, lang);
                             }
                         });
                         ui.end_row();
                     }
                 });
             for p in flags {
-                if let Some(Val::Flag(mut x)) = self.get(&p.key)
-                    && ui.checkbox(&mut x, p.text.get(lang)).changed()
-                {
-                    self.set(&p.key, Val::Flag(x));
-                    self.dirty = true;
-                }
+                self.flag(ui, p, lang);
             }
         });
+    }
+
+    /// Галка с подписью из списка.
+    fn flag(&mut self, ui: &mut egui::Ui, p: &Param, lang: Lang) {
+        if let Some(Val::Flag(mut x)) = self.get(&p.key)
+            && ui.checkbox(&mut x, p.text.get(lang)).changed()
+        {
+            self.set(&p.key, Val::Flag(x));
+            self.dirty = true;
+        }
     }
 
     /// Поле значения по виду из списка.
@@ -707,6 +728,23 @@ mod tests {
                 assert_eq!(app.get(k), Some(v), "{k}");
             }
         }
+        // галка в строке другого поля: это поле есть в той же секции
+        for sec in s.groups.iter().flat_map(|g| &g.sections) {
+            for p in sec.params.iter().filter(|p| p.shown()) {
+                if let Some(k) = &p.row_with {
+                    assert!(
+                        sec.params.iter().any(|r| &r.key == k && r.shown()),
+                        "{}: row_with {k}",
+                        p.key
+                    );
+                }
+            }
+        }
+        let p: Param = serde_json::from_str(
+            r#"{"key":"box_near","ru":"а","en":"a","kind":"bool","where":"both","row_with":"box_edges"}"#,
+        )
+        .expect("поле с row_with разбирается");
+        assert_eq!(p.row_with.as_deref(), Some("box_edges"));
         for k in ["vex", "camera.azimuth", "axes_on", "side", "zlo", "theme"] {
             assert!(keys.contains(&k), "{k} нет в списке модуля");
         }
