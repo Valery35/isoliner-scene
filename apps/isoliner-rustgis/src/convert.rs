@@ -245,6 +245,9 @@ fn geometry(g: &Geom) -> J {
         Geom::Line(p) => json!({"points": p}),
         Geom::Point(p) => json!({"xyz": p}),
         Geom::Source(id) => json!({"source": id}),
+        Geom::None => J::Null,
+        Geom::Grid(g) => json!({"grid": {"transform": g.transform, "nx": g.nx, "ny": g.ny,
+            "z0": g.z0, "dz": g.dz, "bands": g.bands}}),
     }
 }
 
@@ -282,6 +285,8 @@ pub fn outputs(tool: &Tool, out: &BTreeMap<String, Output>, lang: tool_spec::Lan
             OutGeometry::Line => "line",
             OutGeometry::Point => "point",
             OutGeometry::Source => "source",
+            OutGeometry::None => "none",
+            OutGeometry::Grid => "grid",
         };
         map.insert(
             key.clone(),

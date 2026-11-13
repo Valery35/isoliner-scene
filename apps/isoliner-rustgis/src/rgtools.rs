@@ -620,6 +620,8 @@ fn out_geometry(g: &Geom, frame: &Frame, geoms: &HashMap<i64, J>) -> J {
         }),
         Geom::Point(p) => json!({"type": "Point", "coordinates": lonlat(utm, p)}),
         Geom::Source(id) => geoms.get(id).cloned().unwrap_or(J::Null),
+        // строка таблицы и куб - без геометрии слоя
+        Geom::None | Geom::Grid(_) => J::Null,
     }
 }
 
@@ -905,7 +907,7 @@ fn geom_3d(g: &Geom, utm: &Utm) -> J {
             "coordinates": p.iter().map(|q| lonlat_z(utm, q)).collect::<Vec<_>>(),
         }),
         Geom::Point(p) => json!({"type": "Point", "coordinates": lonlat_z(utm, p)}),
-        Geom::Source(_) => J::Null,
+        Geom::Source(_) | Geom::None | Geom::Grid(_) => J::Null,
     }
 }
 
@@ -1810,13 +1812,22 @@ mod tests {
                 .iter()
                 .find(|f| f["id"] == 8)
                 .unwrap();
-            let ring: Vec<J> = f8["parts"][0]
-                .as_array()
-                .unwrap()
+            // контур - от его угла: прогоны модуля бывают и в метрах
+            // проекта (435 000, 6 062 000), в зону кладётся только форма
+            let pts = f8["parts"][0].as_array().unwrap();
+            let min = |k: usize| {
+                pts.iter()
+                    .map(|p| p[k].as_f64().unwrap())
+                    .fold(f64::INFINITY, f64::min)
+            };
+            let (mx, my) = (min(0), min(1));
+            let ring: Vec<J> = pts
                 .iter()
                 .map(|p| {
-                    let [lon, lat] =
-                        utm.inverse(e0 + p[0].as_f64().unwrap(), n0 + p[1].as_f64().unwrap());
+                    let [lon, lat] = utm.inverse(
+                        e0 + p[0].as_f64().unwrap() - mx,
+                        n0 + p[1].as_f64().unwrap() - my,
+                    );
                     json!([lon, lat])
                 })
                 .collect();
