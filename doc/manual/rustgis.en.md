@@ -9,22 +9,23 @@ version 0.5.
 
 ## Installation
 
-1. Download `isoliner3d-0.5.0.rgplugin` from the release page.
+1. Download `isoliner3d-0.5.1.rgplugin` from the release page.
 2. In RustGIS open the Plugins tab and click Install from File.
 3. Choose the package and confirm the installation.
 
 RustGIS warns that the plugin is a program on the computer and not a
 sandboxed module. All process plugins of RustGIS work this way.
 
-After installation the Plugins tab has an Isoliner3D group with the
-Isoliner3D Scene and About Isoliner3D buttons and a button per tool.
-The same tools are in the RustGIS Tools pane, in the Isoliner3D
+After installation the RustGIS ribbon has an Isoliner3D tab of its own.
+The Scene group has the Isoliner3D Scene and About Isoliner3D buttons,
+the Tools group has the Bodies, Shells, Boreholes, Reports and Density
+menus. The same tools are in the RustGIS Tools pane, in the Isoliner3D
 group.
 
 Installation from the command line.
 
 ```
-rustgis-cli plugins install isoliner3d-0.5.0.rgplugin
+rustgis-cli plugins install isoliner3d-0.5.1.rgplugin
 ```
 
 Removal is in the Plugin Manager, on the Isoliner3D row.
@@ -117,6 +118,6 @@ tool that needs bodies then says the layer has none.
 A single run checks the package, RustGIS installs nothing.
 
 ```
-rustgis-cli run --plugin isoliner3d-0.5.0.rgplugin --data axes.geojson ^
+rustgis-cli run --plugin isoliner3d-0.5.1.rgplugin --data axes.geojson ^
   --cmd "gp.run={\"tool\":\"plugin:isoliner3d/sweep-body\",\"params\":{\"input\":\"axes\",\"elev\":-300}}"
 ```

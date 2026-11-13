@@ -22,7 +22,7 @@ scene-app.workspace = true
 scene-core.workspace = true
 # общая основа расширений RustGIS линейки, отдельное хранилище. Правка
 # крейта на месте - [patch] в .cargo/config.toml или путь вместо git.
-rustgis-kit = { git = "https://github.com/Valery35/rustgis-kit", tag = "v0.1.9" }
+rustgis-kit = { git = "https://github.com/Valery35/rustgis-kit", tag = "v0.1.10" }
 
 [lints]
 workspace = true

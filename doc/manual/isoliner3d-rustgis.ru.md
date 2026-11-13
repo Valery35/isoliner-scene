@@ -8,22 +8,23 @@ Isoliner3D для RustGIS - расширение RustGIS с той же сцен
 
 ## Установка
 
-1. Скачать пакет `isoliner3d-0.5.0.rgplugin` со страницы выпуска.
+1. Скачать пакет `isoliner3d-0.5.1.rgplugin` со страницы выпуска.
 2. В RustGIS открыть вкладку «Модули» и нажать «Установить из файла».
 3. Выбрать пакет и подтвердить установку.
 
 RustGIS предупреждает, что расширение - программа на компьютере, а не
 модуль в песочнице. Так устроены все расширения-программы RustGIS.
 
-После установки на вкладке «Модули» появляется группа Isoliner3D. В ней
-кнопки «Сцена Isoliner3D», «О программе Isoliner3D» и кнопки
-инструментов. Те же инструменты лежат в панели «Инструменты» RustGIS,
-в группе Isoliner3D.
+После установки на ленте RustGIS появляется своя вкладка Isoliner3D. В
+группе «Сцена» кнопки «Сцена Isoliner3D» и «О программе Isoliner3D», в
+группе «Инструменты» меню «Тела», «Оболочки», «Скважины», «Отчёты» и
+«Плотность». Те же инструменты лежат в панели «Инструменты» RustGIS, в
+группе Isoliner3D.
 
 Установка из командной строки.
 
 ```
-rustgis-cli plugins install isoliner3d-0.5.0.rgplugin
+rustgis-cli plugins install isoliner3d-0.5.1.rgplugin
 ```
 
 Удаление - «Менеджер модулей», строка Isoliner3D.
@@ -116,7 +117,7 @@ RustGIS: расширение хранит их рядом со сценой и 
 не ставит.
 
 ```
-rustgis-cli run --plugin isoliner3d-0.5.0.rgplugin --data оси.geojson ^
+rustgis-cli run --plugin isoliner3d-0.5.1.rgplugin --data оси.geojson ^
   --cmd "gp.run={\"tool\":\"plugin:isoliner3d/sweep-body\",\"params\":{\"input\":\"оси\",\"elev\":-300}}"
 ```
 
