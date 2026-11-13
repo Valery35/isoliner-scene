@@ -18,7 +18,9 @@
 
 mod convert;
 mod i18n;
+mod layers;
 mod plugin;
+mod session;
 
 use std::io::{BufRead, Write};
 use std::path::Path;
@@ -94,6 +96,13 @@ fn main() -> ExitCode {
         catalog: &catalog,
         launch: &launch,
     };
+    // сессия RustGIS: программа живёт, пока открыт RustGIS
+    if let Some(lang) = session::hello(&line) {
+        let mut host = session::Host::new(std::io::stdin().lock(), std::io::stdout().lock());
+        session::serve(&mut host, &lang, &ctx);
+        return ExitCode::SUCCESS;
+    }
+    // RustGIS без сессий: одна команда на запуск
     let reply = plugin::answer(&line, &ctx);
     let mut out = std::io::stdout().lock();
     match writeln!(out, "{reply}").and_then(|()| out.flush()) {

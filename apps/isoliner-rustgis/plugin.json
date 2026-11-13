@@ -2,31 +2,29 @@
   "id": "isoliner3d",
   "name": "Isoliner3D",
   "version": "0.3.0",
-  "description": "The Isoliner3D scene and tools for RustGIS. A scene package written by the Isoliner3D window in QGIS opens in its own window with the same camera. Tools 2.11, 2.12, 2.14, 2.17, 2.18, 2.23 and 2.24 compute as in the QGIS plugin.",
+  "description": "The Isoliner3D scene and tools for RustGIS. The project's layers open in the Isoliner3D scene window, and so does a scene package written by the Isoliner3D window in QGIS, with the same toolbar and scene settings as in QGIS. Tools 2.11, 2.12, 2.14, 2.17, 2.18, 2.23 and 2.24 compute as in the QGIS plugin.",
   "author": "Inform++ LLC",
   "license": "Apache-2.0",
   "runtime": "process",
-  "session": false,
+  "session": true,
   "run": { "windows": ["bin/isoliner-rustgis.exe", "rustgis-plugin"] },
   "minRustgisVersion": "0.5.0",
-  "permissions": ["files"],
+  "permissions": ["edit", "files"],
   "commands": [
-    { "id": "scene", "label": "Isoliner3D\nScene", "help": "Open an Isoliner3D scene package (.i3dscene) in the scene window with its camera, parts and fly-through views.", "icon": "view_in_ar", "params": "{\"path\": path to the .i3dscene file; answers the scene name and the number of parts}" },
+    { "id": "scene", "label": "Isoliner3D\nScene", "help": "Open the Isoliner3D scene window: the project's visible layers in 3D, or an Isoliner3D scene package (.i3dscene) with its camera, parts and fly-through views. The scene follows the project's layers while it is open.", "icon": "view_in_ar", "params": "{\"path\"?: path to an .i3dscene file; without it the scene is built from the project's visible vector layers, heights from the Z coordinate; answers the scene name and the number of parts}" },
     { "id": "tools", "label": "Isoliner3D\nTools", "help": "List the Isoliner3D tools available here with their fields in the RustGIS language.", "icon": "construction", "params": "{} (answers the tools with their fields: key, kind, label, hint, default, options, limits)" },
     { "id": "run", "label": "Run\nTool", "help": "Run an Isoliner3D tool on the given values and answer its outputs and report.", "icon": "play_arrow", "params": "{\"tool\": the tool's name from the tools command, \"values\": {field key: value}; a lines field is [{\"id\", \"parts\": [[[x, y, z], ...]], \"attrs\"}], a body field is {\"verts\": [[x, y, z]], \"faces\": [[a, b, c]]}; answers the outputs with bodies and fields and the report lines}" },
     { "id": "about", "label": "About\nIsoliner3D", "help": "About the program: version, a short description and links to the website, GitHub and the Isoliner3D channels.", "icon": "info", "params": "{} (answers the window title, the program title and version, text paragraphs and links with labels in the RustGIS language)" }
   ],
   "i18n": {
     "ru": {
-      "The Isoliner3D scene and tools for RustGIS. A scene package written by the Isoliner3D window in QGIS opens in its own window with the same camera. Tools 2.11, 2.12, 2.14, 2.17, 2.18, 2.23 and 2.24 compute as in the QGIS plugin.": "Сцена и инструменты Isoliner3D для RustGIS. Пакет сцены, записанный окном Isoliner3D в QGIS, открывается в своём окне с той же камерой. Инструменты 2.11, 2.12, 2.14, 2.17, 2.18, 2.23 и 2.24 считают так же, как модуль QGIS.",
+      "The Isoliner3D scene and tools for RustGIS. The project's layers open in the Isoliner3D scene window, and so does a scene package written by the Isoliner3D window in QGIS, with the same toolbar and scene settings as in QGIS. Tools 2.11, 2.12, 2.14, 2.17, 2.18, 2.23 and 2.24 compute as in the QGIS plugin.": "Сцена и инструменты Isoliner3D для RustGIS. Слои проекта открываются в окне сцены Isoliner3D, как и пакет сцены, записанный окном Isoliner3D в QGIS, с той же плашкой и параметрами сцены, что в QGIS. Инструменты 2.11, 2.12, 2.14, 2.17, 2.18, 2.23 и 2.24 считают так же, как модуль QGIS.",
       "Isoliner3D\nScene": "Сцена\nIsoliner3D",
-      "Open an Isoliner3D scene package (.i3dscene) in the scene window with its camera, parts and fly-through views.": "Открыть пакет сцены Isoliner3D (.i3dscene) в окне сцены с его камерой, частями и видами облёта.",
+      "Open the Isoliner3D scene window: the project's visible layers in 3D, or an Isoliner3D scene package (.i3dscene) with its camera, parts and fly-through views. The scene follows the project's layers while it is open.": "Открыть окно сцены Isoliner3D: видимые слои проекта в 3D или пакет сцены Isoliner3D (.i3dscene) с его камерой, частями и видами облёта. Пока окно открыто, сцена следует за слоями проекта.",
       "Isoliner3D\nTools": "Инструменты\nIsoliner3D",
       "List the Isoliner3D tools available here with their fields in the RustGIS language.": "Список инструментов Isoliner3D с полями на языке RustGIS.",
       "Run\nTool": "Запустить\nинструмент",
       "Run an Isoliner3D tool on the given values and answer its outputs and report.": "Расчёт инструмента Isoliner3D по заданным значениям: выходы и отчёт.",
-      "About\nIsoliner3D": "О программе\nIsoliner3D",
-      "About the program: version, a short description and links to the website, GitHub and the Isoliner3D channels.": "О программе: версия, краткое описание и ссылки на сайт, GitHub и каналы Isoliner3D.",
       "About\nIsoliner3D": "О программе\nIsoliner3D",
       "About the program: version, a short description and links to the website, GitHub and the Isoliner3D channels.": "О программе: версия, краткое описание и ссылки на сайт, GitHub и каналы Isoliner3D."
     }

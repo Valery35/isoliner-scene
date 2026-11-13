@@ -1037,6 +1037,7 @@ name = "isoliner-rustgis"
 version = "0.3.0"
 dependencies = [
  "scene-app",
+ "scene-core",
  "scene-format",
  "serde_json",
  "tool-spec",
