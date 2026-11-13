@@ -17,6 +17,7 @@ pollster.workspace = true
 
 # Сверка шейдера с WebGL2: тот же naga, что у wgpu, перевод в GLSL ES 3.0.
 [dev-dependencies]
+serde_json.workspace = true
 naga = { version = "30.0.1", features = ["wgsl-in", "glsl-out"] }
 
 [lints]

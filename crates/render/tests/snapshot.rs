@@ -234,6 +234,72 @@ fn sun_casts_a_shadow() {
     std::fs::write(format!("{dir}/shadow.ppm"), ppm).unwrap();
 }
 
+/// Сцена модуля для сверки теней (рельеф, холмы, гребень, плита):
+/// с тенями заметная доля рельефа темнее, чем без них. Кадр - в
+/// target/snapshots/shadow_demo.ppm, рядом с ним снимок модуля
+/// fixtures/shadow_demo_module.png той же камерой.
+#[test]
+fn module_shadow_scene() {
+    let _turn = gpu_turn();
+    let Ok((device, queue)) = headless() else {
+        return;
+    };
+    let path = format!(
+        "{}/../../fixtures/shadow_demo.i3dscene",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let pkg = read_package(&std::fs::read(path).unwrap()).unwrap();
+    let (lo, hi) = mesh::bounds(&pkg.parts).unwrap();
+    let frame = Frame::around(lo, hi, pkg.meta.vex);
+    let mut scene = GpuScene::upload(&device, &pkg.parts, frame);
+    // оформление пакета окно рисует само
+    for (p, info) in scene.parts.iter_mut().zip(&pkg.meta.parts) {
+        p.visible = !info.decor;
+    }
+    let st = &pkg.meta.state;
+    let num = |k: &str| st.get(k).and_then(serde_json::Value::as_f64).unwrap();
+    let renderer = Renderer::new(&device);
+    let target = Target::new(&device, 800, 600);
+    let mut look = Look {
+        camera: frame.camera_to_view(&pkg.meta.camera.unwrap()),
+        vex: frame.vex,
+        opacity: 1.0,
+        light: (num("light") / 100.0) as f32,
+        sun: Some(render::Sun {
+            azimuth: num("sun_az"),
+            altitude: num("sun_alt"),
+            strength: 0.0,
+        }),
+        background: BG_PLAIN,
+        pixels_per_point: 1.0,
+    };
+    renderer.render(&device, &queue, &target, &scene, &look);
+    let plain = read_rgba(&device, &queue, &target).unwrap();
+    look.sun = look.sun.map(|s| render::Sun {
+        strength: (num("shadow_k") / 100.0) as f32,
+        ..s
+    });
+    renderer.render(&device, &queue, &target, &scene, &look);
+    let lit = read_rgba(&device, &queue, &target).unwrap();
+    let darker = plain
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(lit.as_chunks::<4>().0)
+        .filter(|(p, q)| i16::from(p[0]) - i16::from(q[0]) > 20)
+        .count();
+    let share = darker as f64 / (800.0 * 600.0);
+    // у модуля в тени около пятой части кадра
+    assert!(share > 0.05 && share < 0.4, "в тени {share}");
+    let dir = format!("{}/../../target/snapshots", env!("CARGO_MANIFEST_DIR"));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut ppm = format!("P6\n{} {}\n255\n", target.width, target.height).into_bytes();
+    for p in lit.as_chunks::<4>().0 {
+        ppm.extend_from_slice(&p[..3]);
+    }
+    std::fs::write(format!("{dir}/shadow_demo.ppm"), ppm).unwrap();
+}
+
 /// Цена теней на большой сцене: рельеф 1000 x 1000 ячеек (два
 /// миллиона треугольников), кадр 1600 x 900 с тенями и без. Замер,
 /// а не проверка: `cargo test -p render --release -- --ignored
