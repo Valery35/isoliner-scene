@@ -17,8 +17,8 @@ Isoliner3D для RustGIS 0.5.0 - десять инструментов
 
 Общая часть расширения вынесена в открытый крейт rustgis-kit. На нём строятся расширения RustGIS для Isoliner, Topoliner и Routeliner.
 
-Расширение: https://github.com/Valery35/isoliner-scene/releases/tag/rustgis-v0.5.0
-Крейт: https://github.com/Valery35/rustgis-kit
+Расширение - https://github.com/Valery35/isoliner-scene/releases/tag/rustgis-v0.5.0
+Крейт - https://github.com/Valery35/rustgis-kit
 
 #QGIS #RustGIS #геология #горноедело #3D #ГИС
 
