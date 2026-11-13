@@ -1622,6 +1622,95 @@ impl SceneApp {
         };
     }
 
+    /// Меню выгрузки: GLB, STL, OBJ.
+    fn export_menu(&mut self, ui: &mut egui::Ui) {
+        for (fmt, tip) in [
+            ("glb", "GLB - сцена с цветом, линиями и привязкой"),
+            ("stl", "STL - оболочки для CAD одним телом"),
+            ("obj", "OBJ - оболочки для CAD, часть - группа"),
+        ] {
+            if ui.button(self.t(tip)).clicked() {
+                self.export(fmt);
+                ui.close();
+            }
+        }
+    }
+
+    /// Выгрузить сцену в файл: GLB, STL или OBJ, как кнопка «Выгрузить»
+    /// модуля. Пишутся видимые части в том виде, как на экране (после
+    /// обрезки), координаты настоящие, без преувеличения. В GLB идёт
+    /// и короб пакета, если короб показан, в STL и OBJ - только тела.
+    fn export(&mut self, fmt: &str) {
+        let Some(pkg) = &self.pkg else { return };
+        let shown = |i: usize| {
+            self.scene
+                .as_ref()
+                .is_none_or(|s| s.parts.get(i).is_some_and(|p| p.visible))
+        };
+        let parts: Vec<Part> = pkg
+            .parts
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| {
+                if self.is_decor(*i) {
+                    fmt == "glb" && self.box_opts.on
+                } else {
+                    shown(*i)
+                }
+            })
+            .map(|(_, p)| p.clone())
+            .collect();
+        let title = if pkg.meta.name.is_empty() {
+            "Isoliner3D".to_string()
+        } else {
+            pkg.meta.name.clone()
+        };
+        let data: Option<Vec<u8>> = match fmt {
+            "glb" => Some(scene_format::glb::write(&parts, &title, &pkg.georef)),
+            "stl" => scene_format::cad::stl(&parts, &title),
+            _ => scene_format::cad::obj(&parts, &title).map(String::into_bytes),
+        };
+        let Some(data) = data else {
+            self.status = self
+                .t("Выгружать нечего: на экране нет тел из треугольников.")
+                .to_string();
+            return;
+        };
+        let stem = self
+            .name
+            .as_deref()
+            .and_then(|n| Path::new(n).file_stem())
+            .map_or_else(|| "scene".to_string(), |n| n.to_string_lossy().into_owned());
+        let file = format!("{stem}.{fmt}");
+        #[cfg(not(target_arch = "wasm32"))]
+        let res = {
+            let Some(dest) = rfd::FileDialog::new()
+                .add_filter(fmt.to_uppercase(), &[fmt])
+                .set_file_name(&file)
+                .save_file()
+            else {
+                return;
+            };
+            std::fs::write(&dest, &data)
+                .map(|()| dest.display().to_string())
+                .map_err(|e| e.to_string())
+        };
+        // в браузере файл скачивается в папку загрузок
+        #[cfg(target_arch = "wasm32")]
+        let res = {
+            let mime = match fmt {
+                "glb" => "model/gltf-binary",
+                "obj" => "text/plain",
+                _ => "model/stl",
+            };
+            crate::web::download(&file, &data, mime).map(|()| file.clone())
+        };
+        self.status = match res {
+            Ok(dest) => fill(self.t("Записано: %s"), &[dest]),
+            Err(e) => fill(self.t("Не записалось: %s"), &[e]),
+        };
+    }
+
     /// Охват для кадра, как окно модуля.
     fn span(&self) -> f64 {
         self.pkg
@@ -2414,8 +2503,7 @@ impl SceneApp {
                 }
                 self.probe = None;
             }
-            // выгрузка сцены - здесь пакет .i3dscene
-            "export" | "export_package" => self.save_as(),
+            "export_package" => self.save_as(),
             "spin" => {
                 self.spin = !self.spin;
                 if self.spin {
@@ -2502,6 +2590,8 @@ impl SceneApp {
                             let resp = button(ui, &it.icon, it.tip(lang), checked, enabled);
                             if it.key == "views" {
                                 egui::Popup::menu(&resp).show(|ui| self.views_menu(ui, now));
+                            } else if it.key == "export" {
+                                egui::Popup::menu(&resp).show(|ui| self.export_menu(ui));
                             } else if resp.clicked() {
                                 self.tool_click(&it.key, ui.ctx(), w, h);
                             }

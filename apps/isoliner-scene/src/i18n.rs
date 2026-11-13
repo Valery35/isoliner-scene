@@ -188,6 +188,23 @@ const TABLE: &[(&str, &str)] = &[
         "Вертикальное преувеличение. Единица - натуральный масштаб.",
         "Vertical exaggeration. One is true scale.",
     ),
+    // выгрузка сцены
+    (
+        "GLB - сцена с цветом, линиями и привязкой",
+        "GLB - the scene with colour, lines and georeference",
+    ),
+    (
+        "STL - оболочки для CAD одним телом",
+        "STL - shells for CAD as one body",
+    ),
+    (
+        "OBJ - оболочки для CAD, часть - группа",
+        "OBJ - shells for CAD, a group per part",
+    ),
+    (
+        "Выгружать нечего: на экране нет тел из треугольников.",
+        "Nothing to export: no triangle bodies are shown.",
+    ),
     // окно «Параметры сцены»: подписи полей - из списка модуля
     // fixtures/scene_params.json, здесь только подсказка кнопки
     (
