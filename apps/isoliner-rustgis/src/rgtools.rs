@@ -524,12 +524,12 @@ pub fn run(req: &J, catalog: &Catalog, lang: Lang) -> J {
     let mut messages: Vec<String> = report
         .lines
         .iter()
-        .map(|(_, m)| tool_spec::format(tool.translate(m.template, lang), &m.args))
+        .map(|(_, m)| crate::i18n::report_text(tool, m, lang))
         .collect();
     let out = match result {
         Ok(o) => o,
         Err(e) => {
-            let text = tool_spec::format(tool.translate(e.0.template, lang), &e.0.args);
+            let text = crate::i18n::report_text(tool, &e.0, lang);
             return json!({"error": tr(lang, "Расчёт не удался: %s", &[Arg::Text(text)])});
         }
     };
@@ -956,6 +956,11 @@ mod tests {
             assert_eq!(*m, w[1].as_str().unwrap());
         }
         assert!(msgs[0].contains("X точка, Y точка, Z z"), "{}", msgs[0]);
+
+        // строковые аргументы сообщений переводятся, как в QGIS
+        let en = run(&req, &catalog(), Lang::En);
+        let first = en["ok"]["messages"][0].as_str().unwrap_or("");
+        assert!(first.contains("X point, Y point"), "{first}");
 
         // устья таблицей с X и Y: расчёт в метрах таблицы, как у модуля,
         // итог в тех же метрах с кодом системы

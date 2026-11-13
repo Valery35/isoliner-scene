@@ -197,12 +197,7 @@ fn run(params: &J, lang: Lang, catalog: &Catalog) -> J {
     let lines: Vec<J> = report
         .lines
         .iter()
-        .map(|(level, m)| {
-            json!([
-                level,
-                tool_spec::format(tool.translate(m.template, lang), &m.args)
-            ])
-        })
+        .map(|(level, m)| json!([level, crate::i18n::report_text(tool, m, lang)]))
         .collect();
     match result {
         Ok(out) => json!({ "ok": {
@@ -211,7 +206,7 @@ fn run(params: &J, lang: Lang, catalog: &Catalog) -> J {
             "report": lines,
         }}),
         Err(e) => {
-            let text = tool_spec::format(tool.translate(e.0.template, lang), &e.0.args);
+            let text = crate::i18n::report_text(tool, &e.0, lang);
             json!({
                 "error": tr(lang, "Расчёт не удался: %s", &[Arg::Text(text)]),
                 "report": lines,

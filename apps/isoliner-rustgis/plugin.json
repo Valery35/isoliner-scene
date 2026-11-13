@@ -1,7 +1,7 @@
 {
   "id": "isoliner3d",
   "name": "Isoliner3D",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "The Isoliner3D scene and tools for RustGIS. The project's layers open in the Isoliner3D scene window, and so does a scene package written by the Isoliner3D window in QGIS, with the same toolbar and scene settings as in QGIS. Tools 2.11, 2.12, 2.14, 2.17, 2.18, 2.23 and 2.24 compute as in the QGIS plugin.",
   "author": "Inform++ LLC",
   "license": "Apache-2.0",

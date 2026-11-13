@@ -54,6 +54,21 @@ pub const TABLE: &[(&str, &str)] = &[
     ),
 ];
 
+/// Сообщение расчёта на языке RustGIS: шаблон и строковые аргументы
+/// переводятся по `messages` инструмента, как отчёт модуля в QGIS
+/// (`Report` в `toolspec.py`: «точка» в 2.17 - «point»).
+pub fn report_text(tool: &tool_spec::Tool, m: &tool_spec::Message, lang: Lang) -> String {
+    let args: Vec<Arg> = m
+        .args
+        .iter()
+        .map(|a| match a {
+            Arg::Text(s) => Arg::Text(tool.translate(s, lang).to_string()),
+            other => other.clone(),
+        })
+        .collect();
+    tool_spec::format(tool.translate(m.template, lang), &args)
+}
+
 /// Перевод текста ответа с подстановкой.
 pub fn tr(lang: Lang, ru: &str, args: &[Arg]) -> String {
     let template = match lang {

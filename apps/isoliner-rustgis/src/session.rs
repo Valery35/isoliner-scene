@@ -235,9 +235,13 @@ fn degrees(fc: &J) -> bool {
 /// Куда пишется сцена из слоёв проекта: временная папка, как пакет
 /// кнопки модуля (`<temp>/isoliner3d`).
 pub fn scene_path() -> PathBuf {
-    std::env::temp_dir()
-        .join("isoliner3d")
-        .join("RustGIS.i3dscene")
+    // тесты пишут свой пакет: живая сцена автора и чужие прогоны не задеты
+    let dir = if cfg!(test) {
+        format!("isoliner3d-test-{}", std::process::id())
+    } else {
+        "isoliner3d".to_string()
+    };
+    std::env::temp_dir().join(dir).join("RustGIS.i3dscene")
 }
 
 /// Записать пакет из слоёв проекта: сначала во временный файл, потом
