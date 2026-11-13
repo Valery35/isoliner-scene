@@ -2328,21 +2328,159 @@ impl SceneApp {
         self.toolbar(&ctx, rect, w, h, now);
     }
 
-    /// Плашка значков в левом верхнем углу сцены, в порядке плашки
-    /// окна модуля: перечитать | вид сверху, сброс, вид по разрезу,
-    /// параллельная проекция, короб, рисование (и его снять, замкнуть,
-    /// резать по линии), разметка, снять обрезку, сохранить, вращение,
-    /// виды, видео, буфер, PNG, преувеличение. В конце - тема.
+    /// Состояние кнопки плашки по ключу списка модуля: нажата ли,
+    /// доступна ли. None - у ключа нет действия в программе.
+    fn tool_state(&self, key: &str) -> Option<(bool, bool)> {
+        let loaded = self.pkg.is_some();
+        let shot = self.target.is_some() && self.shot.is_none() && loaded;
+        Some(match key {
+            "params" => (self.params_open, loaded),
+            "top" | "home" | "clip_clear" | "export" | "views" => (false, loaded),
+            "section" => (self.section.is_some(), loaded),
+            "draw" => (self.ruler.is_some(), loaded),
+            "draw_undo" | "draw_close" | "draw_line" => (false, self.ruler.is_some()),
+            "spin" => (self.spin, loaded),
+            "copy" | "png" => (false, shot),
+            // «обновить» модуля здесь - перечитать пакет с диска
+            #[cfg(not(target_arch = "wasm32"))]
+            "rebuild" => (false, self.watch.is_some()),
+            #[cfg(not(target_arch = "wasm32"))]
+            "video" => (self.recording.is_some(), loaded && self.joining.is_none()),
+            _ => return None,
+        })
+    }
+
+    /// Нажата кнопка плашки с ключом из списка модуля.
+    fn tool_click(&mut self, key: &str, ctx: &egui::Context, w: f64, h: f64) {
+        match key {
+            "params" => {
+                self.params_open = !self.params_open;
+                // окно egui меряет себя первым кадром и видно со второго
+                ctx.request_repaint();
+            }
+            "top" => {
+                self.section = None;
+                let v = camera::top(&self.view_camera());
+                self.set_view_camera(v);
+                self.anim = None;
+            }
+            "home" => {
+                self.section = None;
+                let v = camera::reset(&self.view_camera(), self.span());
+                self.set_view_camera(v);
+                self.anim = None;
+            }
+            "section" => {
+                if self.section.is_some() {
+                    self.section = None;
+                    self.status.clear();
+                } else {
+                    self.section_view(w, h);
+                }
+            }
+            "draw" => {
+                self.ruler = if self.ruler.is_some() {
+                    None
+                } else {
+                    Some(Ruler::default())
+                };
+                self.probe = None;
+                self.status.clear();
+            }
+            "draw_undo" => self.ruler_undo(),
+            "draw_close" => {
+                self.ruler_close();
+                if !matches!(self.clip.side, Some(Side::In | Side::Out)) {
+                    self.clip.side = Some(Side::In);
+                }
+                self.apply_clip();
+            }
+            "draw_line" => {
+                if !matches!(
+                    self.clip.side,
+                    Some(Side::Left | Side::Right | Side::Corridor)
+                ) {
+                    self.clip.side = Some(Side::Corridor);
+                }
+                self.apply_clip();
+            }
+            "clip_clear" => {
+                self.clear_clip();
+                if let Some(r) = self.ruler.as_mut() {
+                    r.pts.clear();
+                    r.closed = false;
+                }
+                self.probe = None;
+            }
+            // выгрузка сцены - здесь пакет .i3dscene
+            "export" => self.save_as(),
+            "spin" => {
+                self.spin = !self.spin;
+                if self.spin {
+                    self.section = None;
+                }
+            }
+            "copy" => {
+                self.shot_copy = true;
+                self.take_shot(ctx);
+            }
+            "png" => {
+                self.shot_copy = false;
+                self.take_shot(ctx);
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            "rebuild" => {
+                if let Some(wt) = self.watch.as_mut() {
+                    wt.force();
+                }
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            "video" => {
+                if self.recording.is_some() {
+                    self.finish_film(None, ctx);
+                } else {
+                    self.film_open = true;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Плашка значков в левом верхнем углу сцены - по списку модуля
+    /// (`toolbar.rs`): тот же порядок, разделители, значки и подсказки.
+    /// Кнопки только модуля не показываются, кнопки рисования видны,
+    /// пока рисуется контур. Лишние разделители (в начале, в конце,
+    /// подряд) опускаются.
     fn toolbar(&mut self, ctx: &egui::Context, rect: egui::Rect, w: f64, h: f64, now: f64) {
-        use crate::toolbar::{Icon, button, separator};
+        use crate::toolbar::{button, items, separator};
         let lang = self.lang;
-        let t = |s: &'static str| tr(lang, s);
         let loaded = self.pkg.is_some();
         // Ctrl+C - кадр в буфер, как в окне модуля; поле ввода
         // в фокусе забирает его себе
         let copy_key = loaded
             && !ctx.egui_wants_keyboard_input()
             && ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Copy)));
+        if copy_key && self.tool_state("copy").is_some_and(|(_, on)| on) {
+            self.tool_click("copy", ctx, w, h);
+        }
+        let drawing = self.ruler.is_some();
+        // кнопки, которые видны сейчас, и разделители между ними
+        let mut row: Vec<&crate::toolbar::Item> = Vec::new();
+        for it in items() {
+            if it.sep {
+                if row.last().is_some_and(|p| !p.sep) {
+                    row.push(it);
+                }
+                continue;
+            }
+            let mode_ok = it.mode.as_deref().is_none_or(|m| m == "draw" && drawing);
+            if it.shown() && mode_ok && self.tool_state(&it.key).is_some() {
+                row.push(it);
+            }
+        }
+        while row.last().is_some_and(|p| p.sep) {
+            row.pop();
+        }
         // одна плашка на окно: id глобально единственный
         egui::Area::new(egui::Id::unique("isoliner-tools"))
             .fixed_pos(rect.min + egui::vec2(8.0, 8.0))
@@ -2352,206 +2490,24 @@ impl SceneApp {
                     ui.spacing_mut().item_spacing = egui::vec2(2.0, 2.0);
                     ui.set_max_width((rect.width() - 16.0).max(120.0));
                     ui.horizontal_wrapped(|ui| {
-                        #[cfg(not(target_arch = "wasm32"))]
-                        {
-                            let can = self.watch.is_some();
-                            if button(ui, Icon::Reload, t("Перечитать пакет с диска"), false, can)
-                                .clicked()
-                                && let Some(wt) = self.watch.as_mut()
-                            {
-                                wt.force();
+                        for it in &row {
+                            if it.sep {
+                                separator(ui);
+                                continue;
                             }
-                            separator(ui);
-                        }
-                        if button(ui, Icon::Top, t("Вид сверху, план"), false, loaded).clicked() {
-                            self.section = None;
-                            let v = camera::top(&self.view_camera());
-                            self.set_view_camera(v);
-                            self.anim = None;
-                        }
-                        if button(
-                            ui,
-                            Icon::Home,
-                            t("Сбросить вид: угол обзора, ракурс и кадр по сцене"),
-                            false,
-                            loaded,
-                        )
-                        .clicked()
-                        {
-                            self.section = None;
-                            let v = camera::reset(&self.view_camera(), self.span());
-                            self.set_view_camera(v);
-                            self.anim = None;
-                        }
-                        if button(
-                            ui,
-                            Icon::Section,
-                            t("Вид по разрезу: камера поперёк линии обрезки, поворот заперт, остаются сдвиг и масштаб"),
-                            self.section.is_some(),
-                            loaded,
-                        )
-                        .clicked()
-                        {
-                            if self.section.is_some() {
-                                self.section = None;
-                                self.status.clear();
-                            } else {
-                                self.section_view(w, h);
+                            let (checked, enabled) =
+                                self.tool_state(&it.key).unwrap_or((false, false));
+                            let resp = button(ui, &it.icon, it.tip(lang), checked, enabled);
+                            if it.key == "views" {
+                                egui::Popup::menu(&resp).show(|ui| self.views_menu(ui, now));
+                            } else if resp.clicked() {
+                                self.tool_click(&it.key, ui.ctx(), w, h);
                             }
-                        }
-                        let drawing = self.ruler.is_some();
-                        if button(
-                            ui,
-                            Icon::Draw,
-                            t("Рисовать контур по поверхности: щелчок ставит вершину"),
-                            drawing,
-                            loaded,
-                        )
-                        .clicked()
-                        {
-                            self.ruler = if drawing {
-                                None
-                            } else {
-                                Some(Ruler::default())
-                            };
-                            self.probe = None;
-                            self.status.clear();
-                        }
-                        if drawing {
-                            if button(ui, Icon::Undo, t("Снять последнюю вершину"), false, true)
-                                .clicked()
-                            {
-                                self.ruler_undo();
-                            }
-                            if button(ui, Icon::Done, t("Замкнуть контур и обрезать сцену"), false, true)
-                                .clicked()
-                            {
-                                self.ruler_close();
-                                if !matches!(self.clip.side, Some(Side::In | Side::Out)) {
-                                    self.clip.side = Some(Side::In);
-                                }
-                                self.apply_clip();
-                            }
-                            if button(ui, Icon::Line, t("Завершить линию и резать по ней"), false, true)
-                                .clicked()
-                            {
-                                if !matches!(
-                                    self.clip.side,
-                                    Some(Side::Left | Side::Right | Side::Corridor)
-                                ) {
-                                    self.clip.side = Some(Side::Corridor);
-                                }
-                                self.apply_clip();
-                            }
-                        }
-                        if button(
-                            ui,
-                            Icon::Clear,
-                            t("Снять обрезку, наброски и точку опроса"),
-                            false,
-                            loaded,
-                        )
-                        .clicked()
-                        {
-                            self.clear_clip();
-                            if let Some(r) = self.ruler.as_mut() {
-                                r.pts.clear();
-                                r.closed = false;
-                            }
-                            self.probe = None;
-                        }
-                        if button(
-                            ui,
-                            Icon::Export,
-                            t("Сохранить пакет сцены (.i3dscene)"),
-                            false,
-                            loaded,
-                        )
-                        .clicked()
-                        {
-                            self.save_as();
-                        }
-                        if button(
-                            ui,
-                            Icon::Spin,
-                            t("Вращать сцену (ещё раз - остановить)"),
-                            self.spin,
-                            loaded,
-                        )
-                        .clicked()
-                        {
-                            self.spin = !self.spin;
-                            if self.spin {
-                                self.section = None;
-                            }
-                        }
-                        let views = button(
-                            ui,
-                            Icon::Views,
-                            t("Виды облёта: запомнить текущий вид, убрать, перейти к виду"),
-                            false,
-                            loaded,
-                        );
-                        egui::Popup::menu(&views).show(|ui| self.views_menu(ui, now));
-                        #[cfg(not(target_arch = "wasm32"))]
-                        {
-                            let rec = self.recording.is_some();
-                            if button(
-                                ui,
-                                Icon::Frames,
-                                t("Записать видео: оборот вокруг сцены или облёт по видам, файлом MP4 или кадрами PNG"),
-                                rec,
-                                loaded && self.joining.is_none(),
-                            )
-                            .clicked()
-                            {
-                                if rec {
-                                    self.finish_film(None, ui.ctx());
-                                } else {
-                                    self.film_open = true;
-                                }
-                            }
-                        }
-                        let can_shot = self.target.is_some() && self.shot.is_none() && loaded;
-                        let copy = button(
-                            ui,
-                            Icon::Copy,
-                            t("Положить кадр сцены в буфер обмена (Ctrl+C)"),
-                            false,
-                            can_shot,
-                        )
-                        .clicked();
-                        if copy || (copy_key && can_shot) {
-                            self.shot_copy = true;
-                            self.take_shot(ui.ctx());
-                        }
-                        if button(ui, Icon::Png, t("Сохранить кадр сцены в файл PNG"), false, can_shot)
-                            .clicked()
-                        {
-                            self.shot_copy = false;
-                            self.take_shot(ui.ctx());
-                        }
-                        separator(ui);
-                        // все параметры вида - одно окно, как у модуля
-                        if button(
-                            ui,
-                            Icon::Params,
-                            t("Параметры сцены: вид, камера, оформление, короб, обрезка"),
-                            self.params_open,
-                            loaded,
-                        )
-                        .clicked()
-                        {
-                            self.params_open = !self.params_open;
-                            // окно egui меряет себя первым кадром и видно
-                            // со второго: второй нужен сразу
-                            ui.ctx().request_repaint();
                         }
                     });
                 });
             });
     }
-
     /// Меню видов облёта: запомнить, перейти, убрать, облететь.
     fn views_menu(&mut self, ui: &mut egui::Ui, now: f64) {
         let lang = self.lang;
@@ -2708,6 +2664,22 @@ mod tests {
     /// Окно без видеокарты и пакета: для тестов полей.
     pub(super) fn bare_app() -> SceneApp {
         SceneApp::blank(Lang::Ru, false, None)
+    }
+
+    /// Плашка модуля: у каждой кнопки «both» и «lite» есть действие.
+    /// «Видео» есть только на диске, тест идёт на диске.
+    #[test]
+    fn every_toolbar_button_has_an_action() {
+        let app = bare_app();
+        let shown: Vec<&str> = crate::toolbar::items()
+            .iter()
+            .filter(|i| !i.sep && i.shown())
+            .map(|i| i.key.as_str())
+            .collect();
+        assert!(shown.contains(&"params") && shown.contains(&"top"));
+        for k in shown {
+            assert!(app.tool_state(k).is_some(), "нет действия для {k}");
+        }
     }
 
     #[test]

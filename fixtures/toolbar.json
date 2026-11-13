@@ -1,0 +1,166 @@
+{
+ "version": 1,
+ "items": [
+  {
+   "key": "rebuild",
+   "icon": "rebuild",
+   "ru": "Обновить сцену",
+   "where": "pro",
+   "en": "Update the scene",
+   "svg": "icons/rebuild.svg"
+  },
+  {
+   "sep": true
+  },
+  {
+   "key": "params",
+   "icon": "params",
+   "ru": "Параметры сцены: вид, камера, оформление, короб, обрезка",
+   "where": "both",
+   "en": "Scene settings: view, camera, look, box, clipping",
+   "svg": "icons/params.svg"
+  },
+  {
+   "key": "top",
+   "icon": "top",
+   "ru": "Вид сверху, план",
+   "where": "both",
+   "en": "Top view, a plan",
+   "svg": "icons/top.svg"
+  },
+  {
+   "key": "home",
+   "icon": "home",
+   "ru": "Сбросить вид: угол обзора, ракурс и кадр по сцене",
+   "where": "both",
+   "en": "Reset view: field of view, angle and framing to the scene",
+   "svg": "icons/home.svg"
+  },
+  {
+   "key": "section",
+   "icon": "section",
+   "ru": "Вид по разрезу: камера поперёк линии обрезки, поворот заперт, остаются сдвиг и масштаб",
+   "where": "both",
+   "checkable": true,
+   "en": "Section view: the camera across the clipping line, rotation locked, pan and zoom remain",
+   "svg": "icons/section.svg"
+  },
+  {
+   "key": "draw",
+   "icon": "draw",
+   "ru": "Рисовать контур по поверхности: клик ставит вершину.",
+   "where": "both",
+   "checkable": true,
+   "en": "Draw a contour on the surface: a click adds a vertex.",
+   "svg": "icons/draw.svg"
+  },
+  {
+   "key": "draw_undo",
+   "icon": "undo",
+   "ru": "Снять последнюю вершину",
+   "where": "both",
+   "mode": "draw",
+   "en": "Remove the last vertex",
+   "svg": "icons/undo.svg"
+  },
+  {
+   "key": "draw_close",
+   "icon": "done",
+   "ru": "Замкнуть контур и обрезать сцену",
+   "where": "both",
+   "mode": "draw",
+   "en": "Close the contour and clip the scene",
+   "svg": "icons/done.svg"
+  },
+  {
+   "key": "draw_line",
+   "icon": "line",
+   "ru": "Завершить линию и резать по ней",
+   "where": "both",
+   "mode": "draw",
+   "en": "Finish the line and cut along it",
+   "svg": "icons/line.svg"
+  },
+  {
+   "key": "clip_clear",
+   "icon": "clear",
+   "ru": "Снять обрезку, наброски и точку опроса",
+   "where": "both",
+   "en": "Clear the clip, the sketches and the query point",
+   "svg": "icons/clear.svg"
+  },
+  {
+   "key": "draw_save",
+   "icon": "save",
+   "ru": "Сохранить нарисованный контур слоем проекта",
+   "where": "pro",
+   "en": "Save the drawn contour as a project layer",
+   "svg": "icons/save.svg"
+  },
+  {
+   "key": "shells",
+   "icon": "shell",
+   "ru": "Оболочки выбранного слоя в слой проекта",
+   "where": "pro",
+   "en": "Shells of the selected layer into a project layer",
+   "svg": "icons/shell.svg"
+  },
+  {
+   "key": "export",
+   "icon": "export",
+   "ru": "Выгрузить сцену в файл: GLB, STL или OBJ",
+   "where": "both",
+   "en": "Export the scene to a file: GLB, STL or OBJ",
+   "svg": "icons/export.svg"
+  },
+  {
+   "key": "scene_app",
+   "icon": "scene",
+   "ru": "Открыть в Isoliner Scene: сцена в отдельной программе. Повторное нажатие обновляет её там",
+   "where": "pro",
+   "en": "Open in Isoliner Scene: the scene in a separate program. Press again to update it there",
+   "svg": "icons/scene.svg"
+  },
+  {
+   "key": "spin",
+   "icon": "spin",
+   "ru": "Вращать сцену (ещё раз - остановить)",
+   "where": "both",
+   "checkable": true,
+   "en": "Spin the scene (again to stop)",
+   "svg": "icons/spin.svg"
+  },
+  {
+   "key": "views",
+   "icon": "views",
+   "ru": "Виды облёта: запомнить текущий вид, убрать, перейти к виду",
+   "where": "both",
+   "en": "Flight views: remember the current view, remove, go to a view",
+   "svg": "icons/views.svg"
+  },
+  {
+   "key": "video",
+   "icon": "frames",
+   "ru": "Записать видео: оборот вокруг сцены или облёт по видам, файлом MP4 или кадрами PNG",
+   "where": "both",
+   "en": "Record a video: a turn around the scene or a flight through the views, as an MP4 file or PNG frames",
+   "svg": "icons/frames.svg"
+  },
+  {
+   "key": "copy",
+   "icon": "copy",
+   "ru": "Положить кадр сцены в буфер обмена (Ctrl+C)",
+   "where": "both",
+   "en": "Put a frame of the scene on the clipboard (Ctrl+C)",
+   "svg": "icons/copy.svg"
+  },
+  {
+   "key": "png",
+   "icon": "png",
+   "ru": "Сохранить кадр сцены в файл PNG",
+   "where": "both",
+   "en": "Save a frame of the scene to a PNG file",
+   "svg": "icons/png.svg"
+  }
+ ]
+}

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="6.35mm" height="6.35mm"
+ viewBox="0 0 18 18"
+ xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.2" baseProfile="tiny">
+<title>params</title>
+<desc>Isoliner3D toolbar icon</desc>
+<defs>
+</defs>
+<g fill="none" stroke="black" stroke-width="1" fill-rule="evenodd" stroke-linecap="square" stroke-linejoin="bevel" >
+
+<g fill="#0e7c66" fill-opacity="1" stroke="#1d2b28" stroke-opacity="1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="bevel" transform="matrix(1,0,0,1,0,0)"
+font-family="Segoe UI" font-size="7.9" font-weight="400" font-style="normal" 
+>
+<polyline fill="none" vector-effect="none" points="2.16,4.68 15.84,4.68 " />
+<circle cx="6.12" cy="4.68" r="1.62"/>
+<polyline fill="none" vector-effect="none" points="2.16,9 15.84,9 " />
+<circle cx="11.52" cy="9" r="1.62"/>
+<polyline fill="none" vector-effect="none" points="2.16,13.32 15.84,13.32 " />
+<circle cx="7.92" cy="13.32" r="1.62"/>
+</g>
+</g>
+</svg>
