@@ -19,7 +19,7 @@
        "ru": "Система координат сцены (EPSG)",
        "en": "Scene coordinate system (EPSG)",
        "kind": "string",
-       "where": "pro",
+       "where": "both",
        "default": "",
        "hint": "Код EPSG системы, в метрах которой строится сцена, например EPSG:28410. Пусто - система проекта.",
        "hint_en": "The EPSG code of the system the scene is built in, for example EPSG:28410. Empty takes the project's system."
