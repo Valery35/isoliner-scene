@@ -169,6 +169,14 @@
    "where": "both",
    "en": "Save a frame of the scene to a PNG file",
    "svg": "icons/png.svg"
+  },
+  {
+   "key": "about",
+   "icon": "about",
+   "ru": "О программе: кто мы и где нас найти",
+   "where": "both",
+   "en": "About: who we are and where to find us",
+   "svg": "icons/about.svg"
   }
  ]
 }

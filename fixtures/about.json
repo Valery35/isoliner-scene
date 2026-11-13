@@ -1,0 +1,143 @@
+{
+ "version": 1,
+ "window": {
+  "ru": "О программе",
+  "en": "About"
+ },
+ "title": [
+  {
+   "ru": "Isoliner3D",
+   "en": "Isoliner3D",
+   "where": "pro"
+  },
+  {
+   "ru": "Isoliner Scene",
+   "en": "Isoliner Scene",
+   "where": "lite"
+  }
+ ],
+ "text": [
+  {
+   "ru": "Модуль QGIS для трёхмерных моделей недр и поверхностей: сцена из слоёв проекта, тела пластов, блочная модель, объёмная интерполяция.",
+   "en": "A QGIS plugin for 3D models of the subsurface and surfaces: a scene from project layers, bed bodies, block model, volume interpolation.",
+   "where": "pro"
+  },
+  {
+   "ru": "Программа для просмотра сцен Isoliner3D без QGIS: открывает пакет .i3dscene со слоями, камерой и видами облёта.",
+   "en": "A program to view Isoliner3D scenes without QGIS: it opens an .i3dscene package with its layers, camera and flight views.",
+   "where": "lite"
+  },
+  {
+   "ru": "Линейка Isoliner3D - модуль для QGIS и программа Isoliner Scene. Окно параметров сцены и плашка у них общие.",
+   "en": "The Isoliner3D line is the QGIS plugin and the Isoliner Scene program. They share the scene settings window and the toolbar.",
+   "where": "both"
+  },
+  {
+   "ru": "© 2026 ООО «Информ++»",
+   "en": "© 2026 Inform++ LLC",
+   "where": "both"
+  },
+  {
+   "ru": "Лицензия GPL-2.0-or-later",
+   "en": "License GPL-2.0-or-later",
+   "where": "pro"
+  },
+  {
+   "ru": "Лицензия Apache-2.0",
+   "en": "License Apache-2.0",
+   "where": "lite"
+  }
+ ],
+ "links": [
+  {
+   "url": "https://www.informpp.ru/%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D0%B0%D1%8F-%D1%81%D1%82%D1%80%D0%B0%D0%BD%D0%B8%D1%86%D0%B0/isoliner3d",
+   "ru": "Линейка Isoliner3D на сайте",
+   "en": "The Isoliner3D line on the website",
+   "where": "both"
+  },
+  {
+   "url": "https://www.informpp.ru/%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D0%B0%D1%8F-%D1%81%D1%82%D1%80%D0%B0%D0%BD%D0%B8%D1%86%D0%B0/isoliner3d/qgis-isoliner3d",
+   "ru": "Страница модуля",
+   "en": "Plugin page",
+   "where": "pro"
+  },
+  {
+   "url": "https://www.informpp.ru/%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D0%B0%D1%8F-%D1%81%D1%82%D1%80%D0%B0%D0%BD%D0%B8%D1%86%D0%B0/isoliner3d/isoliner-scene",
+   "ru": "Страница программы",
+   "en": "Program page",
+   "where": "lite"
+  },
+  {
+   "url": "https://github.com/Valery35/qgis-isoliner3d",
+   "ru": "Модуль на GitHub",
+   "en": "The plugin on GitHub",
+   "where": "both"
+  },
+  {
+   "url": "https://github.com/Valery35/isoliner-scene",
+   "ru": "Isoliner Scene на GitHub",
+   "en": "Isoliner Scene on GitHub",
+   "where": "both"
+  },
+  {
+   "url": "https://plugins.qgis.org/plugins/isoliner3d/",
+   "ru": "Модуль в каталоге QGIS",
+   "en": "The plugin in the QGIS catalog",
+   "where": "both"
+  },
+  {
+   "url": "https://github.com/Valery35/qgis-isoliner3d/issues",
+   "ru": "Сообщить об ошибке",
+   "en": "Report a problem",
+   "where": "pro"
+  },
+  {
+   "url": "https://github.com/Valery35/isoliner-scene/issues",
+   "ru": "Сообщить об ошибке",
+   "en": "Report a problem",
+   "where": "lite"
+  },
+  {
+   "url": "https://github.com/Valery35#%D0%BF%D0%BE%D0%B4%D0%B4%D0%B5%D1%80%D0%B6%D0%B0%D1%82%D1%8C-%D1%80%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D1%83",
+   "ru": "Поддержать разработку",
+   "en": "Support the development",
+   "where": "both"
+  },
+  {
+   "url": "https://t.me/qgis_isolines",
+   "ru": "Telegram",
+   "en": "Telegram",
+   "where": "both"
+  },
+  {
+   "url": "https://vk.ru/qgismodules",
+   "ru": "ВКонтакте",
+   "en": "VK",
+   "where": "both"
+  },
+  {
+   "url": "https://en.osm.town/@Vaery35",
+   "ru": "Mastodon",
+   "en": "Mastodon",
+   "where": "both"
+  },
+  {
+   "url": "https://x.com/Valery35",
+   "ru": "X",
+   "en": "X",
+   "where": "both"
+  },
+  {
+   "url": "https://www.facebook.com/valery35",
+   "ru": "Facebook",
+   "en": "Facebook",
+   "where": "both"
+  },
+  {
+   "url": "https://www.informpp.ru/",
+   "ru": "ООО «Информ++»",
+   "en": "Inform++ LLC",
+   "where": "both"
+  }
+ ]
+}

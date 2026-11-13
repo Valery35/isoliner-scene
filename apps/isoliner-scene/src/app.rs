@@ -23,6 +23,7 @@ use scene_format::{Package, Part, PartInfo, read_package, write_package};
 use crate::i18n::{Lang, tr};
 use crate::{share, shot};
 
+mod about;
 mod params;
 use params::{BoxOpts, LookOpts, SunOpts};
 
@@ -328,6 +329,8 @@ pub struct SceneApp {
     /// Окно «Параметры сцены» открыто и его вкладка.
     params_open: bool,
     params_tab: usize,
+    /// Окно «О программе» открыто.
+    about_open: bool,
     /// Настройки координатного короба.
     box_opts: BoxOpts,
     /// Отмывка и сглаживание краёв.
@@ -420,6 +423,7 @@ impl SceneApp {
             shot_copy: false,
             params_open: false,
             params_tab: 0,
+            about_open: false,
             box_opts: BoxOpts::default(),
             look_opts: LookOpts::default(),
             sun: SunOpts::default(),
@@ -2366,6 +2370,8 @@ impl SceneApp {
         let shot = self.target.is_some() && self.shot.is_none() && loaded;
         Some(match key {
             "params" => (self.params_open, loaded),
+            // о программе - и без пакета
+            "about" => (self.about_open, true),
             "top" | "home" | "clip_clear" | "export" | "export_package" | "views" => {
                 (false, loaded)
             }
@@ -2389,6 +2395,10 @@ impl SceneApp {
             "params" => {
                 self.params_open = !self.params_open;
                 // окно egui меряет себя первым кадром и видно со второго
+                ctx.request_repaint();
+            }
+            "about" => {
+                self.about_open = !self.about_open;
                 ctx.request_repaint();
             }
             "top" => {
@@ -2665,6 +2675,7 @@ impl eframe::App for SceneApp {
         }
         self.share_window(ui.ctx());
         self.params_window(ui.ctx());
+        self.about_window(ui.ctx());
         self.run_check(ui.ctx());
         self.finish_shot(ui.ctx());
         #[cfg(not(target_arch = "wasm32"))]

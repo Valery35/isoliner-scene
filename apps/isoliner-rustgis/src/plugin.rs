@@ -16,7 +16,9 @@
 //!   `params.path`;
 //! - `tools` - описания инструментов из tools.json на языке RustGIS;
 //! - `run` - расчёт инструмента `params.tool` (имя Processing) по
-//!   значениям `params.values`, итог - выходы и сообщения отчёта.
+//!   значениям `params.values`, итог - выходы и сообщения отчёта;
+//! - `about` - «О программе»: название, версия, текст и ссылки из общего
+//!   списка линейки (`scene_format::about`), как окно (i) модуля.
 
 use std::path::Path;
 
@@ -64,11 +66,31 @@ pub fn answer(line: &str, ctx: &Context<'_>) -> J {
         "scene" => scene(&params, lang, ctx),
         "tools" => json!({ "ok": tools(ctx.catalog, lang) }),
         "run" => run(&params, lang, ctx.catalog),
+        "about" => about(lang),
         _ => error(tr(
             lang,
             "Isoliner3D: команды «%s» нет.",
             &[Arg::Text(id.to_string())],
         )),
+    }
+}
+
+/// «О программе»: то же, что окно (i) модуля и Isoliner Scene.
+fn about(lang: Lang) -> J {
+    let en = lang == Lang::En;
+    let version = env!("CARGO_PKG_VERSION");
+    match scene_format::about::About::load() {
+        Some(a) => {
+            let s = a.shown(en);
+            json!({ "ok": {
+                "window": s.window,
+                "title": s.title,
+                "version": version,
+                "text": s.text,
+                "links": s.links.iter().map(|(label, url)| json!({"label": label, "url": url})).collect::<Vec<_>>(),
+            }})
+        }
+        None => json!({ "ok": { "title": "Isoliner Scene", "version": version } }),
     }
 }
 
@@ -201,7 +223,7 @@ mod tests {
     use std::path::PathBuf;
 
     /// Команды, которые разбирает [`answer`], как в `plugin.json`.
-    const COMMANDS: &[&str] = &["scene", "tools", "run"];
+    const COMMANDS: &[&str] = &["scene", "tools", "run", "about"];
 
     fn fixture(name: &str) -> PathBuf {
         PathBuf::from(format!(

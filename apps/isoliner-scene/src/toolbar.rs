@@ -50,6 +50,7 @@ const ICONS: &[(&str, &str)] = &[
         "rebuild",
         include_str!("../../../fixtures/icons/rebuild.svg"),
     ),
+    ("about", include_str!("../../../fixtures/icons/about.svg")),
 ];
 
 /// Сторона значка и кнопки, точки egui. Значок 15 точек на экране
