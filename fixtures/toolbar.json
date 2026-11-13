@@ -109,7 +109,7 @@
    "key": "export",
    "icon": "export",
    "ru": "Выгрузить сцену в файл: GLB, STL или OBJ",
-   "where": "pro",
+   "where": "both",
    "en": "Export the scene to a file: GLB, STL or OBJ",
    "svg": "icons/export.svg"
   },
