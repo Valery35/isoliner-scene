@@ -23,6 +23,9 @@ use scene_format::{Package, Part, PartInfo, read_package, write_package};
 use crate::i18n::{Lang, tr};
 use crate::{share, shot};
 
+mod params;
+use params::{BoxOpts, Tab};
+
 /// Подставить значения в шаблон по порядку: `%s`, `%d`, `%.0f`.
 fn fill(template: &str, args: &[String]) -> String {
     let mut out = String::new();
@@ -260,6 +263,11 @@ pub struct SceneApp {
     marks: bool,
     /// Снимок идёт в буфер обмена, а не в файл.
     shot_copy: bool,
+    /// Окно «Параметры сцены» открыто и его вкладка.
+    params_open: bool,
+    params_tab: Tab,
+    /// Настройки координатного короба.
+    box_opts: BoxOpts,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     film: Film,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -335,6 +343,9 @@ impl SceneApp {
             dark,
             marks: true,
             shot_copy: false,
+            params_open: false,
+            params_tab: Tab::default(),
+            box_opts: BoxOpts::default(),
             film: Film::default(),
             film_open: false,
             #[cfg(not(target_arch = "wasm32"))]
@@ -1018,6 +1029,7 @@ impl SceneApp {
                 p.visible = pkg.meta.part_shown(row.info.as_ref()) && !glyphs;
             }
         }
+        self.box_opts = BoxOpts::from_state(&pkg.meta.state);
         self.pkg = Some(pkg);
         self.status.clone_from(&name);
         self.name = Some(name);
@@ -1143,15 +1155,44 @@ impl SceneApp {
     /// Короб с подписями виден: в пакете есть линии оформления и они
     /// показаны.
     fn box_visible(&self) -> bool {
+        self.box_shown_now()
+    }
+
+    /// Строки оформления-линий: короб, штрихи, сетка. Подписи буквами
+    /// из пакета (оформление-меш) сюда не входят: окно ставит свои
+    /// поверх кадра.
+    fn box_rows(&self) -> Vec<usize> {
+        (0..self.rows.len())
+            .filter(|&i| {
+                self.rows[i]
+                    .info
+                    .as_ref()
+                    .is_some_and(|info| info.decor && info.kind != scene_format::PartKind::Mesh)
+            })
+            .collect()
+    }
+
+    /// Короб сейчас показан.
+    fn box_shown_now(&self) -> bool {
         let Some(scene) = self.scene.as_ref() else {
             return false;
         };
-        self.rows.iter().enumerate().any(|(i, r)| {
-            r.info
-                .as_ref()
-                .is_some_and(|info| info.decor && info.kind == scene_format::PartKind::Lines)
-                && scene.parts.get(i).is_some_and(|p| p.visible)
-        })
+        self.box_rows()
+            .iter()
+            .any(|&i| scene.parts.get(i).is_some_and(|p| p.visible))
+    }
+
+    /// Показать или скрыть короб.
+    fn show_box(&mut self, on: bool) {
+        let rows = self.box_rows();
+        if let Some(s) = self.scene.as_mut() {
+            for i in rows {
+                if let Some(p) = s.parts.get_mut(i) {
+                    p.visible = on;
+                }
+            }
+        }
+        self.dirty = true;
     }
 
     /// Охват координатного короба в настоящих координатах, как
@@ -1167,38 +1208,27 @@ impl SceneApp {
             .map(|(_, p)| p.clone())
             .collect();
         let (lo, hi) = mesh::bounds(&body)?;
-        let st = &pkg.meta.state;
-        let rng: Option<Vec<f64>> = st
-            .get("box_range_on")
-            .and_then(serde_json::Value::as_bool)
-            .filter(|on| *on)
-            .and_then(|_| st.get("box_range"))
-            .and_then(serde_json::Value::as_array)
-            .map(|a| a.iter().filter_map(serde_json::Value::as_f64).collect());
-        Some(scene_core::axes::custom_range(lo, hi, rng.as_deref()))
+        let b = &self.box_opts;
+        let rng = b.range_on.then_some(&b.range[..]);
+        Some(scene_core::axes::custom_range(lo, hi, rng))
     }
 
     /// Подписи координатного короба поверх кадра, как в окне модуля:
     /// штрихи и числа на рёбрах, ближних к камере, стрелка севера.
-    /// Шаг, множитель подписи и выбор рёбер берутся из состояния окна
-    /// QGIS в пакете. Подписи оси, смотрящей на камеру торцом,
-    /// и налезающие на соседние не ставятся.
+    /// Шаг, множитель подписи и выбор рёбер - из окна параметров,
+    /// при открытии пакета они берутся из состояния окна QGIS. Подписи
+    /// оси, смотрящей на камеру торцом, и налезающие на соседние
+    /// не ставятся.
     fn box_marks(&self, ui: &egui::Ui, rect: egui::Rect) {
         use scene_core::axes;
         if !self.box_visible() {
             return;
         }
-        let (Some(pkg), Some((lo, hi))) = (self.pkg.as_ref(), self.box_range()) else {
+        let Some((lo, hi)) = self.box_range() else {
             return;
         };
-        let st = &pkg.meta.state;
-        let num = |k: &str, d: f64| st.get(k).and_then(serde_json::Value::as_f64).unwrap_or(d);
-        let (sxy, sz) = (num("tick_xy", 0.0), num("tick_z", 0.0));
-        let (mxy, mz) = (num("mult_xy", 1.0), num("mult_z", 1.0));
-        let near = st
-            .get("box_near")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(true);
+        let b = self.box_opts;
+        let (sxy, sz, mxy, mz, near) = (b.step_xy, b.step_z, b.mult_xy, b.mult_z, b.near);
         let view = self.view_camera();
         let frame = self.frame_now();
         let sides = if near {
@@ -1418,55 +1448,11 @@ impl SceneApp {
         self.dirty = true;
     }
 
-    /// Раздел «Обрезка» панели.
-    fn clip_panel(&mut self, ui: &mut egui::Ui) {
+    /// Кнопки обрезки в панели. Что оставить и отметки - во вкладке
+    /// «Обрезка» окна параметров.
+    fn clip_buttons(&mut self, ui: &mut egui::Ui) {
         let lang = self.lang;
         let t = |s: &'static str| tr(lang, s);
-        egui::CollapsingHeader::new(t("Обрезка"))
-            .id_salt("clip")
-            .show(ui, |ui| {
-                ui.weak(t(
-                    "Контур и линия берутся из измерения: щелчками поставьте точки, двойной щелчок замыкает контур.",
-                ));
-                let c = &mut self.clip;
-                let name = |s: Option<Side>| match s {
-                    None => t("(нет)"),
-                    Some(Side::In) => t("Оставить внутри"),
-                    Some(Side::Out) => t("Убрать внутри"),
-                    Some(Side::Left) => t("Слева от линии"),
-                    Some(Side::Right) => t("Справа от линии"),
-                    Some(Side::Corridor) => t("Коридор вдоль линии"),
-                };
-                egui::Grid::new("clip").num_columns(2).show(ui, |ui| {
-                    ui.label(t("Что оставить"));
-                    egui::ComboBox::from_id_salt("clip_side")
-                        .selected_text(name(c.side))
-                        .show_ui(ui, |ui| {
-                            for s in [
-                                None,
-                                Some(Side::In),
-                                Some(Side::Out),
-                                Some(Side::Left),
-                                Some(Side::Right),
-                                Some(Side::Corridor),
-                            ] {
-                                ui.selectable_value(&mut c.side, s, name(s));
-                            }
-                        });
-                    ui.end_row();
-                    if c.side == Some(Side::Corridor) {
-                        ui.label(t("Полуширина коридора, м"));
-                        ui.add(egui::DragValue::new(&mut c.width).range(0.0..=1e9).speed(1.0));
-                        ui.end_row();
-                    }
-                    ui.checkbox(&mut c.use_lo, t("Отметка не ниже, м"));
-                    ui.add_enabled(c.use_lo, egui::DragValue::new(&mut c.zlo).speed(1.0));
-                    ui.end_row();
-                    ui.checkbox(&mut c.use_hi, t("Отметка не выше, м"));
-                    ui.add_enabled(c.use_hi, egui::DragValue::new(&mut c.zhi).speed(1.0));
-                    ui.end_row();
-                });
-            });
         ui.horizontal_wrapped(|ui| {
             if ui.button(t("Обрезать")).clicked() {
                 self.apply_clip();
@@ -1856,19 +1842,10 @@ impl SceneApp {
         });
         // кнопки окна модуля - на плашке поверх сцены (`toolbar`),
         // здесь только то, чего на плашке нет
+        // параметры вида - в окне «Параметры сцены» (шестерёнка),
+        // здесь только действия
         self.ruler_panel(ui);
-        self.clip_panel(ui);
-        let label = self.t("Градиентный фон");
-        if ui.checkbox(&mut self.gradient, label).changed() {
-            self.dirty = true;
-        }
-        let label = self.t("Непрозрачность");
-        if ui
-            .add(egui::Slider::new(&mut self.opacity, 0.05..=1.0).text(label))
-            .changed()
-        {
-            self.dirty = true;
-        }
+        self.clip_buttons(ui);
 
         ui.separator();
         ui.heading(self.t("Части"));
@@ -2329,49 +2306,6 @@ impl SceneApp {
                                 self.section_view(w, h);
                             }
                         }
-                        if button(
-                            ui,
-                            Icon::Ortho,
-                            t("Параллельная проекция вместо перспективной"),
-                            self.cam.ortho,
-                            loaded,
-                        )
-                        .clicked()
-                        {
-                            self.cam.ortho = !self.cam.ortho;
-                            self.dirty = true;
-                        }
-                        // подписи буквами из пакета не включаются: окно
-                        // ставит свои поверх кадра
-                        let decor: Vec<usize> = (0..self.rows.len())
-                            .filter(|&i| {
-                                self.rows[i].info.as_ref().is_some_and(|info| {
-                                    info.decor && info.kind != scene_format::PartKind::Mesh
-                                })
-                            })
-                            .collect();
-                        let shown = self.scene.as_ref().is_some_and(|s| {
-                            decor
-                                .iter()
-                                .any(|&i| s.parts.get(i).is_some_and(|p| p.visible))
-                        });
-                        if button(
-                            ui,
-                            Icon::Grid,
-                            t("Координатный короб: деления и подписи по осям"),
-                            shown,
-                            !decor.is_empty(),
-                        )
-                        .clicked()
-                            && let Some(s) = self.scene.as_mut()
-                        {
-                            for &i in &decor {
-                                if let Some(p) = s.parts.get_mut(i) {
-                                    p.visible = !shown;
-                                }
-                            }
-                            self.dirty = true;
-                        }
                         let drawing = self.ruler.is_some();
                         if button(
                             ui,
@@ -2515,37 +2449,18 @@ impl SceneApp {
                             self.shot_copy = false;
                             self.take_shot(ui.ctx());
                         }
-                        ui.label("Z ×").on_hover_text(t(
-                            "Вертикальное преувеличение. Единица - натуральный масштаб.",
-                        ));
-                        let mut vex = self.vex;
-                        if ui
-                            .add_enabled(
-                                loaded,
-                                egui::DragValue::new(&mut vex)
-                                    .range(0.01..=10000.0)
-                                    .speed(0.05)
-                                    .max_decimals(2),
-                            )
-                            .changed()
-                        {
-                            self.vex = vex;
-                            self.dirty = true;
-                        }
                         separator(ui);
-                        let (icon, tip) = if self.dark {
-                            (Icon::Sun, t("Светлая тема"))
-                        } else {
-                            (Icon::Moon, t("Тёмная тема"))
-                        };
-                        if button(ui, icon, tip, false, true).clicked() {
-                            self.dark = !self.dark;
-                            ui.ctx().set_theme(if self.dark {
-                                egui::Theme::Dark
-                            } else {
-                                egui::Theme::Light
-                            });
-                            self.dirty = true;
+                        // все параметры вида - одно окно, как у модуля
+                        if button(
+                            ui,
+                            Icon::Params,
+                            t("Параметры сцены: камера, вертикальный масштаб, короб, оформление, обрезка"),
+                            self.params_open,
+                            loaded,
+                        )
+                        .clicked()
+                        {
+                            self.params_open = !self.params_open;
                         }
                     });
                 });
@@ -2649,6 +2564,7 @@ impl eframe::App for SceneApp {
             None => {}
         }
         self.share_window(ui.ctx());
+        self.params_window(ui.ctx());
         self.run_check(ui.ctx());
         self.finish_shot(ui.ctx());
         #[cfg(not(target_arch = "wasm32"))]

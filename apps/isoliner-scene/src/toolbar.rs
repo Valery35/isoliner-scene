@@ -18,8 +18,6 @@ pub enum Icon {
     Top,
     Home,
     Section,
-    Ortho,
-    Grid,
     Draw,
     Undo,
     Done,
@@ -32,19 +30,16 @@ pub enum Icon {
     Frames,
     Copy,
     Png,
-    Sun,
-    Moon,
+    Params,
 }
 
 /// Все значки: для проверки, что каждый рисуется.
 #[cfg(test)]
-pub const ALL: [Icon; 20] = [
+pub const ALL: [Icon; 17] = [
     Icon::Reload,
     Icon::Top,
     Icon::Home,
     Icon::Section,
-    Icon::Ortho,
-    Icon::Grid,
     Icon::Draw,
     Icon::Undo,
     Icon::Done,
@@ -57,8 +52,7 @@ pub const ALL: [Icon; 20] = [
     Icon::Frames,
     Icon::Copy,
     Icon::Png,
-    Icon::Sun,
-    Icon::Moon,
+    Icon::Params,
 ];
 
 /// Краски значков модуля.
@@ -212,16 +206,6 @@ pub fn paint(icon: Icon, rect: Rect, dark: bool) -> Vec<Shape> {
             p.ink_line((0.42, 0.20), (0.62, 0.20));
             p.ellipse((0.50, 0.55), 0.16, 0.16, Some(PALE));
         }
-        Icon::Grid => {
-            p.rect(0.14, 0.28, 0.56, 0.56, None);
-            p.ink_line((0.32, 0.28), (0.32, 0.84));
-            p.ink_line((0.52, 0.28), (0.52, 0.84));
-            p.ink_line((0.14, 0.48), (0.70, 0.48));
-            p.ink_line((0.14, 0.66), (0.70, 0.66));
-            p.line((0.84, 0.80), (0.84, 0.22), p.teal, 1.6);
-            p.line((0.84, 0.22), (0.74, 0.36), p.teal, 1.6);
-            p.line((0.84, 0.22), (0.94, 0.36), p.teal, 1.6);
-        }
         Icon::Spin => {
             p.arc([0.18, 0.24, 0.64, 0.52], 30.0, 260.0, p.ink);
             p.line((0.74, 0.30), (0.84, 0.40), ORANGE, 1.6);
@@ -244,15 +228,6 @@ pub fn paint(icon: Icon, rect: Rect, dark: bool) -> Vec<Shape> {
             p.rect(0.18, 0.18, 0.64, 0.64, None);
             p.line((0.50, 0.10), (0.50, 0.90), p.teal, 1.4);
             p.line((0.10, 0.50), (0.90, 0.50), p.teal, 1.4);
-        }
-        Icon::Ortho => {
-            let front = [(0.20, 0.36), (0.62, 0.36), (0.62, 0.78), (0.20, 0.78)];
-            let back = front.map(|(x, y)| (x + 0.18, y - 0.18));
-            p.path(&front, true, p.ink, 1.6);
-            p.path(&back, true, p.ink, 1.6);
-            for (a, b) in front.iter().zip(&back) {
-                p.ink_line(*a, *b);
-            }
         }
         Icon::Eye => {
             p.arc([0.08, 0.24, 0.84, 0.52], 20.0, 140.0, p.ink);
@@ -323,21 +298,12 @@ pub fn paint(icon: Icon, rect: Rect, dark: bool) -> Vec<Shape> {
             p.arc([0.18, 0.18, 0.64, 0.64], 40.0, 280.0, p.ink);
             p.polygon(&[(0.78, 0.20), (0.90, 0.44), (0.64, 0.42)], p.ink, p.ink);
         }
-        // тема - своих значков у модуля нет: солнце и месяц
-        Icon::Sun => {
-            p.ellipse((0.50, 0.50), 0.18, 0.18, Some(ORANGE));
-            for k in 0..8 {
-                let a = (k as f32 * 45.0).to_radians();
-                let (c, s) = (a.cos(), a.sin());
-                p.ink_line(
-                    (0.50 + 0.28 * c, 0.50 + 0.28 * s),
-                    (0.50 + 0.40 * c, 0.50 + 0.40 * s),
-                );
+        // три ползунка: параметры сцены, как значок «params» модуля
+        Icon::Params => {
+            for (y, x) in [(0.26, 0.34), (0.50, 0.64), (0.74, 0.44)] {
+                p.ink_line((0.12, y), (0.88, y));
+                p.ellipse((x, y), 0.09, 0.09, Some(p.teal));
             }
-        }
-        Icon::Moon => {
-            p.arc([0.16, 0.16, 0.68, 0.68], 60.0, 240.0, p.ink);
-            p.arc([0.36, 0.12, 0.52, 0.56], 120.0, 150.0, p.ink);
         }
     }
     shapes

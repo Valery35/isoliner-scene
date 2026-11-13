@@ -19,9 +19,10 @@ cargo run -p isoliner-scene --release -- fixtures/scene_demo.i3dscene
 Двойной щелчок вписывает сцену в окно.
 
 Над сценой плашка значков в порядке окна модуля: вид сверху, сброс,
-вид по разрезу, проекция, короб, контур и обрезка, вращение, виды,
-видео, кадр в буфер и в PNG, преувеличение. Тема светлая, тёмная
-включается на плашке. Обрезка контуром, коридором и по отметкам
+вид по разрезу, контур и обрезка, вращение, виды, видео, кадр
+в буфер и в PNG. Последний значок открывает окно «Параметры сцены» -
+камера, вертикальный масштаб, координатный короб, тема и фон,
+обрезка. Тема светлая, тёмная выбирается там же. Обрезка контуром, коридором и по отметкам
 оставляет тела замкнутыми. Видео пишется кадрами PNG и склеивается
 в MP4, если в PATH есть ffmpeg.
 
@@ -55,8 +56,9 @@ https://valery35.github.io/isoliner-scene/app/. Сборка страницы -
 A viewer for Isoliner3D scene packages (`.i3dscene`) without QGIS.
 It shows the scene with the camera saved in QGIS: mine workings, ore
 bodies, surfaces, lines, transparency, vertical exaggeration and
-fly-through views. A toolbar follows the QGIS viewer, with a light
-theme by default and a dark one on request. Clipping keeps bodies
+fly-through views. A toolbar follows the QGIS viewer, and one
+«Scene settings» window holds the camera, vertical scale, coordinate
+box, theme and clipping, with a light theme by default. Clipping keeps bodies
 closed, the section view shows elevation and depth scales, videos
 are joined into MP4 when ffmpeg is in PATH. An open package reloads
 itself when the QGIS plugin rewrites it (the «Open in Isoliner
