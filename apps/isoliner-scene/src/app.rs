@@ -2335,7 +2335,9 @@ impl SceneApp {
         let shot = self.target.is_some() && self.shot.is_none() && loaded;
         Some(match key {
             "params" => (self.params_open, loaded),
-            "top" | "home" | "clip_clear" | "export" | "views" => (false, loaded),
+            "top" | "home" | "clip_clear" | "export" | "export_package" | "views" => {
+                (false, loaded)
+            }
             "section" => (self.section.is_some(), loaded),
             "draw" => (self.ruler.is_some(), loaded),
             "draw_undo" | "draw_close" | "draw_line" => (false, self.ruler.is_some()),
@@ -2413,7 +2415,7 @@ impl SceneApp {
                 self.probe = None;
             }
             // выгрузка сцены - здесь пакет .i3dscene
-            "export" => self.save_as(),
+            "export" | "export_package" => self.save_as(),
             "spin" => {
                 self.spin = !self.spin;
                 if self.spin {
