@@ -25,9 +25,43 @@ struct U {
     bg_bottom: vec4<f32>,
     // ширина и высота кадра в пикселях, пикселей на точку экрана
     screen: vec4<f32>,
+    // вид и проекция со стороны Солнца
+    light_vp: mat4x4<f32>,
+    // направление на Солнце, w - сила тени (0 - теней нет)
+    sun: vec4<f32>,
+    // x - шаг карты теней в долях, y - сдвиг глубины
+    shadow: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> u: U;
+@group(1) @binding(0) var shadow_map: texture_depth_2d;
+@group(1) @binding(1) var shadow_cmp: sampler_comparison;
+
+// Карта теней: глубина тел со стороны Солнца.
+@vertex
+fn vs_shadow(@location(0) p: vec3<f32>, @location(1) c: vec4<f32>) -> @builtin(position) vec4<f32> {
+    return u.light_vp * vec4<f32>(p.x, p.y, p.z * u.params.x, 1.0);
+}
+
+// Доля света в точке: 1 - освещена, 0 - в тени. Края мягкие: девять
+// отборов вокруг точки. Отбор без уровней (Level) - он законен
+// и в ветвлении, и на WebGL2.
+fn lit(world: vec3<f32>) -> f32 {
+    let lp = u.light_vp * vec4<f32>(world, 1.0);
+    let uv = vec2<f32>(lp.x * 0.5 + 0.5, 0.5 - lp.y * 0.5);
+    if uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || lp.z > 1.0 {
+        return 1.0;
+    }
+    let d = lp.z - u.shadow.y;
+    var sum = 0.0;
+    for (var i = -1; i <= 1; i++) {
+        for (var j = -1; j <= 1; j++) {
+            let o = vec2<f32>(f32(i), f32(j)) * u.shadow.x;
+            sum += textureSampleCompareLevel(shadow_map, shadow_cmp, uv + o, d);
+        }
+    }
+    return sum / 9.0;
+}
 
 struct VsOut {
     @builtin(position) pos: vec4<f32>,
@@ -56,7 +90,11 @@ fn fs_mesh(v: VsOut) -> @location(0) vec4<f32> {
         p += u.lights[i].w * abs(dot(n, u.lights[i].xyz));
     }
     // params.z - сила отмывки: 0 - ровный цвет, 1 - свет окна модуля
-    let k = mix(1.0, 0.32 + 0.78 * p, u.params.z);
+    var k = mix(1.0, 0.32 + 0.78 * p, u.params.z);
+    // тень от Солнца: в тени остаётся рассеянный свет
+    if u.sun.w > 0.0 {
+        k *= 1.0 - u.sun.w * 0.6 * (1.0 - lit(v.world));
+    }
     let rgb = clamp(v.color.rgb * k, vec3<f32>(0.0), vec3<f32>(1.0));
     return vec4<f32>(rgb, v.color.a * u.params.y);
 }

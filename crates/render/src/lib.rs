@@ -16,7 +16,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 use bytemuck::{Pod, Zeroable};
-use glam::{DMat3, DVec3};
+use glam::{DMat3, DMat4, DVec3};
 use wgpu::util::DeviceExt;
 
 use scene_core::camera::{View, eye};
@@ -101,6 +101,69 @@ struct Uniforms {
     bg_bottom: [f32; 4],
     /// ширина и высота кадра в пикселях, пикселей на точку экрана
     screen: [f32; 4],
+    /// Вид и проекция со стороны Солнца: карта теней.
+    light_vp: [[f32; 4]; 4],
+    /// Направление на Солнце в координатах просмотра, w - сила тени
+    /// (0 - теней нет).
+    sun: [f32; 4],
+    /// x - шаг карты теней в долях, y - сдвиг глубины против «угрей».
+    shadow: [f32; 4],
+}
+
+/// Сторона карты теней, пиксели.
+pub const SHADOW_SIZE: u32 = 2048;
+
+/// Солнце: тени и отмывка от него.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Sun {
+    /// Азимут, градусы от севера по часовой стрелке.
+    pub azimuth: f64,
+    /// Высота над горизонтом, градусы.
+    pub altitude: f64,
+    /// Сила тени: 0 - тени нет, 1 - в тени остаётся рассеянный свет.
+    pub strength: f32,
+}
+
+/// Направление на Солнце: восток, север, верх.
+pub fn sun_dir(azimuth: f64, altitude: f64) -> DVec3 {
+    let (a, h) = (azimuth.to_radians(), altitude.clamp(1.0, 90.0).to_radians());
+    DVec3::new(a.sin() * h.cos(), a.cos() * h.cos(), h.sin()).normalize_or(DVec3::Z)
+}
+
+/// Вид и проекция карты теней: параллельный свет по `dir` (на Солнце),
+/// кадр плотно охватывает короб `lo`-`hi` (координаты просмотра
+/// с преувеличением), глубина от 0 до 1, как у wgpu.
+pub fn sun_view_proj(dir: DVec3, lo: DVec3, hi: DVec3) -> DMat4 {
+    let center = (lo + hi) * 0.5;
+    let radius = ((hi - lo).length() * 0.5).max(1e-6);
+    let up = if dir.z.abs() > 0.99 {
+        DVec3::Y
+    } else {
+        DVec3::Z
+    };
+    let view = DMat4::look_at_rh(center + dir * radius * 2.0, center, up);
+    let (mut a, mut b) = (DVec3::splat(f64::MAX), DVec3::splat(f64::MIN));
+    for i in 0..8 {
+        let c = DVec3::new(
+            if i & 1 == 0 { lo.x } else { hi.x },
+            if i & 2 == 0 { lo.y } else { hi.y },
+            if i & 4 == 0 { lo.z } else { hi.z },
+        );
+        let p = view.transform_point3(c);
+        a = a.min(p);
+        b = b.max(p);
+    }
+    // запас по краям: штрих на краю не выпадает из карты
+    let pad = radius * 0.02;
+    let proj = DMat4::orthographic_rh(
+        a.x - pad,
+        b.x + pad,
+        a.y - pad,
+        b.y + pad,
+        -b.z - pad,
+        -a.z + pad,
+    );
+    proj * view
 }
 
 /// Часть сцены в видеокарте.
@@ -113,6 +176,9 @@ pub struct GpuPart {
     pub visible: bool,
     /// Середина части в координатах сцены без преувеличения.
     pub center: [f64; 3],
+    /// Охват части там же: по нему ставится карта теней.
+    pub lo: [f64; 3],
+    pub hi: [f64; 3],
     vbuf: wgpu::Buffer,
     /// У точек номеров нет: точка - один экземпляр квадрата.
     ibuf: Option<wgpu::Buffer>,
@@ -148,6 +214,7 @@ impl GpuPart {
             return Some(upload_points(device, part, idx, frame));
         }
         let mut sum = [0.0f64; 3];
+        let (mut lo, mut hi) = ([f64::MAX; 3], [f64::MIN; 3]);
         let verts: Vec<Vertex> = part
             .verts
             .iter()
@@ -156,6 +223,8 @@ impl GpuPart {
                 let p = [v[0] - frame.cx, v[1] - frame.cy, v[2] - frame.cz];
                 for k in 0..3 {
                     sum[k] += p[k];
+                    lo[k] = lo[k].min(p[k]);
+                    hi[k] = hi[k].max(p[k]);
                 }
                 let color = part
                     .colors
@@ -195,6 +264,8 @@ impl GpuPart {
             transparent,
             visible: true,
             center: [sum[0] / n, sum[1] / n, sum[2] / n],
+            lo,
+            hi,
             vbuf,
             ibuf: Some(ibuf),
             count: flat.len() as u32,
@@ -213,6 +284,7 @@ impl GpuPart {
 /// случай без паники.
 fn upload_points(device: &wgpu::Device, part: &Part, idx: &[u32], frame: Frame) -> GpuPart {
     let mut sum = [0.0f64; 3];
+    let (mut lo, mut hi) = ([f64::MAX; 3], [f64::MIN; 3]);
     let marks: Vec<PointMark> = idx
         .iter()
         .filter_map(|&i| {
@@ -220,6 +292,8 @@ fn upload_points(device: &wgpu::Device, part: &Part, idx: &[u32], frame: Frame) 
             let p = [v[0] - frame.cx, v[1] - frame.cy, v[2] - frame.cz];
             for k in 0..3 {
                 sum[k] += p[k];
+                lo[k] = lo[k].min(p[k]);
+                hi[k] = hi[k].max(p[k]);
             }
             let i = i as usize;
             Some(PointMark {
@@ -251,6 +325,8 @@ fn upload_points(device: &wgpu::Device, part: &Part, idx: &[u32], frame: Frame) 
         transparent: marks.iter().any(|m| m.color[3] < 0.999),
         visible: true,
         center: [sum[0] / n, sum[1] / n, sum[2] / n],
+        lo,
+        hi,
         vbuf,
         ibuf: None,
         count: marks.len() as u32,
@@ -344,6 +420,9 @@ pub struct Look {
     /// Сила отмывки тел светом: 0 - ровный цвет, 1 - свет окна модуля
     /// при отмывке 55 процентов, больше - резче.
     pub light: f32,
+    /// Солнце: тени от рельефа и тел, главный свет отмывки. None -
+    /// свет окна модуля от камеры, без теней.
+    pub sun: Option<Sun>,
     /// Фон кадра.
     pub background: Background,
     /// Пикселей кадра на пиксель значка: размер точки в пакете задан
@@ -360,6 +439,11 @@ pub struct Renderer {
     lines: wgpu::RenderPipeline,
     uniforms: wgpu::Buffer,
     bind: wgpu::BindGroup,
+    /// Карта теней: только глубина, рисуется со стороны Солнца.
+    shadow_pipe: wgpu::RenderPipeline,
+    shadow_view: wgpu::TextureView,
+    /// Карта теней и сравнивающий отбор для тел в кадре.
+    shadow_bind: wgpu::BindGroup,
     /// Отсчётов на пиксель у конвейеров: кадр нужен такой же.
     samples: u32,
 }
@@ -403,8 +487,73 @@ impl Renderer {
                 resource: uniforms.as_entire_binding(),
             }],
         });
+        // карта теней: своя группа, её нет в проходе самой карты
+        let shadow_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("карта теней"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Depth,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                    count: None,
+                },
+            ],
+        });
+        let shadow_tex = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("карта теней"),
+            size: wgpu::Extent3d {
+                width: SHADOW_SIZE,
+                height: SHADOW_SIZE,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DEPTH_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let shadow_view = shadow_tex.create_view(&wgpu::TextureViewDescriptor::default());
+        let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("карта теней"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            compare: Some(wgpu::CompareFunction::LessEqual),
+            ..Default::default()
+        });
+        let shadow_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("карта теней"),
+            layout: &shadow_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&shadow_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&shadow_sampler),
+                },
+            ],
+        });
         let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("сцена"),
+            bind_group_layouts: &[Some(&layout), Some(&shadow_layout)],
+            immediate_size: 0,
+        });
+        let shadow_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("карта теней"),
             bind_group_layouts: &[Some(&layout)],
             immediate_size: 0,
         });
@@ -529,6 +678,39 @@ impl Renderer {
             multiview_mask: None,
             cache: None,
         });
+        // Карта теней: только глубина со стороны Солнца. Наклонный
+        // сдвиг глубины убирает «угри» - пятна тени на освещённом
+        // склоне от неточности самой карты.
+        let shadow_pipe = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("карта теней"),
+            layout: Some(&shadow_pl),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_shadow"),
+                compilation_options: Default::default(),
+                buffers: &buffers,
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                cull_mode: None,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::LessEqual),
+                stencil: Default::default(),
+                bias: wgpu::DepthBiasState {
+                    constant: 2,
+                    slope_scale: 2.0,
+                    clamp: 0.0,
+                },
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            fragment: None,
+            multiview_mask: None,
+            cache: None,
+        });
         Self {
             background,
             points,
@@ -555,6 +737,9 @@ impl Renderer {
             ),
             uniforms,
             bind,
+            shadow_pipe,
+            shadow_view,
+            shadow_bind,
             samples,
         }
     }
@@ -580,10 +765,41 @@ impl Renderer {
         // «залипает» на модели при вращении. В шейдер он идёт
         // в координатах просмотра: поворот вида, обращённый.
         let to_view = DMat3::from_mat4(view.view).transpose();
-        let lights = LIGHTS.map(|(d, w)| {
+        let mut lights = LIGHTS.map(|(d, w)| {
             let l = (to_view * DVec3::from(d)).normalize_or_zero();
             [l.x as f32, l.y as f32, l.z as f32, w]
         });
+        // Солнце: главный свет отмывки идёт от него и стоит на месте
+        // при вращении, тени - картой со стороны Солнца по охвату тел.
+        let casters: Vec<&GpuPart> = scene
+            .parts
+            .iter()
+            .filter(|p| p.visible && !p.lines && !p.points && p.count > 0)
+            .collect();
+        let vex = look.vex;
+        let bounds = casters.iter().fold(None, |acc: Option<(DVec3, DVec3)>, p| {
+            let lo = DVec3::new(p.lo[0], p.lo[1], p.lo[2] * vex);
+            let hi = DVec3::new(p.hi[0], p.hi[1], p.hi[2] * vex);
+            let (lo, hi) = (lo.min(hi), lo.max(hi));
+            Some(acc.map_or((lo, hi), |(a, b)| (a.min(lo), b.max(hi))))
+        });
+        let sun = look.sun.zip(bounds);
+        let (light_vp, sun_u) = match sun {
+            Some((s, (lo, hi))) => {
+                let d = sun_dir(s.azimuth, s.altitude);
+                lights[0] = [d.x as f32, d.y as f32, d.z as f32, lights[0][3]];
+                (
+                    sun_view_proj(d, lo, hi),
+                    [
+                        d.x as f32,
+                        d.y as f32,
+                        d.z as f32,
+                        s.strength.clamp(0.0, 1.0),
+                    ],
+                )
+            }
+            None => (DMat4::IDENTITY, [0.0, 0.0, 1.0, 0.0]),
+        };
         let bg = look.background;
         let u = Uniforms {
             view_proj: view.view_proj().as_mat4().to_cols_array_2d(),
@@ -602,11 +818,13 @@ impl Renderer {
                 look.pixels_per_point.max(0.1),
                 0.0,
             ],
+            light_vp: light_vp.as_mat4().to_cols_array_2d(),
+            sun: sun_u,
+            shadow: [1.0 / SHADOW_SIZE as f32, 0.0005, 0.0, 0.0],
         };
         queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(&u));
 
         // прозрачные - от дальних к ближним
-        let vex = look.vex;
         let dist = |p: &GpuPart| {
             let q = DVec3::new(p.center[0], p.center[1], p.center[2] * vex);
             (q - e).length()
@@ -623,6 +841,35 @@ impl Renderer {
         let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("кадр"),
         });
+        // карта теней: каждый кадр с тенями, пустая - без них
+        {
+            let mut pass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("карта теней"),
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.shadow_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            if sun.is_some() {
+                pass.set_bind_group(0, &self.bind, &[]);
+                pass.set_pipeline(&self.shadow_pipe);
+                for p in &casters {
+                    if let Some(ib) = &p.ibuf {
+                        pass.set_vertex_buffer(0, p.vbuf.slice(..));
+                        pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                        pass.draw_indexed(0..p.count, 0, 0..1);
+                    }
+                }
+            }
+        }
         {
             let mut pass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("сцена"),
@@ -653,6 +900,7 @@ impl Renderer {
                 multiview_mask: None,
             });
             pass.set_bind_group(0, &self.bind, &[]);
+            pass.set_bind_group(1, &self.shadow_bind, &[]);
             pass.set_pipeline(&self.background);
             pass.draw(0..3, 0..1);
             let draw = |pass: &mut wgpu::RenderPass<'_>, p: &GpuPart| {

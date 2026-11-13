@@ -298,6 +298,52 @@ impl LookOpts {
     }
 }
 
+/// Солнце: тени от рельефа и тел, отмывка от него же. Ключи
+/// `shadows`, `sun_azimuth`, `sun_altitude`, `shadow_strength`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct SunOpts {
+    pub on: bool,
+    /// Азимут, градусы от севера по часовой стрелке.
+    pub azimuth: f64,
+    /// Высота над горизонтом, градусы.
+    pub altitude: f64,
+    /// Сила тени, проценты.
+    pub strength: f64,
+}
+
+impl Default for SunOpts {
+    fn default() -> Self {
+        // свет с северо-запада, как у отмывки карт
+        Self {
+            on: false,
+            azimuth: 315.0,
+            altitude: 45.0,
+            strength: 70.0,
+        }
+    }
+}
+
+impl SunOpts {
+    pub fn from_state(st: &serde_json::Value) -> Self {
+        let d = Self::default();
+        Self {
+            on: flag(st, "shadows", d.on),
+            azimuth: num(st, "sun_azimuth", d.azimuth),
+            altitude: num(st, "sun_altitude", d.altitude).clamp(1.0, 90.0),
+            strength: num(st, "shadow_strength", d.strength).clamp(0.0, 100.0),
+        }
+    }
+
+    /// Солнце для рендера. Выключено - None.
+    pub fn look(&self) -> Option<render::Sun> {
+        self.on.then(|| render::Sun {
+            azimuth: self.azimuth,
+            altitude: self.altitude,
+            strength: (self.strength / 100.0) as f32,
+        })
+    }
+}
+
 /// Непрозрачность из `opacity` модуля: там это прозрачность в процентах.
 pub(super) fn opacity_from_state(st: &serde_json::Value) -> f32 {
     let t = num(st, "opacity", 0.0).clamp(0.0, 95.0);
@@ -340,6 +386,7 @@ impl SceneApp {
     pub(super) fn params_from_state(&mut self, st: &serde_json::Value) {
         self.box_opts = BoxOpts::from_state(st);
         self.look_opts = LookOpts::from_state(st);
+        self.sun = SunOpts::from_state(st);
         self.opacity = opacity_from_state(st);
         self.marks = flag(st, "sketch_on", true);
         let c = &mut self.clip;
@@ -376,6 +423,10 @@ impl SceneApp {
             "bg_grad" => Val::Flag(self.gradient),
             "smooth_edges" => Val::Flag(self.look_opts.smooth),
             "sketch_on" => Val::Flag(self.marks),
+            "shadows" => Val::Flag(self.sun.on),
+            "sun_azimuth" => Val::Num(self.sun.azimuth),
+            "sun_altitude" => Val::Num(self.sun.altitude),
+            "shadow_strength" => Val::Num(self.sun.strength),
             "theme" => Val::Text(if self.dark { "dark" } else { "light" }.into()),
             "axes_on" => Val::Flag(b.on),
             "box_edges" => Val::Text(b.edges.key().into()),
@@ -413,6 +464,10 @@ impl SceneApp {
             ("bg_grad", Val::Flag(x)) => self.gradient = x,
             ("smooth_edges", Val::Flag(x)) => self.look_opts.smooth = x,
             ("sketch_on", Val::Flag(x)) => self.marks = x,
+            ("shadows", Val::Flag(x)) => self.sun.on = x,
+            ("sun_azimuth", Val::Num(x)) => self.sun.azimuth = x.rem_euclid(360.0),
+            ("sun_altitude", Val::Num(x)) => self.sun.altitude = x.clamp(1.0, 90.0),
+            ("shadow_strength", Val::Num(x)) => self.sun.strength = x.clamp(0.0, 100.0),
             ("theme", Val::Text(x)) => self.dark = x == "dark",
             ("axes_on", Val::Flag(x)) => b.on = x,
             ("box_edges", Val::Text(x)) => b.edges = Edges::from_key(&x),

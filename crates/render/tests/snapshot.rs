@@ -72,6 +72,7 @@ fn point_marks_render_in_screen_pixels() {
         vex: frame.vex,
         opacity: 1.0,
         light: 1.0,
+        sun: None,
         background: BG_PLAIN,
         pixels_per_point: 1.0,
     };
@@ -126,6 +127,113 @@ fn point_marks_render_in_screen_pixels() {
     std::fs::write(format!("{dir}/scene_points.ppm"), ppm).unwrap();
 }
 
+/// Куб на плите под Солнцем: тень ложится на плиту, сила тени ноль -
+/// кадр как без Солнца. Кадр пишется в target/snapshots/shadow.ppm.
+#[test]
+fn sun_casts_a_shadow() {
+    use scene_format::{Indices, Part};
+    let _turn = gpu_turn();
+    let (device, queue) = match headless() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("видеокарты нет, кадр не проверяется: {e}");
+            return;
+        }
+    };
+    let quad = |verts: Vec<[f64; 3]>, faces: Vec<[u32; 3]>, c: [f32; 4]| Part {
+        name: String::new(),
+        colors: Some(vec![c; verts.len()]),
+        verts,
+        indices: Indices::Triangles(faces),
+        sizes: None,
+    };
+    let plate = quad(
+        vec![
+            [-100.0, -100.0, 0.0],
+            [100.0, -100.0, 0.0],
+            [100.0, 100.0, 0.0],
+            [-100.0, 100.0, 0.0],
+        ],
+        vec![[0, 1, 2], [0, 2, 3]],
+        [0.8, 0.8, 0.8, 1.0],
+    );
+    let mut v = Vec::new();
+    for z in [0.0, 40.0] {
+        for (x, y) in [(-10.0, -10.0), (10.0, -10.0), (10.0, 10.0), (-10.0, 10.0)] {
+            v.push([x, y, z]);
+        }
+    }
+    let f = vec![
+        [4, 5, 6],
+        [4, 6, 7],
+        [0, 1, 5],
+        [0, 5, 4],
+        [1, 2, 6],
+        [1, 6, 5],
+        [2, 3, 7],
+        [2, 7, 6],
+        [3, 0, 4],
+        [3, 4, 7],
+    ];
+    let cube = quad(v, f, [0.6, 0.3, 0.2, 1.0]);
+    let parts = vec![plate, cube];
+    let frame = Frame::default();
+    let scene = GpuScene::upload(&device, &parts, frame);
+    let renderer = Renderer::new(&device);
+    let target = Target::new(&device, 400, 400);
+    let mut look = Look {
+        camera: scene_core::Camera {
+            center: [0.0, 0.0, 0.0],
+            distance: 400.0,
+            azimuth: 0.0,
+            elevation: 90.0,
+            fov: 60.0,
+            ortho: true,
+        },
+        vex: 1.0,
+        opacity: 1.0,
+        light: 0.0,
+        sun: None,
+        background: BG_PLAIN,
+        pixels_per_point: 1.0,
+    };
+    let shot = |look: &Look| {
+        renderer.render(&device, &queue, &target, &scene, look);
+        read_rgba(&device, &queue, &target).unwrap()
+    };
+    let plain = shot(&look);
+    let darker = |a: &[u8], b: &[u8]| {
+        a.as_chunks::<4>()
+            .0
+            .iter()
+            .zip(b.as_chunks::<4>().0)
+            .filter(|(p, q)| i16::from(p[0]) - i16::from(q[0]) > 30)
+            .count()
+    };
+    look.sun = Some(render::Sun {
+        azimuth: 180.0,
+        altitude: 45.0,
+        strength: 0.0,
+    });
+    assert_eq!(darker(&plain, &shot(&look)), 0, "тень силы ноль");
+    look.sun = Some(render::Sun {
+        azimuth: 180.0,
+        altitude: 45.0,
+        strength: 1.0,
+    });
+    let lit = shot(&look);
+    // тень куба 20 x 40 м на плите: сотни пикселей кадра
+    let n = darker(&plain, &lit);
+    assert!(n > 300 && n < 40_000, "в тени пикселей {n}");
+    let dir = format!("{}/../../target/snapshots", env!("CARGO_MANIFEST_DIR"));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut ppm = format!("P6\n{} {}\n255\n", target.width, target.height).into_bytes();
+    for p in lit.as_chunks::<4>().0 {
+        ppm.extend_from_slice(&p[..3]);
+    }
+    std::fs::write(format!("{dir}/shadow.ppm"), ppm).unwrap();
+}
+
 #[test]
 fn demo_scene_renders_with_its_camera() {
     let _turn = gpu_turn();
@@ -153,6 +261,7 @@ fn demo_scene_renders_with_its_camera() {
         vex: frame.vex,
         opacity: 1.0,
         light: 1.0,
+        sun: None,
         background: BG_PLAIN,
         pixels_per_point: 1.0,
     };

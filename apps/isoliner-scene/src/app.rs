@@ -24,7 +24,7 @@ use crate::i18n::{Lang, tr};
 use crate::{share, shot};
 
 mod params;
-use params::{BoxOpts, LookOpts};
+use params::{BoxOpts, LookOpts, SunOpts};
 
 /// Подставить значения в шаблон по порядку: `%s`, `%d`, `%.0f`.
 fn fill(template: &str, args: &[String]) -> String {
@@ -332,6 +332,8 @@ pub struct SceneApp {
     box_opts: BoxOpts,
     /// Отмывка и сглаживание краёв.
     look_opts: LookOpts,
+    /// Солнце и тени.
+    sun: SunOpts,
     /// Короб, построенный окном: номер в частях видеокарты и то,
     /// по чему он построен. Изменилось - строится заново.
     box_slot: Option<usize>,
@@ -420,6 +422,7 @@ impl SceneApp {
             params_tab: 0,
             box_opts: BoxOpts::default(),
             look_opts: LookOpts::default(),
+            sun: SunOpts::default(),
             box_slot: None,
             box_key: None,
             film: Film::default(),
@@ -571,6 +574,7 @@ impl SceneApp {
             vex: self.vex,
             opacity: self.opacity,
             light: self.look_opts.strength(),
+            sun: self.sun.look(),
             background: match (self.gradient, self.dark) {
                 (true, false) => render::BG_GRADIENT,
                 (false, false) => render::BG_PLAIN,
