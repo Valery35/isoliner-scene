@@ -140,6 +140,32 @@ The bodies are closed: the volume, the samples inside and filling with water are
 | **Faces on a circle and an arch** | Number of faces on a circle and an arch. More is smoother but makes the scene heavier. |
 | **Working bodies** | Working bodies, one per line, with all the fields of the axis and the fields of length, section area and volume. The bodies are closed, they are taken by 2.11, 2.12, 2.14 and 2.23. |
 
+## 2.26 Crowned bodies from outlines
+
+Builds a closed body for each outline in plan: a flat floor, walls and a crown over them. A chamber, a lens, a dome, a dump over its base outline.
+
+The floor is a least-squares plane through the outline elevations, so a small tilt and scatter are allowed. An outline without elevation takes the floor from a field or a constant elevation.
+
+The crown height at a point grows with the distance to the outline. A narrow part of the body comes out low, a wide part high, and the crest follows the middle line of the shape rather than one axis: an L-shaped outline gets a crown along both arms. A linear crown is a gable roof with the rise "steepness per metre from the outline", a rounded one is an arc of the same height, like a chamber vault. The rise limit cuts the crest: a wide body gets a flat roof over its middle.
+
+The body is built on a grid with the cell step, and the boundary runs through the centres of the cells inside the outline, so the volume is a little less than the outline area times the height. A finer cell is closer to the outline.
+
+The bodies are closed: 2.11, 2.12, 2.14 and 2.23 compute the volume, the samples inside and the water filling.
+
+The idea comes from the QGIS 3D Studio plugin.
+
+| Field | What it sets |
+|---|---|
+| **Body outlines (polygons)** | Body outlines in plan: polygons with or without elevation. A vertical outline, as on a section, is skipped: it has no area in plan. |
+| **Floor elevation field** | Floor elevation from a field. When set, the floor is level at this elevation even if the outline has its own Z. |
+| **Floor elevation for outlines without Z, m** | Floor elevation for outlines without elevation and without an elevation field. Outlines with Z keep the floor on their own elevations. |
+| **Wall height, m** | Height of the vertical walls from the floor to the start of the crown. Zero starts the crown right at the floor, like a lens. |
+| **Crown profile** | Linear is a gable roof whose rise grows evenly. Rounded is an arc from the wall to a crest of the same height, like a chamber vault, with a larger volume. |
+| **Crown steepness, m per metre from the outline** | Crown rise per metre of distance from the outline. 0.45 gives a crest of about 24 degrees, one gives 45 degrees. |
+| **Crown rise at most, m (0 - no limit)** | The limit of the crown rise above the walls. Zero means no limit, and a wide body then gets a high crown. |
+| **Cell, m (0 - from outline size)** | The body grid step. Zero takes about one hundred twenty cells along the long side of the outline. Finer gives a more exact boundary but more faces. |
+| **Bodies from outlines** | Bodies, one per outline, with all outline fields and the fields of volume, area, elevations and crown rise. The bodies are closed, 2.11, 2.12, 2.14 and 2.23 take them. |
+
 ## 2.17 Borehole traces from downhole surveys
 
 Builds borehole traces from collars and downhole surveys the way they are exported from a database: a collar layer and a survey table, matched by the hole ID.

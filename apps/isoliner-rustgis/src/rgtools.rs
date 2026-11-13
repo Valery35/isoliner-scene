@@ -43,6 +43,7 @@ use crate::i18n::tr;
 /// (2.18), а слой RustGIS их не держит.
 pub const OFFERED: &[&str] = &[
     "sweep_body",
+    "contour_crown",
     "desurvey_holes",
     "fill_to_volume",
     "hole_intervals",
@@ -1792,6 +1793,82 @@ mod tests {
             .find(|p| is_layer(p.kind))
             .map(|p| p.key.clone())
             .unwrap_or_default()
+    }
+
+    /// 2.26 по полигонам RustGIS: Г-образный контур без Z (пол - полем
+    /// или постоянной) даёт то же тело, что модуль. Слой линий - отказ.
+    #[test]
+    fn contour_crown_from_polygons() {
+        let cat = catalog();
+        let tool = cat.tool("contour_crown").unwrap();
+        let utm = Utm::at(56.0, 54.7);
+        let [e0, n0] = utm.forward(56.0, 54.7).map(f64::round);
+        for (k, r) in runs_of("contour_crown").iter().enumerate() {
+            let f8 = r["input"]["INPUT"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|f| f["id"] == 8)
+                .unwrap();
+            let ring: Vec<J> = f8["parts"][0]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|p| {
+                    let [lon, lat] =
+                        utm.inverse(e0 + p[0].as_f64().unwrap(), n0 + p[1].as_f64().unwrap());
+                    json!([lon, lat])
+                })
+                .collect();
+            let fc = json!({"type": "FeatureCollection", "features": [
+                {"type": "Feature", "row": 8, "properties": f8["attrs"],
+                 "geometry": {"type": "Polygon", "coordinates": [ring]}}]});
+            let v = &r["values"];
+            let shape =
+                &tool.param("SHAPE").unwrap().options[v["SHAPE"].as_u64().unwrap() as usize].en;
+            let mut params = json!({"input": "Контуры", "floor": v["FLOOR"], "wall": v["WALL"],
+                "shape": shape, "steep": v["STEEP"], "rise_max": v["RISE_MAX"], "cell": v["CELL"]});
+            if let Some(f) = v["FLOOR_FIELD"].as_str() {
+                params["floor_field"] = json!(f);
+            }
+            let req = json!({"kind": "tool", "id": "contour-crown", "lang": "ru",
+                "params": params, "layers": {"Контуры": fc}});
+            let got = run_t(&req, &cat, Lang::Ru);
+            if r.get("error").is_some() {
+                // у RustGIS слой полигонов, отказ модуля - на слое линий
+                continue;
+            }
+            assert!(got["ok"].is_object(), "{k}: {got}");
+            let props = &got["ok"]["layers"][0]["geojson"]["features"][0]["properties"];
+            let want = r["output"]["OUTPUT"]["features"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|w| w["source"] == 8)
+                .unwrap();
+            for (i, n) in ["volume", "plan_area", "zmin", "zmax", "rise"]
+                .iter()
+                .enumerate()
+            {
+                let (a, b) = (
+                    props[*n].as_f64().unwrap(),
+                    want["values"][i].as_f64().unwrap(),
+                );
+                assert!((a - b).abs() / b.abs().max(1.0) < 1e-6, "{k} {n}: {a} {b}");
+            }
+            assert_eq!(props["closed"], 1);
+        }
+        // слой линий - отказ модуля
+        let lines = json!({"type": "FeatureCollection", "features": [
+            {"type": "Feature", "properties": {}, "geometry": {"type": "LineString",
+             "coordinates": [[56.0, 54.7], [56.001, 54.7], [56.001, 54.701]]}}]});
+        let req = json!({"kind": "tool", "id": "contour-crown", "lang": "ru",
+            "params": {"input": "Линии"}, "layers": {"Линии": lines}});
+        let e = run_t(&req, &cat, Lang::Ru)["error"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+        assert!(e.contains("Нужен слой полигонов"), "{e}");
     }
 
     #[test]

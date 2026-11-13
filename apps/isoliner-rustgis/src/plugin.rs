@@ -316,8 +316,9 @@ mod tests {
         for r in runs["runs"].as_array().unwrap() {
             let name = r["tool"].as_str().unwrap();
             let tool = cat.tool(name).unwrap();
-            // инструмент без расчёта на Rust - его прогоны позже
-            if tools::run_fn(name).is_none() {
+            // инструмент без расчёта на Rust - его прогоны позже, отказы
+            // модуля сверяет тест самого расчёта
+            if tools::run_fn(name).is_none() || r.get("error").is_some() {
                 continue;
             }
             want_n += 1;
