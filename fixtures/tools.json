@@ -1,7 +1,7 @@
 {
  "format": 1,
  "module": "isoliner3d",
- "version": "1.4.13",
+ "version": "1.5.5",
  "tools": [
   {
    "code": "2.11",
@@ -374,8 +374,8 @@
       "en": "Thinning of the mesh"
      },
      "hint": {
-      "ru": "Прореживание сетки. Единица - как есть; двойка берёт каждую вторую ячейку и даёт вчетверо меньше треугольников. Объём при этом меняется мало, а вот тонкие детали срезаются.",
-      "en": "Thinning of the mesh. One means as it is; two takes every second cell and gives four times fewer triangles. The volume changes little, but fine detail is cut away."
+      "ru": "Прореживание сетки. Единица - как есть, двойка берёт каждую вторую ячейку и даёт вчетверо меньше треугольников. Объём при этом меняется мало, а вот тонкие детали срезаются.",
+      "en": "Thinning of the mesh. One means as it is, two takes every second cell and gives four times fewer triangles. The volume changes little, but fine detail is cut away."
      },
      "default": 1,
      "minimum": 1,
@@ -646,8 +646,8 @@
    },
    "group": "2",
    "help": {
-    "ru": "Строит стволы скважин по устьям и инклинометрии.\n\nМежду замерами ствол идёт дугой окружности, касательные к которой на концах совпадают с замерами: метод минимальной кривизны, им считают Micromine, Datamine, Surpac и Leapfrog. От устья до первого замера ствол идёт по направлению из паспорта скважины, если поля азимута и угла есть у устьев, иначе по первому замеру. За последним замером ствол идёт по нему же до забоя. Скважина без инклинометрии и паспорта отвесная, скважина вверх из выработки задаётся углом вверх.\n\nУгол записывают по-разному: от горизонта с минусом вниз (-90 отвесно вниз), от горизонта с плюсом вниз или зенитный угол от вертикали. Соглашение выбирается явно.\n\nНа выходе линии с Z, длина каждой равна глубине по стволу. Дальше 2.18 режет их на интервалы опробования или композиты, а сцена показывает трубами.",
-    "en": "Builds borehole traces from collars and downhole surveys.\n\nBetween stations the trace follows a circular arc whose end tangents match the surveys: the minimum curvature method, used by Micromine, Datamine, Surpac and Leapfrog. From the collar to the first station the trace follows the direction from the hole passport when the collars have azimuth and angle fields, otherwise the first station. Past the last station the trace goes along it to the end of hole. A hole without a survey and a passport is vertical, an upward hole from a working is set by an upward angle.\n\nThe angle is recorded in different ways: from the horizontal with down negative (-90 straight down), from the horizontal with down positive, or a zenith angle from the vertical. The convention is chosen explicitly.\n\nThe output is lines with Z, the length of each equals the depth along the hole. Then 2.18 cuts them into sample intervals or composites, and the scene shows them as tubes."
+    "ru": "Строит стволы скважин по устьям и инклинометрии, как их выгружают из базы: слой устьев и таблица замеров, сведённые по номеру скважины.\n\nМежду замерами ствол идёт дугой окружности, касательные к которой на концах совпадают с замерами. Это метод минимальной кривизны, им считают Micromine, Datamine, Surpac и Leapfrog, и стволы совпадают с их стволами. От устья до первого замера ствол идёт по направлению из паспорта скважины: азимут и угол у устья, если такие поля есть в слое устьев. Наклонная скважина идёт под углом с самого устья, а первый замер прибора бывает глубже. Без паспорта ствол до первого замера идёт по нему. Замер на глубине 0 важнее паспорта. За последним замером ствол идёт по нему же до забоя. Скважина без инклинометрии и без паспорта отвесная, о чём выдаётся предупреждение. Скважина вверх из подземной выработки задаётся углом вверх: при записи от горизонта с минусом вниз это положительный угол.\n\nУгол в базах записывают тремя способами: от горизонта с минусом вниз, когда -90 означает отвесно вниз, от горизонта с плюсом вниз и зенитный угол от вертикали, как в российской инклинометрии. Соглашение выбирается явно. Перепутанное соглашение уводит ствол вверх или кладёт его горизонтально, поэтому первую скважину стоит сверить с известной.\n\nАзимут считается от севера сетки проекции. Сближение меридианов не вводится: если азимуты в базе истинные, поправьте их до расчёта.\n\nНа выходе линии с Z. Длина каждой равна глубине по стволу, поэтому 2.18 режет ствол по глубинам без отдельной таблицы.",
+    "en": "Builds borehole traces from collars and downhole surveys the way they are exported from a database: a collar layer and a survey table, matched by the hole ID.\n\nBetween stations the trace follows a circular arc whose end tangents match the surveys. This is the minimum curvature method used by Micromine, Datamine, Surpac and Leapfrog, and the traces agree with theirs. From the collar to the first station the trace follows the direction from the hole passport: the azimuth and angle at the collar, when the collar layer has such fields. An inclined hole is angled from the collar itself, while the first instrument station may be deeper. Without a passport the trace follows the first station up to it. A station at depth 0 takes precedence over the passport. Past the last station the trace goes along it to the end of hole. A hole without a survey and without a passport is vertical, with a warning. An upward hole from an underground working is set by an upward angle: with the angle from the horizontal and down negative it is a positive angle.\n\nDatabases record the angle in three ways: from the horizontal with down negative, where -90 means straight down, from the horizontal with down positive, and a zenith angle from the vertical, as in Russian surveys. The convention is chosen explicitly. A wrong convention sends the trace upwards or lays it flat, so check the first hole against a known one.\n\nThe azimuth is taken from the grid north of the projection. The meridian convergence is not applied: if the azimuths in the database are true, correct them before the run.\n\nThe output is lines with Z. The length of each equals the depth along the hole, so 2.18 cuts a trace by depths without a separate table."
    },
    "params": [
     {
@@ -958,8 +958,8 @@
    },
    "group": "2",
    "help": {
-    "ru": "Режет стволы скважин на интервалы.\n\nТри способа. Интервалы из таблицы: каждая строка опробования ложится на ствол от своей глубины до своей со всеми полями. Равные интервалы: ствол режется на пробы заданной длины от устья. Композиты: так же, но в каждом интервале считается среднее по таблице, взвешенное по длине пересечения. Простое среднее завысило бы короткую богатую пробу.\n\nКомпозит без единой пробы получает пустое значение, а не ноль, поле cover показывает опробованную долю его длины.\n\nНа выходе куски ствола с Z и середины интервалов точками. Куски показывают в сцене трубами, точки идут в интерполяцию 2.02, 2.06 и 2.07.",
-    "en": "Cuts borehole traces into intervals.\n\nThree modes. Intervals from the table: every sample row lands on the trace from its depth to its depth with all its fields. Equal intervals: the trace is cut into samples of the given length from the collar. Composites: the same, but each interval gets the mean of the table weighted by the length of overlap. A plain mean would overstate a short rich sample.\n\nA composite without a single sample gets an empty value, not a zero, and the cover field shows the sampled share of its length.\n\nThe outputs are pieces of the trace with Z and the interval midpoints as points. The pieces are shown in the scene as tubes, the points go into the interpolation of 2.02, 2.06 and 2.07."
+    "ru": "Режет стволы скважин на интервалы тремя способами.\n\n**Интервалы из таблицы** кладут каждую строку опробования на ствол от своей глубины до своей со всеми полями таблицы. Так в сцене видно опробование как оно есть.\n\n**Равные интервалы** режут ствол на куски заданной длины от устья. Последний кусок до забоя короче, если длина не делится нацело.\n\n**Композиты по длине** режут так же и в каждом интервале считают среднее по таблице, взвешенное по длине пересечения с пробой. Проба 0-1 м по 10 г/т и проба 1-4 м по 2 г/т дают композит 0-4 м по 4 г/т, а простое среднее дало бы 6. Композит без единой пробы получает пустое значение, а не ноль: пропуск опробования не равен пустой породе. Поле cover показывает опробованную долю длины композита.\n\nНа выходе два слоя. Куски ствола с Z показывают в сцене трубами, с толщиной и цветом по содержанию. Середины интервалов точками с теми же полями идут в 2.02, 2.06 и 2.07: так от опробования доходят до куба и оболочек.",
+    "en": "Cuts borehole traces into intervals in three ways.\n\n**Intervals from the table** put every sample row on the trace from its depth to its depth with all the fields of the table. The scene then shows the sampling as it is.\n\n**Equal intervals** cut the trace into pieces of the given length from the collar. The last piece to the end of hole is shorter when the length does not divide evenly.\n\n**Length-weighted composites** cut the same way and compute in each interval the mean of the table weighted by the length of overlap with a sample. A sample 0-1 m at 10 g/t and a sample 1-4 m at 2 g/t give a composite 0-4 m at 4 g/t, while a plain mean would give 6. A composite without a single sample gets an empty value, not a zero: a gap in sampling is not barren rock. The cover field shows the sampled share of the composite length.\n\nThere are two outputs. Pieces of the trace with Z are shown in the scene as tubes with the thickness and colour by grade. Interval midpoints as points with the same fields go into 2.02, 2.06 and 2.07: this is the way from the assays to a cube and shells."
    },
    "params": [
     {
@@ -1560,6 +1560,665 @@
     {
      "ru": "Незамкнутых тел: %d.",
      "en": "Open bodies: %d."
+    }
+   ]
+  },
+  {
+   "code": "2.25",
+   "name": "density_3d",
+   "title": {
+    "ru": "3D-плотность",
+    "en": "3D density"
+   },
+   "group": "2",
+   "help": {
+    "ru": "Строит куб, в ячейке которого не оценка, а счёт: сколько объектов в ячейке, сумма или среднее их атрибута, длина линий внутри ячейки.\n\nОбъект считается один раз: точка своим положением, линия серединой по длине, полигон центром кольца. Длина линии делится между ячейками точно, по пересечениям отрезка с гранями сетки, и сумма по ячейкам равна длине линии внутри сетки. Это печатается в журнал.\n\nПустая ячейка - ноль, а не пропуск: ноль находок тоже измеренный факт. Только у среднего ячейка без объектов пустая: среднего по пустому множеству нет.\n\nКуб размечен по высоте (Z0, DZ), как все кубы модуля: в окне сцены по нему строится изоповерхность и воксели, 2.03 переводит его в блочную модель, 2.04 - в тело вокселями. Так скопление находок или густая сеть выработок становится телом по порогу плотности.\n\nШаг сетки ноль - круглый шаг от охвата данных: около пятидесяти ячеек по длинной стороне плана и двадцати по высоте.\n\nИдея из модуля QGIS 3D Studio.",
+    "en": "Builds a cube whose cell holds a count, not an estimate: how many features fall into the cell, the sum or mean of their attribute, the length of lines inside the cell.\n\nA feature is counted once: a point at its position, a line at its middle along the length, a polygon at the centre of its ring. Line length is split between cells exactly, at the crossings of each segment with the cell faces, and the sum over the cells equals the line length inside the grid. This is printed to the log.\n\nAn empty cell is zero, not a gap: zero finds is a measured fact too. Only for the mean a cell without features is empty: there is no mean of an empty set.\n\nThe cube carries the elevation marks (Z0, DZ) like every cube of the plugin: the scene window builds an isosurface and voxels from it, 2.03 turns it into a block model, 2.04 into a voxel body. So a cluster of finds or a dense net of workings becomes a body by a density threshold.\n\nA grid step of zero takes a round step from the data extent: about fifty cells along the long side of the plan and twenty along the height.\n\nThe idea comes from the QGIS 3D Studio plugin."
+   },
+   "params": [
+    {
+     "key": "INPUT",
+     "kind": "features",
+     "label": {
+      "ru": "Объекты с Z",
+      "en": "Features with Z"
+     },
+     "hint": {
+      "ru": "Точки, линии или полигоны с высотой: находки, пробы, интервалы опробования, выработки. Объекты без Z пропускаются, их число пишется в журнал.",
+      "en": "Points, lines or polygons with elevation: finds, samples, sampling intervals, workings. Features without Z are skipped and their count goes to the log."
+     }
+    },
+    {
+     "key": "METRIC",
+     "kind": "enum",
+     "label": {
+      "ru": "Что считать в ячейке",
+      "en": "What to count in a cell"
+     },
+     "hint": {
+      "ru": "Число объектов - плотность находок или проб. Сумма и среднее - по атрибуту ниже. Длина линий, м - сколько метров выработок или интервалов проходит через ячейку.",
+      "en": "Feature count is the density of finds or samples. Sum and mean use the attribute below. Line length, m is how many metres of workings or intervals pass through the cell."
+     },
+     "default": 0,
+     "options": [
+      {
+       "ru": "Число объектов",
+       "en": "Feature count"
+      },
+      {
+       "ru": "Сумма атрибута",
+       "en": "Attribute sum"
+      },
+      {
+       "ru": "Среднее атрибута",
+       "en": "Attribute mean"
+      },
+      {
+       "ru": "Длина линий, м",
+       "en": "Line length, m"
+      }
+     ]
+    },
+    {
+     "key": "ATTR",
+     "kind": "field",
+     "label": {
+      "ru": "Атрибут для суммы и среднего",
+      "en": "Attribute for the sum and mean"
+     },
+     "hint": {
+      "ru": "Числовой атрибут: металл, масса, вес находки. Пустые значения не участвуют.",
+      "en": "A numeric attribute: metal, mass, weight of a find. Empty values do not take part."
+     },
+     "parent": "INPUT",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "CELL_XY",
+     "kind": "number",
+     "label": {
+      "ru": "Ячейка в плане, м (0 - от охвата)",
+      "en": "Cell in plan, m (0 - from extent)"
+     },
+     "hint": {
+      "ru": "Размер ячейки по x и y в метрах. Ноль - круглый шаг от охвата данных, около пятидесяти ячеек по длинной стороне.",
+      "en": "Cell size along x and y in metres. Zero takes a round step from the data extent, about fifty cells along the long side."
+     },
+     "default": 0.0,
+     "minimum": 0.0
+    },
+    {
+     "key": "CELL_Z",
+     "kind": "number",
+     "label": {
+      "ru": "Ячейка по высоте, м (0 - от охвата)",
+      "en": "Cell along height, m (0 - from extent)"
+     },
+     "hint": {
+      "ru": "Размер ячейки по высоте в метрах. Ноль - около двадцати слоёв на размах отметок.",
+      "en": "Cell size along the height in metres. Zero takes about twenty levels over the elevation range."
+     },
+     "default": 0.0,
+     "minimum": 0.0
+    },
+    {
+     "key": "OUTPUT",
+     "kind": "sink",
+     "label": {
+      "ru": "Куб плотности",
+      "en": "Density cube"
+     },
+     "hint": {
+      "ru": "Куб плотности: канал на уровень по высоте, разметка Z0 и DZ в метаданных. Открывается в окне сцены изоповерхностью или вокселями.",
+      "en": "The density cube: a band per elevation level, Z0 and DZ in the metadata. It opens in the scene window as an isosurface or voxels."
+     },
+     "geometry": "raster"
+    },
+    {
+     "key": "OUTPUT_CELLS",
+     "kind": "sink",
+     "label": {
+      "ru": "Ячейки плотности (точки)",
+      "en": "Density cells (points)"
+     },
+     "hint": {
+      "ru": "Непустые ячейки точками в центрах, со всеми счётами сразу: n, sum, mean, len_m и объём ячейки vol.",
+      "en": "Non-empty cells as points at their centres, with all counts at once: n, sum, mean, len_m and the cell volume vol."
+     },
+     "geometry": "points",
+     "optional": true
+    }
+   ],
+   "messages": [
+    {
+     "ru": "число объектов",
+     "en": "feature count"
+    },
+    {
+     "ru": "сумма атрибута",
+     "en": "attribute sum"
+    },
+    {
+     "ru": "среднее атрибута",
+     "en": "attribute mean"
+    },
+    {
+     "ru": "длина линий, м",
+     "en": "line length, m"
+    },
+    {
+     "ru": "Сетка %d x %d x %d, шаг %.6g x %.6g x %.6g м.",
+     "en": "Grid %d x %d x %d, step %.6g x %.6g x %.6g m."
+    },
+    {
+     "ru": "Объектов: %d, в сетке %d.",
+     "en": "Features: %d, inside the grid %d."
+    },
+    {
+     "ru": "Непустых ячеек: %d из %d.",
+     "en": "Non-empty cells: %d of %d."
+    },
+    {
+     "ru": "Для суммы и среднего нужен атрибут.",
+     "en": "The sum and the mean need an attribute."
+    },
+    {
+     "ru": "Длина линий считается только по слою линий.",
+     "en": "Line length is counted only for a line layer."
+    },
+    {
+     "ru": "Объектов без высоты: %d, они пропущены. Плотности в объёме нужна Z у каждой вершины.",
+     "en": "Features without elevation: %d, skipped. Density in a volume needs Z at every vertex."
+    },
+    {
+     "ru": "Объектов с высотой не нашлось: у геометрии должна быть Z.",
+     "en": "No features with height were found: the geometry must have Z."
+    },
+    {
+     "ru": "Длина линий: всего %.2f м, по ячейкам %.2f м.",
+     "en": "Line length: %.2f m in total, %.2f m over the cells."
+    },
+    {
+     "ru": "Сетка слишком мелкая (%s). Укрупните шаг.",
+     "en": "The grid is too fine (%s). Use a coarser step."
+    },
+    {
+     "ru": "Ячейки плотности",
+     "en": "Density cells"
+    }
+   ]
+  },
+  {
+   "code": "1.09",
+   "name": "bench_report",
+   "title": {
+    "ru": "Отчёт по горизонтам",
+    "en": "Bench report"
+   },
+   "group": "1",
+   "help": {
+    "ru": "Режет блочную модель горизонтальными уступами и считает по каждому: горную массу, руду и вскрышу, среднее содержание руды, металл, коэффициент вскрыши, выручку, затраты и маржу. Последняя строка - итог.\n\nУступы идут от базовой отметки с шагом высоты уступа, отчёт сверху вниз, как отрабатывают карьер. Блок, который пересекает границу уступа, делится между уступами по доле своей высоты. Высота блока берётся из полей верха и низа (z_from и z_to у 1.03), иначе из поля dz (у 2.03) вокруг отметки точки, иначе блок целиком уходит в уступ своего центра.\n\nРуда - блоки с содержанием не ниже бортового. Блок без содержания считается вскрышей, их число пишется в журнал.\n\nМеталл зависит от единицы содержания: для процентов он в тоннах, для г/т - в граммах. Цена - за ту же единицу металла. Выручка - металл с учётом извлечения по цене, затраты - выемка всей горной массы плюс переработка руды. Нули в экономике - только тоннаж и металл.\n\nПоля объёма и плотности угадываются по именам vol и dens, как их пишут 1.03 и 2.03. Чужую модель Micromine, Datamine или Surpac сначала переведите в куб 2.20, потом в блоки 2.03, или задайте поля сами.\n\nИдея из модуля QGIS 3D Studio.",
+    "en": "Cuts the block model into horizontal benches and computes for each: rock mass, ore and waste, mean ore grade, metal, stripping ratio, revenue, cost and margin. The last row is the total.\n\nBenches go from the base elevation with the bench height step, the report runs top down, the way a pit is mined. A block crossing a bench boundary is split between benches by the share of its height. The block height comes from the top and bottom fields (z_from and z_to of 1.03), otherwise from the dz field (of 2.03) around the point elevation, otherwise the whole block goes to the bench of its centre.\n\nOre is blocks with a grade not below the cut-off. A block without grade counts as waste, and their number goes to the log.\n\nMetal depends on the grade unit: for percent it is in tonnes, for g/t in grams. The price is per the same metal unit. Revenue is metal with recovery at the price, cost is mining of all rock plus processing of ore. Zero economics gives only tonnage and metal.\n\nThe volume and density fields are guessed by the names vol and dens, as 1.03 and 2.03 write them. A foreign Micromine, Datamine or Surpac model goes first to a cube with 2.20, then to blocks with 2.03, or set the fields yourself.\n\nThe idea comes from the QGIS 3D Studio plugin."
+   },
+   "params": [
+    {
+     "key": "BLOCKS",
+     "kind": "points",
+     "label": {
+      "ru": "Блочная модель (точки с Z)",
+      "en": "Block model (points with Z)"
+     },
+     "hint": {
+      "ru": "Центры блоков точками с высотой: выход 1.03 или 2.03, либо своя модель с полями объёма и содержания.",
+      "en": "Block centres as points with elevation: the output of 1.03 or 2.03, or your own model with volume and grade fields."
+     }
+    },
+    {
+     "key": "GRADE",
+     "kind": "field",
+     "label": {
+      "ru": "Поле содержания",
+      "en": "Field of the grade"
+     },
+     "hint": {
+      "ru": "Содержание полезного компонента в блоке. Единица - в поле ниже, от неё зависит единица металла.",
+      "en": "The grade of the useful component in the block. The unit is in the field below, the metal unit depends on it."
+     },
+     "parent": "BLOCKS",
+     "numeric": true
+    },
+    {
+     "key": "UNIT",
+     "kind": "enum",
+     "label": {
+      "ru": "Единица содержания",
+      "en": "Grade unit"
+     },
+     "hint": {
+      "ru": "Проценты - металл в тоннах. Г/т - металл в граммах. Цена металла ниже задаётся за эту же единицу.",
+      "en": "Percent gives metal in tonnes, g/t gives metal in grams. The metal price below is set per the same unit."
+     },
+     "default": 0,
+     "options": [
+      {
+       "ru": "Проценты",
+       "en": "Percent"
+      },
+      {
+       "ru": "Граммы на тонну",
+       "en": "Grams per tonne"
+      }
+     ]
+    },
+    {
+     "key": "CUTOFF",
+     "kind": "number",
+     "label": {
+      "ru": "Бортовое содержание",
+      "en": "Cut-off grade"
+     },
+     "hint": {
+      "ru": "Блоки с содержанием не ниже этого - руда, остальные вскрыша.",
+      "en": "Blocks with a grade not below this are ore, the rest is waste."
+     },
+     "default": 0.0
+    },
+    {
+     "key": "HEIGHT",
+     "kind": "number",
+     "label": {
+      "ru": "Высота уступа, м",
+      "en": "Bench height, m"
+     },
+     "hint": {
+      "ru": "Высота уступа в метрах. Мельче уступ - подробнее отчёт, но больше строк и дробнее блоки.",
+      "en": "Bench height in metres. A smaller bench gives a finer report, but more rows and more split blocks."
+     },
+     "default": 10.0,
+     "minimum": 0.01
+    },
+    {
+     "key": "BASE",
+     "kind": "number",
+     "label": {
+      "ru": "Базовая отметка уступов, м",
+      "en": "Bench base elevation, m"
+     },
+     "hint": {
+      "ru": "Отметка, от которой отсчитываются уступы: границы уступов лежат на ней и через высоту уступа вверх и вниз.",
+      "en": "The elevation benches are counted from: bench boundaries lie on it and every bench height up and down."
+     },
+     "default": 0.0
+    },
+    {
+     "key": "VOL",
+     "kind": "field",
+     "label": {
+      "ru": "Поле объёма блока (пусто - vol)",
+      "en": "Block volume field (empty - vol)"
+     },
+     "hint": {
+      "ru": "Объём блока, м³. Пусто - поле vol или volume, если оно есть.",
+      "en": "Block volume, m³. Empty takes the vol or volume field when present."
+     },
+     "parent": "BLOCKS",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "DENS",
+     "kind": "field",
+     "label": {
+      "ru": "Поле плотности (пусто - dens)",
+      "en": "Density field (empty - dens)"
+     },
+     "hint": {
+      "ru": "Плотность блока, т/м³. Пусто - поле dens или density, если оно есть, иначе постоянная ниже.",
+      "en": "Block density, t/m³. Empty takes the dens or density field when present, otherwise the constant below."
+     },
+     "parent": "BLOCKS",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "DENSITY",
+     "kind": "number",
+     "label": {
+      "ru": "Плотность, т/м³, если поля нет",
+      "en": "Density, t/m³, if no field"
+     },
+     "hint": {
+      "ru": "Плотность для блоков, у которых нет поля плотности или оно пустое.",
+      "en": "Density for blocks that have no density field or an empty one."
+     },
+     "default": 2.7,
+     "minimum": 0.0
+    },
+    {
+     "key": "ZTOP",
+     "kind": "field",
+     "label": {
+      "ru": "Поле верха блока (пусто - z_from)",
+      "en": "Block top field (empty - z_from)"
+     },
+     "hint": {
+      "ru": "Отметка верха блока. Пусто - поле z_from, если оно есть. Без верха и низа высота блока берётся из поля dz вокруг отметки точки.",
+      "en": "Block top elevation. Empty takes the z_from field when present. Without top and bottom the block height comes from the dz field around the point elevation."
+     },
+     "parent": "BLOCKS",
+     "optional": true,
+     "numeric": true,
+     "advanced": true
+    },
+    {
+     "key": "ZBOT",
+     "kind": "field",
+     "label": {
+      "ru": "Поле низа блока (пусто - z_to)",
+      "en": "Block bottom field (empty - z_to)"
+     },
+     "hint": {
+      "ru": "Отметка низа блока. Пусто - поле z_to, если оно есть.",
+      "en": "Block bottom elevation. Empty takes the z_to field when present."
+     },
+     "parent": "BLOCKS",
+     "optional": true,
+     "numeric": true,
+     "advanced": true
+    },
+    {
+     "key": "PRICE",
+     "kind": "number",
+     "label": {
+      "ru": "Цена единицы металла",
+      "en": "Price per metal unit"
+     },
+     "hint": {
+      "ru": "Цена тонны металла для процентов или грамма для г/т. Ноль - без выручки.",
+      "en": "The price of a tonne of metal for percent or of a gram for g/t. Zero gives no revenue."
+     },
+     "default": 0.0,
+     "minimum": 0.0
+    },
+    {
+     "key": "RECOVERY",
+     "kind": "number",
+     "label": {
+      "ru": "Извлечение, %",
+      "en": "Recovery, %"
+     },
+     "hint": {
+      "ru": "Доля металла, которая доходит до продукта.",
+      "en": "The share of metal that reaches the product."
+     },
+     "default": 100.0,
+     "minimum": 0.0,
+     "maximum": 100.0
+    },
+    {
+     "key": "MINE_COST",
+     "kind": "number",
+     "label": {
+      "ru": "Выемка, за тонну горной массы",
+      "en": "Mining, per tonne of rock"
+     },
+     "hint": {
+      "ru": "Стоимость выемки тонны горной массы: руды и вскрыши.",
+      "en": "The cost of mining a tonne of rock: ore and waste."
+     },
+     "default": 0.0,
+     "minimum": 0.0
+    },
+    {
+     "key": "PROC_COST",
+     "kind": "number",
+     "label": {
+      "ru": "Переработка, за тонну руды",
+      "en": "Processing, per tonne of ore"
+     },
+     "hint": {
+      "ru": "Стоимость переработки тонны руды. Вскрыша её не несёт, только выемку.",
+      "en": "The cost of processing a tonne of ore. Waste does not carry it, only mining."
+     },
+     "default": 0.0,
+     "minimum": 0.0
+    },
+    {
+     "key": "OUTPUT",
+     "kind": "sink",
+     "label": {
+      "ru": "Отчёт по горизонтам",
+      "en": "Bench report"
+     },
+     "hint": {
+      "ru": "Таблица без геометрии: строка на уступ сверху вниз и итог.",
+      "en": "A table without geometry: a row per bench top down and the total."
+     },
+     "geometry": "none"
+    }
+   ],
+   "messages": [
+    {
+     "ru": "Поля: содержание %s, объём %s, плотность %s, высота блока %s.",
+     "en": "Fields: grade %s, volume %s, density %s, block height %s."
+    },
+    {
+     "ru": "Уступов: %d. Горная масса %.0f т, руда %.0f т, вскрыша %.0f т, металл %.6g.",
+     "en": "Benches: %d. Rock %.0f t, ore %.0f t, waste %.0f t, metal %.6g."
+    },
+    {
+     "ru": "Нужно поле содержания.",
+     "en": "A grade field is required."
+    },
+    {
+     "ru": "Нет поля объёма блока (vol). Задайте его.",
+     "en": "No block volume field (vol). Set it."
+    },
+    {
+     "ru": "Блоков без отметки или объёма: %d, они пропущены.",
+     "en": "Blocks without elevation or volume: %d, skipped."
+    },
+    {
+     "ru": "Блоков с отметкой и объёмом не нашлось.",
+     "en": "No blocks with elevation and volume were found."
+    },
+    {
+     "ru": "У %d блоков нет плотности: задайте поле плотности или постоянную плотность.",
+     "en": "%d blocks have no density: set a density field or a constant density."
+    },
+    {
+     "ru": "Блоков без содержания: %d, они считаются вскрышей.",
+     "en": "Blocks without grade: %d, counted as waste."
+    },
+    {
+     "ru": "Итого",
+     "en": "Total"
+    },
+    {
+     "ru": "Выручка %.0f, затраты %.0f, маржа %.0f.",
+     "en": "Revenue %.0f, cost %.0f, margin %.0f."
+    },
+    {
+     "ru": "нет, по центру",
+     "en": "none, by the centre"
+    },
+    {
+     "ru": "Высота уступа должна быть больше нуля.",
+     "en": "The bench height must be above zero."
+    }
+   ]
+  },
+  {
+   "code": "2.26",
+   "name": "contour_crown",
+   "title": {
+    "ru": "Тела по контуру со сводом",
+    "en": "Crowned bodies from outlines"
+   },
+   "group": "2",
+   "help": {
+    "ru": "Строит замкнутое тело на каждый контур в плане: плоский пол, стенки и свод над ними. Камера, линза, купол, отвал по контуру основания.\n\nПол - плоскость по отметкам контура наименьшими квадратами, поэтому небольшой наклон и разброс отметок допустимы. У контура без высоты пол берётся из поля или постоянной отметки.\n\nВысота свода в точке растёт с расстоянием до контура. Узкое место тела выходит низким, широкое высоким, гребень идёт по средней линии фигуры, а не по одной оси: у контура буквой Г свод вдоль обеих полок. Линейный свод - двускатная кровля с подъёмом «крутизна на метр от контура», округлый - дуга той же высоты, как свод камеры. Потолок подъёма срезает гребень: у широкого тела над серединой плоская кровля.\n\nТело строится на сетке с шагом ячейки, граница идёт по центрам ячеек внутри контура, поэтому объём немного меньше площади контура на высоту. Мельче ячейка - ближе к контуру.\n\nТела замкнуты: объём, пробы внутри, заполнение водой считают 2.11, 2.12, 2.14 и 2.23.\n\nИдея из модуля QGIS 3D Studio.",
+    "en": "Builds a closed body for each outline in plan: a flat floor, walls and a crown over them. A chamber, a lens, a dome, a dump over its base outline.\n\nThe floor is a least-squares plane through the outline elevations, so a small tilt and scatter are allowed. An outline without elevation takes the floor from a field or a constant elevation.\n\nThe crown height at a point grows with the distance to the outline. A narrow part of the body comes out low, a wide part high, and the crest follows the middle line of the shape rather than one axis: an L-shaped outline gets a crown along both arms. A linear crown is a gable roof with the rise \"steepness per metre from the outline\", a rounded one is an arc of the same height, like a chamber vault. The rise limit cuts the crest: a wide body gets a flat roof over its middle.\n\nThe body is built on a grid with the cell step, and the boundary runs through the centres of the cells inside the outline, so the volume is a little less than the outline area times the height. A finer cell is closer to the outline.\n\nThe bodies are closed: 2.11, 2.12, 2.14 and 2.23 compute the volume, the samples inside and the water filling.\n\nThe idea comes from the QGIS 3D Studio plugin."
+   },
+   "params": [
+    {
+     "key": "INPUT",
+     "kind": "features",
+     "label": {
+      "ru": "Контуры тел (полигоны)",
+      "en": "Body outlines (polygons)"
+     },
+     "hint": {
+      "ru": "Контуры тел в плане: полигоны с высотой или без неё. Отвесный контур, как на разрезе, пропускается: площади в плане у него нет.",
+      "en": "Body outlines in plan: polygons with or without elevation. A vertical outline, as on a section, is skipped: it has no area in plan."
+     }
+    },
+    {
+     "key": "FLOOR_FIELD",
+     "kind": "field",
+     "label": {
+      "ru": "Поле отметки пола",
+      "en": "Floor elevation field"
+     },
+     "hint": {
+      "ru": "Отметка пола из поля. Задана - пол горизонтален на этой отметке, даже если у контура есть своя Z.",
+      "en": "Floor elevation from a field. When set, the floor is level at this elevation even if the outline has its own Z."
+     },
+     "parent": "INPUT",
+     "optional": true,
+     "numeric": true
+    },
+    {
+     "key": "FLOOR",
+     "kind": "number",
+     "label": {
+      "ru": "Отметка пола для контуров без Z, м",
+      "en": "Floor elevation for outlines without Z, m"
+     },
+     "hint": {
+      "ru": "Отметка пола для контуров без высоты и без поля отметки. У контуров с Z пол идёт по их отметкам.",
+      "en": "Floor elevation for outlines without elevation and without an elevation field. Outlines with Z keep the floor on their own elevations."
+     },
+     "default": 0.0
+    },
+    {
+     "key": "WALL",
+     "kind": "number",
+     "label": {
+      "ru": "Высота стенок, м",
+      "en": "Wall height, m"
+     },
+     "hint": {
+      "ru": "Высота отвесных стенок от пола до начала свода. Ноль - свод начинается сразу от пола, как у линзы.",
+      "en": "Height of the vertical walls from the floor to the start of the crown. Zero starts the crown right at the floor, like a lens."
+     },
+     "default": 0.0,
+     "minimum": 0.0
+    },
+    {
+     "key": "SHAPE",
+     "kind": "enum",
+     "label": {
+      "ru": "Профиль свода",
+      "en": "Crown profile"
+     },
+     "hint": {
+      "ru": "Линейный - двускатная кровля, подъём растёт ровно. Округлый - дуга от стенки к гребню той же высоты, как свод камеры, объём больше.",
+      "en": "Linear is a gable roof whose rise grows evenly. Rounded is an arc from the wall to a crest of the same height, like a chamber vault, with a larger volume."
+     },
+     "default": 0,
+     "options": [
+      {
+       "ru": "Линейный",
+       "en": "Linear"
+      },
+      {
+       "ru": "Округлый",
+       "en": "Rounded"
+      }
+     ]
+    },
+    {
+     "key": "STEEP",
+     "kind": "number",
+     "label": {
+      "ru": "Крутизна свода, м на метр от контура",
+      "en": "Crown steepness, m per metre from the outline"
+     },
+     "hint": {
+      "ru": "Подъём свода на метр расстояния от контура. 0.45 даёт гребень около 24 градусов, единица - 45 градусов.",
+      "en": "Crown rise per metre of distance from the outline. 0.45 gives a crest of about 24 degrees, one gives 45 degrees."
+     },
+     "default": 0.45,
+     "minimum": 0.01
+    },
+    {
+     "key": "RISE_MAX",
+     "kind": "number",
+     "label": {
+      "ru": "Подъём свода не выше, м (0 - без предела)",
+      "en": "Crown rise at most, m (0 - no limit)"
+     },
+     "hint": {
+      "ru": "Предел подъёма свода над стенками. Ноль - без предела: у широкого тела свод тогда поднимается высоко.",
+      "en": "The limit of the crown rise above the walls. Zero means no limit, and a wide body then gets a high crown."
+     },
+     "default": 0.0,
+     "minimum": 0.0
+    },
+    {
+     "key": "CELL",
+     "kind": "number",
+     "label": {
+      "ru": "Ячейка, м (0 - от размера контура)",
+      "en": "Cell, m (0 - from outline size)"
+     },
+     "hint": {
+      "ru": "Шаг сетки тела. Ноль - около ста двадцати ячеек по длинной стороне контура. Мельче - точнее граница, но больше граней.",
+      "en": "The body grid step. Zero takes about one hundred twenty cells along the long side of the outline. Finer gives a more exact boundary but more faces."
+     },
+     "default": 0.0,
+     "minimum": 0.0,
+     "advanced": true
+    },
+    {
+     "key": "OUTPUT",
+     "kind": "sink",
+     "label": {
+      "ru": "Тела по контуру",
+      "en": "Bodies from outlines"
+     },
+     "hint": {
+      "ru": "Тела, по одному на контур, со всеми полями контура и полями объёма, площади, отметок и подъёма свода. Тела замкнуты, их принимают 2.11, 2.12, 2.14 и 2.23.",
+      "en": "Bodies, one per outline, with all outline fields and the fields of volume, area, elevations and crown rise. The bodies are closed, 2.11, 2.12, 2.14 and 2.23 take them."
+     }
+    }
+   ],
+   "messages": [
+    {
+     "ru": "Тел: %d, объём всего %.1f м3.",
+     "en": "Bodies: %d, volume in all %.1f m3."
+    },
+    {
+     "ru": "Нужен слой полигонов: контуры тел в плане.",
+     "en": "A polygon layer is needed: body outlines in plan."
+    },
+    {
+     "ru": "Крутизна свода должна быть больше нуля.",
+     "en": "The crown steepness must be above zero."
+    },
+    {
+     "ru": "Пропущено контуров: %d. Вырожденный контур или отвесный, как на разрезе: свода в плане у него нет.",
+     "en": "Outlines skipped: %d. A degenerate or vertical outline, as on a section, has no crown in plan."
+    },
+    {
+     "ru": "Ни одного тела не построилось: нужны контуры в плане с площадью.",
+     "en": "No body was built: outlines in plan with an area are needed."
+    },
+    {
+     "ru": "Незамкнутых тел: %d. Их не примут 2.11 и 2.12.",
+     "en": "Open bodies: %d. 2.11 and 2.12 will not take them."
     }
    ]
   }

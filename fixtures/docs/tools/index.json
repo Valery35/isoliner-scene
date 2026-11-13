@@ -1,0 +1,105 @@
+{
+ "format": 1,
+ "version": "1.5.5",
+ "tools": [
+  {
+   "code": "2.11",
+   "name": "boolean_shells",
+   "group": "2",
+   "title": {
+    "ru": "Булевы операции с оболочками",
+    "en": "Boolean operations on shells"
+   }
+  },
+  {
+   "code": "2.12",
+   "name": "select_by_shell",
+   "group": "2",
+   "title": {
+    "ru": "Выборка оболочкой",
+    "en": "Selection by a shell"
+   }
+  },
+  {
+   "code": "2.13",
+   "name": "grid_to_shell",
+   "group": "2",
+   "title": {
+    "ru": "Оболочка грида пласта",
+    "en": "A shell from a bed grid"
+   }
+  },
+  {
+   "code": "2.14",
+   "name": "zonal_shell_stats",
+   "group": "2",
+   "title": {
+    "ru": "Зональная статистика оболочек",
+    "en": "Zonal statistics of shells"
+   }
+  },
+  {
+   "code": "2.17",
+   "name": "desurvey_holes",
+   "group": "2",
+   "title": {
+    "ru": "Стволы скважин по инклинометрии",
+    "en": "Borehole traces from downhole surveys"
+   }
+  },
+  {
+   "code": "2.18",
+   "name": "hole_intervals",
+   "group": "2",
+   "title": {
+    "ru": "Интервалы по стволу скважины",
+    "en": "Intervals along a borehole"
+   }
+  },
+  {
+   "code": "2.23",
+   "name": "fill_to_volume",
+   "group": "2",
+   "title": {
+    "ru": "Заполнение тела до объёма",
+    "en": "Fill a body up to a volume"
+   }
+  },
+  {
+   "code": "2.24",
+   "name": "sweep_body",
+   "group": "2",
+   "title": {
+    "ru": "Тело вдоль выработки",
+    "en": "Body along a mine working"
+   }
+  },
+  {
+   "code": "2.25",
+   "name": "density_3d",
+   "group": "2",
+   "title": {
+    "ru": "3D-плотность",
+    "en": "3D density"
+   }
+  },
+  {
+   "code": "1.09",
+   "name": "bench_report",
+   "group": "1",
+   "title": {
+    "ru": "Отчёт по горизонтам",
+    "en": "Bench report"
+   }
+  },
+  {
+   "code": "2.26",
+   "name": "contour_crown",
+   "group": "2",
+   "title": {
+    "ru": "Тела по контуру со сводом",
+    "en": "Crowned bodies from outlines"
+   }
+  }
+ ]
+}
