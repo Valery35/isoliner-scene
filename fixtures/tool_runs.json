@@ -23579,6 +23579,167 @@
    "tolerance": {
     "volume_rel": 1e-09
    }
+  },
+  {
+   "tool": "contour_crown",
+   "values": {
+    "FLOOR_FIELD": null,
+    "FLOOR": 0.0,
+    "WALL": 0.0,
+    "SHAPE": 0,
+    "STEEP": 0.5,
+    "RISE_MAX": 0.0,
+    "CELL": 1.0,
+    "@INPUT": {
+     "name": "outlines",
+     "geometry": "polygon",
+     "fields": [
+      "fz"
+     ]
+    }
+   },
+   "input": {
+    "INPUT": [
+     {
+      "id": 7,
+      "attrs": {
+       "fz": null
+      },
+      "parts": [
+       [
+        [
+         435000.0,
+         6062000.0,
+         100.0
+        ],
+        [
+         435020.0,
+         6062000.0,
+         100.0
+        ],
+        [
+         435020.0,
+         6062020.0,
+         100.0
+        ],
+        [
+         435000.0,
+         6062020.0,
+         100.0
+        ]
+       ]
+      ]
+     },
+     {
+      "id": 8,
+      "attrs": {
+       "fz": -50.0
+      },
+      "parts": [
+       [
+        [
+         435000.0,
+         6062000.0,
+         null
+        ],
+        [
+         435030.0,
+         6062000.0,
+         null
+        ],
+        [
+         435030.0,
+         6062010.0,
+         null
+        ],
+        [
+         435010.0,
+         6062010.0,
+         null
+        ],
+        [
+         435010.0,
+         6062030.0,
+         null
+        ],
+        [
+         435000.0,
+         6062030.0,
+         null
+        ]
+       ]
+      ]
+     }
+    ]
+   },
+   "output": {
+    "OUTPUT": {
+     "fields": [
+      [
+       "volume",
+       "double"
+      ],
+      [
+       "plan_area",
+       "double"
+      ],
+      [
+       "zmin",
+       "double"
+      ],
+      [
+       "zmax",
+       "double"
+      ],
+      [
+       "rise",
+       "double"
+      ],
+      [
+       "closed",
+       "int"
+      ]
+     ],
+     "geometry": "mesh",
+     "features": [
+      {
+       "values": [
+        660.25,
+        400.0,
+        100.0,
+        104.75,
+        4.75,
+        1
+       ],
+       "source": 7,
+       "n_verts": 800,
+       "n_faces": 1596
+      },
+      {
+       "values": [
+        575.9992271075643,
+        500.0,
+        0.0,
+        2.75,
+        2.75,
+        1
+       ],
+       "source": 8,
+       "n_verts": 1000,
+       "n_faces": 1996
+      }
+     ]
+    }
+   },
+   "report": [
+    [
+     "info",
+     "Тел: 2, объём всего 1236.2 м3."
+    ]
+   ],
+   "tolerance": {
+    "volume_rel": 1e-09
+   }
   }
  ]
 }

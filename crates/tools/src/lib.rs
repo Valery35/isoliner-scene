@@ -23,6 +23,8 @@
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod bench_report;
+pub mod benches;
 pub mod boolean;
 pub mod boolean_shells;
 pub mod colnames;
@@ -50,6 +52,7 @@ pub type RunFn = fn(&Values, &mut dyn Report) -> Result<BTreeMap<String, Output>
 
 /// Расчёты по имени Processing.
 pub const RUNS: &[(&str, RunFn)] = &[
+    ("bench_report", bench_report::run),
     ("boolean_shells", boolean_shells::run),
     ("contour_crown", contour_crown::run),
     ("desurvey_holes", desurvey_holes::run),
