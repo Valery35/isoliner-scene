@@ -69,6 +69,11 @@ fn main() -> ExitCode {
     // окно сцены, его запускает команда scene отдельным процессом
     if first == Some("scene") {
         let launch = scene_app::Launch::from_args(args.into_iter().skip(2));
+        // окно сцены из слоёв проекта держит замок, пока живо: команда
+        // scene тогда только переписывает пакет
+        let _lock = (launch.path.as_deref() == Some(session::scene_path().as_path()))
+            .then(session::hold_lock)
+            .flatten();
         return match scene_app::run(launch) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
@@ -103,8 +108,12 @@ fn main() -> ExitCode {
         session::serve(&mut host, &lang, &ctx);
         return ExitCode::SUCCESS;
     }
-    // RustGIS без сессий: одна команда на запуск
-    let reply = plugin::answer(&line, &ctx);
+    // RustGIS без сессий: одна команда на запуск, запросы host.* - тем же
+    // вводом и выводом
+    let reply = {
+        let mut host = session::Host::new(std::io::stdin().lock(), std::io::stdout().lock());
+        session::once(&mut host, &line, &ctx)
+    };
     let mut out = std::io::stdout().lock();
     match writeln!(out, "{reply}").and_then(|()| out.flush()) {
         Ok(()) => ExitCode::SUCCESS,

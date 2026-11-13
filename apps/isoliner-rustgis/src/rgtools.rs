@@ -38,10 +38,22 @@ use crate::convert;
 use crate::i18n::tr;
 
 /// Инструменты в RustGIS. 2.24 берёт оси без Z: отметка - из поля или
-/// числа. Остальным нужны тела (2.11, 2.12, 2.14, 2.23) или линии с Z
-/// (2.18), а слой RustGIS их не держит. 2.17 ждёт выбора системы
-/// координат таблицы устьев.
-pub const OFFERED: &[&str] = &["sweep_body"];
+/// числа. 2.17 берёт устья точечным слоем, отметку устья - из поля.
+/// Остальным нужны тела (2.11, 2.12, 2.14, 2.23) или линии с Z (2.18),
+/// а слой RustGIS их не держит.
+pub const OFFERED: &[&str] = &["sweep_body", "desurvey_holes"];
+
+/// Поля, которых нет в окне RustGIS. 2.17: X и Y устьев полями -
+/// метры неизвестной системы координат, а у RustGIS систем координат
+/// нет. Устья идут точечным слоем, его градусы переводятся в метры.
+const HIDDEN: &[(&str, &str)] = &[("desurvey_holes", "XFIELD"), ("desurvey_holes", "YFIELD")];
+
+/// Поля-слои, которым в RustGIS нужен свой вид.
+const POINT_LAYERS: &[(&str, &str)] = &[("desurvey_holes", "COLLARS")];
+
+fn hidden(tool: &str, key: &str) -> bool {
+    HIDDEN.contains(&(tool, key))
+}
 
 /// Группа инструментов в панели RustGIS.
 #[cfg(test)]
@@ -113,7 +125,13 @@ fn manifest_tools(catalog: &Catalog) -> (Vec<J>, serde_json::Map<String, J>) {
         say(sum, summary(t.help.get(Lang::Ru)));
         let mut params = Vec::new();
         for p in &t.params {
-            let Some(kind) = rg_kind(p) else { continue };
+            let Some(mut kind) = rg_kind(p) else { continue };
+            if hidden(&t.name, &p.key) {
+                continue;
+            }
+            if POINT_LAYERS.contains(&(t.name.as_str(), p.key.as_str())) {
+                kind = "pointLayer";
+            }
             let label = p.label.get(Lang::En);
             say(label, p.label.get(Lang::Ru));
             let mut o = json!({"name": param_name(&p.key), "label": label, "kind": kind});
@@ -258,6 +276,36 @@ fn layer_value(p: &Param, fc: &J, utm: &Utm) -> J {
     J::Array(list)
 }
 
+/// Сведения о слое `@КЛЮЧ`, как их даёт модуль: имя, геометрия, Z,
+/// поля по порядку первого появления, числовые поля. Z у слоёв RustGIS
+/// нет никогда.
+fn layer_info(name: &str, fc: &J) -> J {
+    let feats = fc["features"].as_array().cloned().unwrap_or_default();
+    let geometry = feats
+        .iter()
+        .find_map(|f| f["geometry"]["type"].as_str())
+        .map_or("none", |t| match t {
+            "Point" | "MultiPoint" => "point",
+            "LineString" | "MultiLineString" => "line",
+            "Polygon" | "MultiPolygon" => "polygon",
+            _ => "none",
+        });
+    let mut fields: Vec<String> = Vec::new();
+    let mut text: Vec<String> = Vec::new();
+    for f in &feats {
+        for (k, v) in f["properties"].as_object().into_iter().flatten() {
+            if !fields.contains(k) {
+                fields.push(k.clone());
+            }
+            if v.is_string() && !text.contains(k) {
+                text.push(k.clone());
+            }
+        }
+    }
+    let numeric: Vec<&String> = fields.iter().filter(|k| !text.contains(k)).collect();
+    json!({"name": name, "geometry": geometry, "hasz": false, "fields": fields, "numeric": numeric})
+}
+
 /// Пункт списка: номер, английский или русский текст пункта.
 fn choice(p: &Param, v: &J) -> Option<usize> {
     if let Some(i) = v.as_u64() {
@@ -299,6 +347,13 @@ fn values(tool: &Tool, req: &J) -> Result<(J, Utm, HashMap<i64, J>), BadKey> {
     let mut out = serde_json::Map::new();
     let mut geoms = HashMap::new();
     for (p, fc) in &inputs {
+        let info = layer_info(params[param_name(&p.key)].as_str().unwrap_or(""), fc);
+        // устья 2.17 - только точками: иначе X и Y взялись бы из полей
+        let point_layer = POINT_LAYERS.contains(&(tool.name.as_str(), p.key.as_str()));
+        if point_layer && info["geometry"] != "point" {
+            return Err(p.key.clone());
+        }
+        out.insert(format!("@{}", p.key), info);
         out.insert(p.key.clone(), layer_value(p, fc, &utm));
         for (i, f) in fc["features"].as_array().into_iter().flatten().enumerate() {
             geoms
@@ -308,7 +363,7 @@ fn values(tool: &Tool, req: &J) -> Result<(J, Utm, HashMap<i64, J>), BadKey> {
     }
     for p in &tool.params {
         let v = &params[param_name(&p.key)];
-        if v.is_null() || is_layer(p.kind) {
+        if v.is_null() || is_layer(p.kind) || hidden(&tool.name, &p.key) {
             continue;
         }
         let got = match p.kind {
@@ -642,6 +697,107 @@ mod tests {
         assert!((p[1].as_f64().unwrap() - 54.7).abs() < 0.01);
         let msgs = got["ok"]["messages"].as_array().unwrap();
         assert!(msgs[0].as_str().unwrap().starts_with("Тел: 1"), "{msgs:?}");
+    }
+
+    /// Прогон 2.17 модуля через RustGIS: устья точками в градусах,
+    /// отметка из поля, инклинометрия таблицей без геометрии. Стволы в плане
+    /// и поля - как у модуля, сообщения - слово в слово.
+    #[test]
+    fn desurvey_from_rustgis_layers() {
+        let runs: J = serde_json::from_slice(
+            &std::fs::read(format!(
+                "{}/../../fixtures/tool_runs.json",
+                env!("CARGO_MANIFEST_DIR")
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        let r = runs["runs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["tool"] == "desurvey_holes")
+            .unwrap();
+        let utm = Utm::at(57.0, 54.7);
+        let [e0, n0] = utm.forward(57.0, 54.7);
+        let collars: Vec<J> = r["input"]["COLLARS"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| {
+                let a = &row["attrs"];
+                let geometry = match (a["x"].as_f64(), a["y"].as_f64()) {
+                    (Some(x), Some(y)) => {
+                        let [lon, lat] = utm.inverse(e0 + x, n0 + y);
+                        json!({"type": "Point", "coordinates": [lon, lat]})
+                    }
+                    _ => J::Null,
+                };
+                json!({"type": "Feature", "row": row["id"], "properties": a, "geometry": geometry})
+            })
+            .collect();
+        let survey: Vec<J> = r["input"]["SURVEY"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| json!({"type": "Feature", "row": row["id"], "properties": row["attrs"], "geometry": null}))
+            .collect();
+        let req = json!({
+            "kind": "tool", "id": "desurvey-holes", "lang": "ru",
+            "params": {"collars": "Устья", "hole": "hole", "zfield": "z", "eoh": "eoh",
+                "survey": "Инклинометрия", "s_hole": "hole", "s_depth": "depth",
+                "s_azi": "azimuth", "s_angle": "dip", "convention": 0, "step": r["values"]["STEP"]},
+            "layers": {
+                "Устья": {"type": "FeatureCollection", "features": collars},
+                "Инклинометрия": {"type": "FeatureCollection", "features": survey},
+            },
+        });
+        let got = run(&req, &catalog(), Lang::Ru);
+        assert!(got["ok"].is_object(), "{got}");
+        let feats = got["ok"]["layers"][0]["geojson"]["features"]
+            .as_array()
+            .unwrap();
+        let want = r["output"]["features"].as_array().unwrap();
+        assert_eq!(feats.len(), want.len());
+        let names: Vec<&str> = r["output"]["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f[0].as_str().unwrap())
+            .collect();
+        for (g, w) in feats.iter().zip(want) {
+            for (i, n) in names.iter().enumerate() {
+                let (a, b) = (&g["properties"][*n], &w["values"][i]);
+                match (a.as_f64(), b.as_f64()) {
+                    (Some(x), Some(y)) => assert!((x - y).abs() < 1e-6, "{n}: {x} {y}"),
+                    _ => assert_eq!(a, b, "{n}"),
+                }
+            }
+            let pts = g["geometry"]["coordinates"].as_array().unwrap();
+            let wp = w["points"].as_array().unwrap();
+            assert_eq!(pts.len(), wp.len());
+            for (p, q) in pts.iter().zip(wp) {
+                let [x, y] = utm.forward(p[0].as_f64().unwrap(), p[1].as_f64().unwrap());
+                assert!((x - e0 - q[0].as_f64().unwrap()).abs() < 1e-3);
+                assert!((y - n0 - q[1].as_f64().unwrap()).abs() < 1e-3);
+            }
+        }
+        let msgs: Vec<&str> = got["ok"]["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(J::as_str)
+            .collect();
+        // поля устьев называются по-другому: X и Y - точка слоя
+        for (m, w) in msgs.iter().zip(r["report"].as_array().unwrap()).skip(1) {
+            assert_eq!(*m, w[1].as_str().unwrap());
+        }
+        assert!(msgs[0].contains("X точка, Y точка, Z z"), "{}", msgs[0]);
+
+        // устья таблицей без точек - ошибка, а не метры из полей
+        let mut req = req;
+        req["layers"]["Устья"] = req["layers"]["Инклинометрия"].clone();
+        assert!(run(&req, &catalog(), Lang::En)["error"].is_string());
     }
 
     #[test]
