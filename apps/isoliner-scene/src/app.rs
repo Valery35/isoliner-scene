@@ -2341,9 +2341,9 @@ impl SceneApp {
             "draw_undo" | "draw_close" | "draw_line" => (false, self.ruler.is_some()),
             "spin" => (self.spin, loaded),
             "copy" | "png" => (false, shot),
-            // «обновить» модуля здесь - перечитать пакет с диска
+            // перечитать пакет с диска - кнопка программы (lite)
             #[cfg(not(target_arch = "wasm32"))]
-            "rebuild" => (false, self.watch.is_some()),
+            "reload" => (false, self.watch.is_some()),
             #[cfg(not(target_arch = "wasm32"))]
             "video" => (self.recording.is_some(), loaded && self.joining.is_none()),
             _ => return None,
@@ -2429,7 +2429,7 @@ impl SceneApp {
                 self.take_shot(ctx);
             }
             #[cfg(not(target_arch = "wasm32"))]
-            "rebuild" => {
+            "reload" => {
                 if let Some(wt) = self.watch.as_mut() {
                     wt.force();
                 }
