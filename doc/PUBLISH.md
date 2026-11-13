@@ -22,6 +22,20 @@
 
 ## Журнал
 
+### Isoliner3D для RustGIS 0.4.0 - 13 ноября 2026 года
+
+Первый выпуск расширения, тег `rustgis-v0.4.0`. Сцена из слоёв проекта
+в системе координат карты, инструменты 2.24 и 2.17 в панели RustGIS,
+руководство. Изменения - `apps/isoliner-rustgis/CHANGELOG.md`. Своих
+постов нет: расширение объявлено общими постами Isoliner Scene 0.4.0
+(`site/posts_0.4.0_social.md`), сайт обновляет основная сессия.
+
+| Площадка | Запись |
+|---|---|
+| GitHub | https://github.com/Valery35/isoliner-scene/releases/tag/rustgis-v0.4.0 - `isoliner3d-0.4.0.rgplugin`, руководство RU и EN, метка «Latest» оставлена у v0.4.0 |
+| Dropbox | `ИИ\Isoliner3D\isoliner3d-0.4.0.rgplugin` |
+| Посты | общие с Isoliner Scene 0.4.0 |
+
 ### 0.4.0 - 13 ноября 2026 года
 
 Окно сцены одно на линейку (крейт `scene-app`): Isoliner Scene и
