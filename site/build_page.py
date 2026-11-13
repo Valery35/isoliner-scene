@@ -34,6 +34,23 @@ RUSTGIS = "https://github.com/opengeos/RustGIS"
 
 # Лента выпусков: свежие сверху.
 FEED = (
+    ("2026-11-13", "pro", "1.5.4",
+     "Кнопка (i) с окном «О программе», общим с Isoliner Scene, чёткие "
+     "значки плашки на экранах с масштабом и дописанное руководство PDF.",
+     "An (i) button with the About window shared with Isoliner Scene, "
+     "sharp toolbar icons on scaled screens and an updated PDF manual."),
+    ("2026-11-13", "pro", "1.5.3",
+     "Тени от рельефа и объектов и положение Солнца в параметрах сцены. "
+     "Исправлена выгрузка поверхностей, которая с 1.5.0 сдвигала рельеф. "
+     "Плашка значков общая с Isoliner Scene.",
+     "Shadows from the terrain and objects and the Sun position in the "
+     "scene settings. Fixed the surface export that shifted the terrain "
+     "since 1.5.0. The toolbar is shared with Isoliner Scene."),
+    ("2026-11-13", "pro", "1.5.2",
+     "Все параметры вида собраны в одно компактное окно за одной кнопкой, "
+     "на плашке остались только действия.",
+     "All view settings are gathered in one compact window behind a single "
+     "button, the toolbar keeps only actions."),
     ("2026-11-13", "scene", "0.2.0",
      "Связь с QGIS. Кнопка модуля открывает сцену, пакет перечитывается "
      "сам, камера остаётся на месте. Обрезка с замкнутыми телами, вид по "
