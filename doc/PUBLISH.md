@@ -47,6 +47,15 @@
 | GitHub | https://github.com/Valery35/isoliner-scene/releases/tag/v0.4.0 |
 | Pages | обновлено по отправке `main` |
 | Dropbox | `ИИ\Isoliner3D`, 0.3.0 в `arhiv` |
+| Mastodon | https://en.osm.town/@Vaery35/117608812198026931 |
+| X | https://x.com/Valery35/status/2121198428432527644 |
+| LinkedIn | https://www.linkedin.com/feed/update/urn:li:activity:7526964318303842306/ |
+| Facebook | https://www.facebook.com/valery35/posts/pfbid0AgZ9dEUChtfR3dw54Zv1oHCFjcSnwsk5DTgUyKihfHnTvadngVXGzqfjpGqvFEbPl |
+| ВК | https://vk.ru/wall-241229428_73 (запись на стене) |
+| Telegram | бот поста не ставит, пост выкладывает автор сам |
+| Сайт informpp.ru | обновляет основная сессия |
+
+Посты общие для сцены и расширения RustGIS, у подсессии своих нет.
 
 ### 0.3.0 - 13 ноября 2026 года
 
