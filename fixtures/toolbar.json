@@ -115,11 +115,11 @@
   },
   {
    "key": "export_package",
-   "icon": "export",
+   "icon": "save",
    "ru": "Сохранить пакет сцены (.i3dscene)",
    "where": "lite",
    "en": "Save the scene package (.i3dscene)",
-   "svg": "icons/export.svg"
+   "svg": "icons/save.svg"
   },
   {
    "key": "scene_app",
