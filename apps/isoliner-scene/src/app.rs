@@ -1523,24 +1523,6 @@ impl SceneApp {
         self.dirty = true;
     }
 
-    /// Кнопки обрезки в панели. Что оставить и отметки - во вкладке
-    /// «Обрезка» окна параметров.
-    fn clip_buttons(&mut self, ui: &mut egui::Ui) {
-        let lang = self.lang;
-        let t = |s: &'static str| tr(lang, s);
-        ui.horizontal_wrapped(|ui| {
-            if ui.button(t("Обрезать")).clicked() {
-                self.apply_clip();
-            }
-            if ui
-                .add_enabled(self.full.is_some(), egui::Button::new(t("Снять обрезку")))
-                .clicked()
-            {
-                self.clear_clip();
-            }
-        });
-    }
-
     fn reset_camera(&mut self, w: f64, h: f64) {
         let Some(pkg) = &self.pkg else { return };
         match pkg.meta.camera {
@@ -1962,194 +1944,154 @@ impl SceneApp {
         self.start(frames, now);
     }
 
-    fn panel(&mut self, ui: &mut egui::Ui, now: f64, size: egui::Vec2) {
-        let (w, h) = (f64::from(size.x.max(1.0)), f64::from(size.y.max(1.0)));
-        ui.horizontal_wrapped(|ui| {
-            if ui.button(self.t("Открыть")).clicked() {
+    /// Левая колонка, как у окна модуля: файл наверху, список частей,
+    /// сведения о сцене внизу. Действия над видом - на плашке
+    /// и в окне параметров, здесь их нет.
+    fn panel(&mut self, ui: &mut egui::Ui) {
+        let lang = self.lang;
+        let loaded = self.pkg.is_some();
+        ui.horizontal(|ui| {
+            if ui.button(self.t("Открыть…")).clicked() {
                 self.pick(ui.ctx());
             }
-            if ui
-                .add_enabled(
-                    self.pkg.is_some(),
-                    egui::Button::new(self.t("Сохранить как")),
-                )
-                .clicked()
-            {
-                self.save_as();
-            }
-            let other = if self.lang == Lang::Ru { "EN" } else { "RU" };
-            if ui.button(other).clicked() {
-                self.lang = if self.lang == Lang::Ru {
-                    Lang::En
-                } else {
-                    Lang::Ru
-                };
-            }
+            ui.add_enabled_ui(loaded, |ui| {
+                ui.menu_button(self.t("Сохранить"), |ui| self.save_menu(ui));
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let other = if lang == Lang::Ru { "EN" } else { "RU" };
+                if ui
+                    .small_button(other)
+                    .on_hover_text(self.t("Язык окна"))
+                    .clicked()
+                {
+                    self.lang = if lang == Lang::Ru { Lang::En } else { Lang::Ru };
+                }
+            });
         });
-        if self.pkg.is_none() {
-            ui.separator();
+        ui.separator();
+        if !loaded {
             ui.label(self.t("Перетащите пакет .i3dscene в окно или нажмите «Открыть»."));
             return;
         }
-        ui.separator();
-        ui.horizontal_wrapped(|ui| {
-            if ui.button(self.t("Вписать")).clicked() {
-                self.fit(w, h);
-            }
-            if ui.button(self.t("Камера пакета")).clicked()
-                && let Some(c) = self.pkg.as_ref().and_then(|p| p.meta.camera)
-            {
-                self.fly_to(c, now);
-            }
-            let label = self.t("Поделиться");
-            ui.toggle_value(&mut self.share_open, label);
+        // измерение идёт - его величины
+        if self.ruler.is_some() {
+            self.ruler_panel(ui);
+            ui.separator();
+        }
+        ui.horizontal(|ui| {
+            ui.strong(self.t("Части"));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let none = ui.small_button(self.t("Ничего")).clicked();
+                let all = ui.small_button(self.t("Все")).clicked();
+                if (all || none)
+                    && let Some(scene) = self.scene.as_mut()
+                {
+                    for (p, row) in scene.parts.iter_mut().zip(&self.rows) {
+                        if !row.info.as_ref().is_some_and(|i| i.decor) {
+                            p.visible = all;
+                        }
+                    }
+                    self.dirty = true;
+                }
+            });
         });
-        // кнопки окна модуля - на плашке поверх сцены (`toolbar`),
-        // здесь только то, чего на плашке нет
-        // параметры вида - в окне «Параметры сцены» (шестерёнка),
-        // здесь только действия
-        self.ruler_panel(ui);
-        self.clip_buttons(ui);
-
-        ui.separator();
-        ui.heading(self.t("Части"));
-        let lang = self.lang;
         egui::ScrollArea::vertical()
-            .max_height(ui.available_height() * 0.45)
+            .max_height((ui.available_height() - 140.0).max(120.0))
             .id_salt("parts")
             .show(ui, |ui| {
-                if let Some(scene) = self.scene.as_mut() {
-                    // оформление пакета не показывается: короб строит
-                    // окно, он - в окне параметров
-                    for (p, row) in scene
-                        .parts
-                        .iter_mut()
-                        .zip(&self.rows)
-                        .filter(|(_, r)| !r.info.as_ref().is_some_and(|i| i.decor))
-                    {
-                        ui.horizontal(|ui| {
-                            let [r, g, b, a] = row.swatch;
-                            let col = egui::Color32::from_rgba_unmultiplied(
-                                (r * 255.0) as u8,
-                                (g * 255.0) as u8,
-                                (b * 255.0) as u8,
-                                (a * 255.0) as u8,
-                            );
-                            let (rect, _) = ui
-                                .allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
-                            ui.painter().rect_filled(rect, 2.0, col);
-                            if ui.checkbox(&mut p.visible, &p.name).changed() {
-                                self.dirty = true;
-                            }
-                        });
-                        let mut note = if p.lines {
-                            tr(lang, "линии").to_string()
-                        } else {
-                            tr(lang, "тело").to_string()
-                        };
-                        if p.points {
-                            note = fill(tr(lang, "точки: %s"), &[row.count.to_string()]);
-                        } else if row.info.as_ref().is_some_and(|i| i.shape.is_some()) {
-                            // значки скважин и реперов - плоские фигуры
-                            note = tr(lang, "значки").to_string();
-                        } else if !p.lines {
-                            note = match row.volume {
-                                Some(v) => fill(tr(lang, "объём %s м3"), &[grouped(v, 1)]),
-                                None => tr(lang, "не замкнуто").to_string(),
-                            };
+                let Some(scene) = self.scene.as_mut() else {
+                    return;
+                };
+                // оформление пакета не показывается: короб строит окно
+                for (p, row) in scene
+                    .parts
+                    .iter_mut()
+                    .zip(&self.rows)
+                    .filter(|(_, r)| !r.info.as_ref().is_some_and(|i| i.decor))
+                {
+                    let note = if p.points {
+                        fill(tr(lang, "точки: %s"), &[row.count.to_string()])
+                    } else if row.info.as_ref().is_some_and(|i| i.shape.is_some()) {
+                        // значки скважин и реперов - плоские фигуры
+                        tr(lang, "значки").to_string()
+                    } else if p.lines {
+                        tr(lang, "линии").to_string()
+                    } else {
+                        match row.volume {
+                            Some(v) => fill(tr(lang, "%s м3"), &[grouped(v, 1)]),
+                            None => tr(lang, "поверхность").to_string(),
                         }
-                        ui.weak(format!("    {note}"));
-                    }
+                    };
+                    ui.horizontal(|ui| {
+                        let [r, g, b, a] = row.swatch;
+                        let col = egui::Color32::from_rgba_unmultiplied(
+                            (r * 255.0) as u8,
+                            (g * 255.0) as u8,
+                            (b * 255.0) as u8,
+                            (a * 255.0) as u8,
+                        );
+                        let (rect, _) =
+                            ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
+                        ui.painter().rect_filled(rect, 2.0, col);
+                        if ui.checkbox(&mut p.visible, &p.name).changed() {
+                            self.dirty = true;
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.weak(note);
+                        });
+                    });
                 }
             });
-
-        ui.separator();
-        ui.heading(self.t("Виды"));
-        let mut go: Option<Camera> = None;
-        let mut drop: Option<usize> = None;
-        for (i, v) in self.views.iter().enumerate() {
-            ui.horizontal(|ui| {
-                if ui
-                    .button(fill(tr(lang, "Вид %d"), &[(i + 1).to_string()]))
-                    .clicked()
-                {
-                    go = Some(*v);
-                }
-                if ui
-                    .small_button(crate::i18n::ICON_REMOVE)
-                    .on_hover_text(tr(lang, "Убрать вид"))
-                    .clicked()
-                {
-                    drop = Some(i);
-                }
-            });
-        }
-        if let Some(v) = go {
-            self.fly_to(v, now);
-        }
-        if let Some(i) = drop {
-            self.views.remove(i);
-        }
-        ui.horizontal_wrapped(|ui| {
-            if ui.button(self.t("Добавить вид")).clicked() {
-                self.views.push(self.cam);
-            }
-            if ui
-                .add_enabled(
-                    self.views.len() > 1,
-                    egui::Button::new(self.t("Облёт по видам")),
-                )
-                .clicked()
-            {
-                let frames = flight::tour(&self.views, 4.0, 1.0, flight::FPS);
-                self.start(frames, now);
-            }
-            if ui.button(self.t("Оборот")).clicked() {
-                let frames = flight::orbit(&self.cam, 360.0, 12.0, flight::FPS);
-                self.start(frames, now);
-            }
-            if self.anim.is_some() && ui.button(self.t("Стоп")).clicked() {
-                self.anim = None;
-            }
-        });
-        // запись кадров - значком плашки; здесь видно, что идёт
-        // запись или склейка, и её можно прервать
+        // запись видео идёт или склеивается - её видно и можно прервать
         #[cfg(not(target_arch = "wasm32"))]
-        ui.horizontal_wrapped(|ui| {
-            if self.recording.is_some() {
-                if ui.button(self.t("Прервать")).clicked() {
-                    self.finish_film(None, ui.ctx());
+        if self.recording.is_some() || self.joining.is_some() {
+            ui.separator();
+            ui.horizontal(|ui| {
+                if self.recording.is_some() {
+                    if ui.button(self.t("Прервать запись")).clicked() {
+                        self.finish_film(None, ui.ctx());
+                    }
+                } else {
+                    ui.spinner();
                 }
-            } else if self.joining.is_some() {
-                ui.spinner();
-            }
-        });
-
+            });
+        }
+        if self.anim.is_some() {
+            ui.horizontal(|ui| {
+                if ui.button(self.t("Остановить облёт")).clicked() {
+                    self.anim = None;
+                }
+            });
+        }
         ui.separator();
         if let Some(pkg) = &self.pkg {
             let m = &pkg.meta;
-            egui::Grid::new("info").num_columns(2).show(ui, |ui| {
-                ui.label(tr(lang, "Сцена"));
-                ui.label(&m.name);
-                ui.end_row();
-                ui.label(tr(lang, "Система координат"));
-                ui.label(if m.crs.authid.is_empty() {
-                    tr(lang, "без системы")
-                } else {
-                    &m.crs.authid
+            egui::CollapsingHeader::new(tr(lang, "Сведения о сцене"))
+                .id_salt("info")
+                .show(ui, |ui| {
+                    egui::Grid::new("info").num_columns(2).show(ui, |ui| {
+                        ui.label(tr(lang, "Сцена"));
+                        ui.label(&m.name);
+                        ui.end_row();
+                        ui.label(tr(lang, "Система координат"));
+                        ui.label(if m.crs.authid.is_empty() {
+                            tr(lang, "без системы")
+                        } else {
+                            &m.crs.authid
+                        });
+                        ui.end_row();
+                        ui.label(tr(lang, "Точка начала"));
+                        ui.label(format!(
+                            "{}, {}",
+                            grouped(m.origin[0], 0),
+                            grouped(m.origin[1], 0)
+                        ));
+                        ui.end_row();
+                        ui.label(tr(lang, "Записал"));
+                        ui.label(format!("{} {}", m.module, m.version));
+                        ui.end_row();
+                    });
                 });
-                ui.end_row();
-                ui.label(tr(lang, "Точка начала"));
-                ui.label(format!(
-                    "{}, {}",
-                    grouped(m.origin[0], 0),
-                    grouped(m.origin[1], 0)
-                ));
-                ui.end_row();
-                ui.label(tr(lang, "Записал"));
-                ui.label(format!("{} {}", m.module, m.version));
-                ui.end_row();
-            });
         }
     }
 
@@ -2603,6 +2545,11 @@ impl SceneApp {
     /// Меню видов облёта: запомнить, перейти, убрать, облететь.
     fn views_menu(&mut self, ui: &mut egui::Ui, now: f64) {
         let lang = self.lang;
+        if let Some(c) = self.pkg.as_ref().and_then(|p| p.meta.camera)
+            && ui.button(tr(lang, "Камера пакета")).clicked()
+        {
+            self.fly_to(c, now);
+        }
         if ui.button(tr(lang, "Запомнить текущий вид")).clicked() {
             self.views.push(self.cam);
         }
@@ -2641,6 +2588,26 @@ impl SceneApp {
         {
             let frames = flight::tour(&self.views, 4.0, 1.0, flight::FPS);
             self.start(frames, now);
+        }
+        if ui.button(tr(lang, "Оборот вокруг сцены")).clicked() {
+            let frames = flight::orbit(&self.cam, 360.0, 12.0, flight::FPS);
+            self.start(frames, now);
+        }
+    }
+
+    /// Меню «Сохранить» колонки: пакет, выгрузка в GLB, STL, OBJ,
+    /// ссылка на сцену.
+    fn save_menu(&mut self, ui: &mut egui::Ui) {
+        if ui.button(self.t("Пакет сцены (.i3dscene)…")).clicked() {
+            self.save_as();
+            ui.close();
+        }
+        ui.separator();
+        self.export_menu(ui);
+        ui.separator();
+        if ui.button(self.t("Ссылка на сцену…")).clicked() {
+            self.share_open = true;
+            ui.close();
         }
     }
 }
@@ -2711,14 +2678,11 @@ impl eframe::App for SceneApp {
             self.poll_join(ui.ctx());
             self.poll_watch(now, ui.ctx());
         }
-        let view_size = self.target.as_ref().map_or(egui::vec2(1280.0, 800.0), |t| {
-            egui::vec2(t.width as f32, t.height as f32)
-        });
         egui::Panel::left("panel")
             .resizable(true)
             .default_size(300.0)
             .show(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| self.panel(ui, now, view_size));
+                egui::ScrollArea::vertical().show(ui, |ui| self.panel(ui));
             });
         egui::Panel::bottom("status").show(ui, |ui| {
             ui.horizontal(|ui| {

@@ -188,6 +188,19 @@ const TABLE: &[(&str, &str)] = &[
         "Вертикальное преувеличение. Единица - натуральный масштаб.",
         "Vertical exaggeration. One is true scale.",
     ),
+    // левая колонка
+    ("Открыть…", "Open…"),
+    ("Сохранить", "Save"),
+    ("Язык окна", "Window language"),
+    ("Все", "All"),
+    ("Ничего", "None"),
+    ("%s м3", "%s m3"),
+    ("поверхность", "surface"),
+    ("Прервать запись", "Stop recording"),
+    ("Остановить облёт", "Stop the flight"),
+    ("Сведения о сцене", "About the scene"),
+    ("Пакет сцены (.i3dscene)…", "Scene package (.i3dscene)…"),
+    ("Ссылка на сцену…", "Link to the scene…"),
     // выгрузка сцены
     (
         "GLB - сцена с цветом, линиями и привязкой",

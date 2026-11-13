@@ -548,6 +548,23 @@ impl SceneApp {
                     for s in &g.sections {
                         self.section_ui(ui, s, lang);
                     }
+                    if g.id == "clip" {
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            if ui.button(crate::i18n::tr(lang, "Обрезать")).clicked() {
+                                self.apply_clip();
+                            }
+                            if ui
+                                .add_enabled(
+                                    self.full.is_some(),
+                                    egui::Button::new(crate::i18n::tr(lang, "Снять обрезку")),
+                                )
+                                .clicked()
+                            {
+                                self.clear_clip();
+                            }
+                        });
+                    }
                 }
             });
         self.params_open = open;
