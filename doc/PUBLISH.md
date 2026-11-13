@@ -22,6 +22,28 @@
 
 ## Журнал
 
+### Isoliner3D для RustGIS 0.5.0 - 13 ноября 2026 года
+
+Тег `rustgis-v0.5.0`, по слову автора «Выпускай всюду» и «выкладывай»
+(крейт rustgis-kit на GitHub). Десять инструментов, цепочки итогов,
+объёмные итоги в окне сцены, общая часть - крейт
+https://github.com/Valery35/rustgis-kit (тег v0.1.0). Изменения -
+`apps/isoliner-rustgis/CHANGELOG.md`, тексты постов -
+`site/posts_rustgis_0.5.0_social.md`. Посты свои, у сцены в этот день
+постов о RustGIS 0.5.0 нет.
+
+| Площадка | Запись |
+|---|---|
+| GitHub | https://github.com/Valery35/isoliner-scene/releases/tag/rustgis-v0.5.0 - `isoliner3d-0.5.0.rgplugin`, руководство RU и EN, метка «Latest» оставлена у v0.4.0 |
+| Dropbox | `ИИ\Isoliner3D\isoliner3d-0.5.0.rgplugin`, 0.4.0 в `arhiv` |
+| Mastodon | https://en.osm.town/@Vaery35/117609551353054410 |
+| X | https://x.com/Valery35/status/2121245718400618851 |
+| LinkedIn | https://www.linkedin.com/feed/update/urn:li:activity:7527011589795962880/ |
+| Facebook | https://www.facebook.com/valery35/posts/pfbid0wrwce3ac1RkWiDxBb8suq8iEMqDPJ13Ucbh8jNLvwGkmJyGAQfN1R4Ux3sDwpD3Ll |
+| ВК | https://vk.ru/wall-241229428_74 (запись на стене) |
+| Telegram | бот поста не ставит, текст в файле постов, выкладывает автор |
+| Сайт informpp.ru | обновляет основная сессия |
+
 ### Isoliner3D для RustGIS 0.4.0 - 13 ноября 2026 года
 
 Первый выпуск расширения, тег `rustgis-v0.4.0`. Сцена из слоёв проекта
