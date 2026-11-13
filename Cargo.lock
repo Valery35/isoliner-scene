@@ -1036,6 +1036,7 @@ dependencies = [
 name = "isoliner-rustgis"
 version = "0.4.0"
 dependencies = [
+ "rustgis-kit",
  "scene-app",
  "scene-core",
  "scene-format",
@@ -2139,6 +2140,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
 dependencies = [
  "semver",
+]
+
+[[package]]
+name = "rustgis-kit"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

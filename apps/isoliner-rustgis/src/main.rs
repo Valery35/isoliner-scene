@@ -9,6 +9,10 @@
 //! Инструменты считаются крейтом `tools` по описаниям из tools.json
 //! модуля.
 //!
+//! Связь с RustGIS, окна инструментов, системы координат и итоги
+//! слоями - крейт `rustgis-kit` (`C:\Dev\rustgis-kit`), своё у продукта -
+//! [`product`].
+//!
 //! Запуск: `isoliner-rustgis rustgis-plugin`, его делает RustGIS
 //! по `plugin.json`. Устройство команд - [`plugin`]. Окно сцены -
 //! `isoliner-rustgis scene файл.i3dscene`: им команда scene открывает
@@ -21,13 +25,12 @@ mod i18n;
 mod layers;
 mod manual;
 mod plugin;
+mod product;
 mod rgtools;
-mod session;
-mod shp;
 
-use std::io::{BufRead, Write};
+use std::ffi::OsString;
 use std::path::Path;
-use std::process::{Command, ExitCode, Stdio};
+use std::process::ExitCode;
 
 /// Описания инструментов, выгрузка модуля (`tools/export_tools.py`).
 /// Обновляются вместе с образцами: `make_fixtures.py` -> `fixtures/`.
@@ -40,36 +43,17 @@ const TOOLS_JSON: &[u8] = include_bytes!("../../../fixtures/tools.json");
 fn launch(path: &Path) -> Result<(), String> {
     // окно сцены - этот же exe с ключом scene
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let spawn = |flags: u32| {
-        let mut cmd = Command::new(&exe);
-        cmd.arg("scene").arg(path);
-        // сцена из слоёв: систему сцены можно менять в окне, выбор - файлом
-        if path == session::scene_path() {
-            cmd.arg("--crs-file").arg(session::crs_path());
-        }
-        cmd.stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(flags);
-        }
-        #[cfg(not(windows))]
-        let _ = flags;
-        cmd.spawn().map(|_| ())
-    };
-    // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, сначала
-    // с CREATE_BREAKAWAY_FROM_JOB
-    const DETACHED: u32 = 0x0000_0008 | 0x0000_0200;
-    const BREAKAWAY: u32 = 0x0100_0000;
-    spawn(DETACHED | BREAKAWAY)
-        .or_else(|_| spawn(DETACHED))
-        .map_err(|e| e.to_string())
+    let mut args: Vec<OsString> = vec!["scene".into(), path.into()];
+    // сцена из слоёв: систему сцены можно менять в окне, выбор - файлом
+    if path == product::scene_path() {
+        args.push("--crs-file".into());
+        args.push(product::crs_path().into());
+    }
+    rustgis_kit::window::spawn_detached(&exe, &args)
 }
 
 fn main() -> ExitCode {
-    let args: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    let args: Vec<OsString> = std::env::args_os().collect();
     let first = args.get(1).and_then(|a| a.to_str());
     // окно сцены, его запускает команда scene отдельным процессом
     if first == Some("scene") {
@@ -77,14 +61,12 @@ fn main() -> ExitCode {
         // окно сцены из слоёв и окно объёмного итога держат замок своего
         // пакета, пока живы: команда scene и инструмент тогда только
         // переписывают пакет, окно перечитывает его само
-        let ours = session::scene_path()
-            .parent()
-            .map(std::path::Path::to_path_buf);
+        let home = product::home();
         let _lock = launch
             .path
             .as_deref()
-            .filter(|p| ours.as_deref().is_some_and(|d| p.starts_with(d)))
-            .and_then(session::hold_lock);
+            .filter(|p| p.starts_with(&home))
+            .and_then(rustgis_kit::window::hold_lock);
         return match scene_app::run(launch) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
@@ -104,32 +86,15 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let mut line = String::new();
-    if let Err(e) = std::io::stdin().lock().read_line(&mut line) {
-        eprintln!("RustGIS: {e}");
-        return ExitCode::FAILURE;
-    }
     let ctx = plugin::Context {
         catalog: &catalog,
         launch: &launch,
     };
-    // сессия RustGIS: программа живёт, пока открыт RustGIS
-    if let Some(lang) = session::hello(&line) {
-        let mut host = session::Host::new(std::io::stdin().lock(), std::io::stdout().lock());
-        session::serve(&mut host, &lang, &ctx);
-        return ExitCode::SUCCESS;
-    }
-    // RustGIS без сессий: одна команда на запуск, запросы host.* - тем же
-    // вводом и выводом
-    let reply = {
-        let mut host = session::Host::new(std::io::stdin().lock(), std::io::stdout().lock());
-        session::once(&mut host, &line, &ctx)
-    };
-    let mut out = std::io::stdout().lock();
-    match writeln!(out, "{reply}").and_then(|()| out.flush()) {
-        Ok(()) => ExitCode::SUCCESS,
+    // сессия RustGIS или одна команда на запуск - решает крейт
+    match product::Isoliner::new(ctx, TOOLS_JSON) {
+        Ok(p) => rustgis_kit::serve_stdio(&p),
         Err(e) => {
-            eprintln!("RustGIS: {e}");
+            eprintln!("tools.json: {e}");
             ExitCode::FAILURE
         }
     }

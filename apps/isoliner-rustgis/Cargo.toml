@@ -19,6 +19,8 @@ tool-spec.workspace = true
 tools.workspace = true
 scene-app.workspace = true
 scene-core.workspace = true
+# общая основа расширений RustGIS линейки, отдельный репозиторий рядом
+rustgis-kit = { path = "../../../rustgis-kit" }
 
 [lints]
 workspace = true
