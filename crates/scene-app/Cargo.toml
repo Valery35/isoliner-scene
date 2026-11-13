@@ -1,0 +1,43 @@
+# Isoliner Scene - сцена Isoliner3D без QGIS.
+# Copyright (C) 2026 ООО «Информ++». Лицензия Apache 2.0.
+# SPDX-License-Identifier: Apache-2.0
+
+# Окно сцены библиотекой: его берут программа Isoliner Scene
+# (apps/isoliner-scene) и расширение для RustGIS (apps/isoliner-rustgis).
+[package]
+name = "scene-app"
+description = "Окно сцены Isoliner3D на egui: плашка, параметры сцены, обрезка, видео"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+eframe.workspace = true
+egui-wgpu.workspace = true
+wgpu.workspace = true
+glam.workspace = true
+rfd.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+png.workspace = true
+scene-format.workspace = true
+scene-core.workspace = true
+render.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+sys-locale.workspace = true
+
+# Страница в браузере: та же программа, собранная Trunk.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# WebGL2 - запасной путь там, где нет WebGPU.
+wgpu = { workspace = true, features = ["webgl"] }
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+js-sys.workspace = true
+web-sys = { workspace = true, features = ["Blob", "BlobPropertyBag", "Document", "Element", "HtmlAnchorElement", "HtmlCanvasElement", "HtmlElement", "Location", "Navigator", "Response", "Url", "Window", "console"] }
+
+[lints]
+workspace = true

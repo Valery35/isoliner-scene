@@ -17,6 +17,7 @@ serde_json.workspace = true
 scene-format.workspace = true
 tool-spec.workspace = true
 tools.workspace = true
+scene-app.workspace = true
 
 [lints]
 workspace = true

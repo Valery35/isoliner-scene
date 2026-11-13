@@ -1036,6 +1036,7 @@ dependencies = [
 name = "isoliner-rustgis"
 version = "0.3.0"
 dependencies = [
+ "scene-app",
  "scene-format",
  "serde_json",
  "tool-spec",
@@ -1047,21 +1048,7 @@ name = "isoliner-scene"
 version = "0.3.0"
 dependencies = [
  "eframe",
- "egui-wgpu",
- "glam",
- "js-sys",
- "png",
- "render",
- "rfd",
- "scene-core",
- "scene-format",
- "serde",
- "serde_json",
- "sys-locale",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
+ "scene-app",
 ]
 
 [[package]]
@@ -2192,6 +2179,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "scene-app"
+version = "0.3.0"
+dependencies = [
+ "eframe",
+ "egui-wgpu",
+ "glam",
+ "js-sys",
+ "png",
+ "render",
+ "rfd",
+ "scene-core",
+ "scene-format",
+ "serde",
+ "serde_json",
+ "sys-locale",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "wgpu",
 ]
 
 [[package]]

@@ -10,6 +10,7 @@ members = [
     "crates/tool-spec",
     "crates/tools",
     "crates/render",
+    "crates/scene-app",
     "apps/isoliner-scene",
     "apps/isoliner-rustgis",
 ]
@@ -27,6 +28,7 @@ scene-core = { path = "crates/scene-core" }
 tool-spec = { path = "crates/tool-spec" }
 tools = { path = "crates/tools" }
 render = { path = "crates/render" }
+scene-app = { path = "crates/scene-app" }
 # Версии как в PlanetX Lite: крейты сцены потом подключаются к RustGIS
 # из того же рабочего пространства, расхождение версий там недопустимо.
 wgpu = "30"

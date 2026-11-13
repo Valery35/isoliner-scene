@@ -3,12 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Isoliner3D для RustGIS - расширение-процесс RustGIS, третье
-//! приложение линейки (`doc/APPS.md`). Сцена `.i3dscene` открывается
-//! в окне Isoliner Scene, инструменты 2.23 и 2.24 считаются крейтом
-//! `tools` по описаниям из tools.json модуля.
+//! приложение линейки (`doc/APPS.md`), одно расширение на всё: сцена,
+//! инструменты, документация. Сцена `.i3dscene` открывается окном
+//! Isoliner Scene - крейт `scene-app`, общий с программой, без копии.
+//! Инструменты считаются крейтом `tools` по описаниям из tools.json
+//! модуля.
 //!
 //! Запуск: `isoliner-rustgis rustgis-plugin`, его делает RustGIS
-//! по `plugin.json`. Устройство команд - [`plugin`].
+//! по `plugin.json`. Устройство команд - [`plugin`]. Окно сцены -
+//! `isoliner-rustgis scene файл.i3dscene`: им команда scene открывает
+//! сцену своим процессом.
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
@@ -17,34 +21,24 @@ mod i18n;
 mod plugin;
 
 use std::io::{BufRead, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, ExitCode, Stdio};
 
 /// Описания инструментов, выгрузка модуля (`tools/export_tools.py`).
 /// Обновляются вместе с образцами: `make_fixtures.py` -> `fixtures/`.
 const TOOLS_JSON: &[u8] = include_bytes!("../../../fixtures/tools.json");
 
-/// Окно сцены - программа isoliner-scene рядом с этой.
-fn scene_exe() -> Result<PathBuf, String> {
-    let me = std::env::current_exe().map_err(|e| e.to_string())?;
-    let dir = me.parent().ok_or("нет папки программы")?;
-    let exe = dir.join(format!("isoliner-scene{}", std::env::consts::EXE_SUFFIX));
-    if exe.is_file() {
-        Ok(exe)
-    } else {
-        Err(exe.display().to_string())
-    }
-}
-
 /// Окно сцены своим процессом: RustGIS останавливает расширение
 /// вскоре после ответа, окно должно его пережить. Как глобус
 /// RustPlanetX (`planetx-lite`, `desktop::launch_linked`): без консоли,
 /// вне задания RustGIS, если задание это разрешает.
 fn launch(path: &Path) -> Result<(), String> {
-    let exe = scene_exe()?;
+    // окно сцены - этот же exe с ключом scene
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let spawn = |flags: u32| {
         let mut cmd = Command::new(&exe);
-        cmd.arg(path)
+        cmd.arg("scene")
+            .arg(path)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
@@ -67,8 +61,20 @@ fn launch(path: &Path) -> Result<(), String> {
 }
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().collect();
-    if args.get(1).map(String::as_str) != Some("rustgis-plugin") {
+    let args: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    let first = args.get(1).and_then(|a| a.to_str());
+    // окно сцены, его запускает команда scene отдельным процессом
+    if first == Some("scene") {
+        let launch = scene_app::Launch::from_args(args.into_iter().skip(2));
+        return match scene_app::run(launch) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("Isoliner Scene: {e}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+    if first != Some("rustgis-plugin") {
         eprintln!("Isoliner3D для RustGIS. Запуск: isoliner-rustgis rustgis-plugin");
         return ExitCode::from(2);
     }

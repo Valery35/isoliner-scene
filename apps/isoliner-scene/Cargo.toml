@@ -7,30 +7,11 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+# Окно - крейт scene-app, здесь только запуск: на диске и страницей
+# в браузере (Trunk, index.html).
 [dependencies]
 eframe.workspace = true
-egui-wgpu.workspace = true
-wgpu.workspace = true
-glam.workspace = true
-rfd.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-png.workspace = true
-scene-format.workspace = true
-scene-core.workspace = true
-render.workspace = true
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-sys-locale.workspace = true
-
-# Страница в браузере: та же программа, собранная Trunk (index.html).
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-# WebGL2 - запасной путь там, где нет WebGPU.
-wgpu = { workspace = true, features = ["webgl"] }
-wasm-bindgen.workspace = true
-wasm-bindgen-futures.workspace = true
-js-sys.workspace = true
-web-sys = { workspace = true, features = ["Blob", "BlobPropertyBag", "Document", "Element", "HtmlAnchorElement", "HtmlCanvasElement", "HtmlElement", "Location", "Navigator", "Response", "Url", "Window", "console"] }
+scene-app.workspace = true
 
 [lints]
 workspace = true
