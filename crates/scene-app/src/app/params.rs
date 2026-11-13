@@ -73,7 +73,11 @@ pub(super) struct Param {
 impl Param {
     /// Поле есть в этом окне: общее или только программы.
     pub fn shown(&self) -> bool {
-        self.place == "both" || self.place == "lite"
+        // пометка может перечислять: «pro,rustgis» - поле есть и у окна
+        // в RustGIS, а это окно и есть окно RustGIS
+        self.place
+            .split([',', ' ', '|'])
+            .any(|w| matches!(w.trim(), "both" | "lite" | "rustgis"))
     }
 }
 
@@ -432,6 +436,13 @@ impl SceneApp {
             "sun_alt" => Val::Num(self.sun.altitude),
             "shadow_k" => Val::Num(self.sun.strength),
             "theme" => Val::Text(if self.dark { "dark" } else { "light" }.into()),
+            // система координат сцены: выбор для RustGIS или из пакета
+            "scene_crs" => Val::Text(self.crs_choice.clone().unwrap_or_else(|| {
+                self.pkg
+                    .as_ref()
+                    .map(|p| p.meta.crs.authid.clone())
+                    .unwrap_or_default()
+            })),
             "axes_on" => Val::Flag(b.on),
             "box_edges" => Val::Text(b.edges.key().into()),
             "box_near" => Val::Flag(b.near),
@@ -473,6 +484,7 @@ impl SceneApp {
             ("sun_alt", Val::Num(x)) => self.sun.altitude = x.clamp(1.0, 90.0),
             ("shadow_k", Val::Num(x)) => self.sun.strength = x.clamp(0.0, 100.0),
             ("theme", Val::Text(x)) => self.dark = x == "dark",
+            ("scene_crs", Val::Text(x)) => self.choose_crs(x),
             ("axes_on", Val::Flag(x)) => b.on = x,
             ("box_edges", Val::Text(x)) => b.edges = Edges::from_key(&x),
             ("box_near", Val::Flag(x)) => b.near = x,
@@ -502,11 +514,65 @@ impl SceneApp {
         }
     }
 
+    /// Файл выбора системы координат: окно открыто расширением RustGIS.
+    pub fn set_crs_file(&mut self, file: Option<std::path::PathBuf>) {
+        self.crs_file = file;
+    }
+
+    /// Выбрать систему координат сцены для RustGIS: «EPSG:n» (или
+    /// просто число), пусто - сбросить. Выбор пишется в файл
+    /// `--crs-file`, сцену по нему пересчитает RustGIS при следующей
+    /// команде «Сцена». Неверный код - сообщение, файл не трогается.
+    fn choose_crs(&mut self, text: String) {
+        let t = text.trim();
+        let digits = t
+            .strip_prefix("EPSG:")
+            .or_else(|| t.strip_prefix("epsg:"))
+            .unwrap_or(t);
+        let code = if t.is_empty() {
+            Some(String::new())
+        } else {
+            digits
+                .parse::<u32>()
+                .ok()
+                .filter(|n| *n > 0)
+                .map(|n| format!("EPSG:{n}"))
+        };
+        let Some(code) = code else {
+            self.status = crate::i18n::tr(
+                self.lang,
+                "Система координат задаётся кодом EPSG, например EPSG:32640.",
+            )
+            .to_string();
+            return;
+        };
+        self.crs_choice = Some(code.clone());
+        self.text_buf.insert("scene_crs".into(), code.clone());
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(path) = &self.crs_file {
+            let res = path
+                .parent()
+                .map_or(Ok(()), std::fs::create_dir_all)
+                .and_then(|()| std::fs::write(path, code.as_bytes()));
+            self.status = match res {
+                Ok(()) => crate::i18n::tr(
+                    self.lang,
+                    "Система применится при следующем нажатии «Сцена» в RustGIS.",
+                )
+                .to_string(),
+                Err(e) => format!("{}: {e}", path.display()),
+            };
+        }
+    }
+
     /// Поле недоступно: коридор без коридора, охват без своей галки.
     fn idle(&self, key: &str) -> bool {
         match key {
             "width" => self.clip.side != Some(Side::Corridor),
             "box_range" => !self.box_opts.range_on,
+            // систему выбирают только в окне из RustGIS: там её
+            // пересчитывает RustGIS, само окно сцену не пересчитывает
+            "scene_crs" => self.crs_file.is_none(),
             _ => false,
         }
     }
@@ -694,6 +760,21 @@ impl SceneApp {
                 });
                 changed.then_some(Val::Six(r))
             }
+            // текст без вариантов - строка ввода; значение уходит,
+            // когда строку покидают или жмут Enter
+            Val::Text(cur) if p.choices.is_empty() => {
+                let buf = self
+                    .text_buf
+                    .entry(p.key.clone())
+                    .or_insert_with(|| cur.clone());
+                let resp =
+                    ui.add_enabled(!idle, egui::TextEdit::singleline(buf).desired_width(140.0));
+                if !resp.has_focus() && !resp.lost_focus() && *buf != cur {
+                    // значение сменилось не здесь (новый пакет)
+                    buf.clone_from(&cur);
+                }
+                (resp.lost_focus() && *buf != cur).then(|| Val::Text(buf.trim().to_string()))
+            }
             Val::Text(cur) => {
                 let shown = p
                     .choices
@@ -760,6 +841,34 @@ mod tests {
         for g in Grid::ALL {
             assert_eq!(Grid::from_key(g.key()), g);
         }
+    }
+
+    /// Система координат сцены: без файла выбора поле только для чтения,
+    /// с файлом код пишется в него («32640» - «EPSG:32640», пусто -
+    /// сброс), неверный код файл не трогает. Поле «pro,rustgis» видно.
+    #[test]
+    fn scene_crs_choice_goes_to_the_file() {
+        let mut app = super::super::tests::bare_app();
+        assert!(app.idle("scene_crs"));
+        assert_eq!(app.get("scene_crs"), Some(Val::Text(String::new())));
+        let path = std::env::temp_dir()
+            .join("isoliner3d-test")
+            .join(format!("crs-{}.txt", std::process::id()));
+        app.set_crs_file(Some(path.clone()));
+        assert!(!app.idle("scene_crs"));
+        app.set("scene_crs", Val::Text("32640".into()));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "EPSG:32640");
+        assert_eq!(app.get("scene_crs"), Some(Val::Text("EPSG:32640".into())));
+        app.set("scene_crs", Val::Text("не код".into()));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "EPSG:32640");
+        app.set("scene_crs", Val::Text(String::new()));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "");
+        let _ = std::fs::remove_file(&path);
+        let p: Param = serde_json::from_str(
+            r#"{"key":"scene_crs","ru":"а","en":"a","kind":"text","where":"pro,rustgis"}"#,
+        )
+        .unwrap();
+        assert!(p.shown());
     }
 
     /// Окно повторяет список модуля: список разбирается, вкладок

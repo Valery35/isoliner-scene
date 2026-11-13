@@ -188,6 +188,15 @@ const TABLE: &[(&str, &str)] = &[
         "Вертикальное преувеличение. Единица - натуральный масштаб.",
         "Vertical exaggeration. One is true scale.",
     ),
+    // система координат сцены (окно из RustGIS)
+    (
+        "Система координат задаётся кодом EPSG, например EPSG:32640.",
+        "The coordinate system is an EPSG code, for example EPSG:32640.",
+    ),
+    (
+        "Система применится при следующем нажатии «Сцена» в RustGIS.",
+        "The system applies the next time you press Scene in RustGIS.",
+    ),
     // левая колонка
     ("Открыть…", "Open…"),
     ("Сохранить", "Save"),

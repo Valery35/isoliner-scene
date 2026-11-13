@@ -331,6 +331,11 @@ pub struct SceneApp {
     params_tab: usize,
     /// Окно «О программе» открыто.
     about_open: bool,
+    /// Файл выбора системы координат (окно из RustGIS) и сам выбор.
+    crs_file: Option<std::path::PathBuf>,
+    crs_choice: Option<String>,
+    /// Строки ввода окна параметров, пока их правят.
+    text_buf: std::collections::HashMap<String, String>,
     /// Настройки координатного короба.
     box_opts: BoxOpts,
     /// Отмывка и сглаживание краёв.
@@ -424,6 +429,9 @@ impl SceneApp {
             params_open: false,
             params_tab: 0,
             about_open: false,
+            crs_file: None,
+            crs_choice: None,
+            text_buf: std::collections::HashMap::new(),
             box_opts: BoxOpts::default(),
             look_opts: LookOpts::default(),
             sun: SunOpts::default(),

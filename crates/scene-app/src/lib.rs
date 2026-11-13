@@ -38,11 +38,15 @@ pub struct Launch {
     pub check: bool,
     /// Кадры оборота PNG в папку и ролик MP4, потом окно закрывается.
     pub frames: Option<std::path::PathBuf>,
+    /// Файл выбора системы координат сцены (расширение для RustGIS):
+    /// с ним поле «Система координат» окна можно менять, выбор пишется
+    /// в этот файл, сцену пересчитывает RustGIS.
+    pub crs_file: Option<std::path::PathBuf>,
 }
 
 impl Launch {
     /// Разобрать ключи: `файл.i3dscene`, `--pose x,y,z,...`, `--check`,
-    /// `--frames ПАПКА`.
+    /// `--frames ПАПКА`, `--crs-file ПУТЬ`.
     pub fn from_args(args: impl IntoIterator<Item = std::ffi::OsString>) -> Self {
         let mut l = Launch::default();
         let mut args = args.into_iter();
@@ -55,6 +59,7 @@ impl Launch {
                 }
                 Some("--check") => l.check = true,
                 Some("--frames") => l.frames = args.next().map(std::path::PathBuf::from),
+                Some("--crs-file") => l.crs_file = args.next().map(std::path::PathBuf::from),
                 _ => l.path = Some(std::path::PathBuf::from(a)),
             }
         }
@@ -86,6 +91,7 @@ pub fn run(launch: Launch) -> eframe::Result {
             if let Some(dir) = launch.frames {
                 app.film_to(dir);
             }
+            app.set_crs_file(launch.crs_file);
             if let Some(p) = launch.path {
                 app.open(&p);
             }
@@ -107,10 +113,19 @@ mod tests {
     #[test]
     fn launch_keys() {
         let l = Launch::from_args(
-            ["a.i3dscene", "--check", "--frames", "out"].map(std::ffi::OsString::from),
+            [
+                "a.i3dscene",
+                "--check",
+                "--frames",
+                "out",
+                "--crs-file",
+                "c.crs",
+            ]
+            .map(std::ffi::OsString::from),
         );
         assert_eq!(l.path.as_deref(), Some(std::path::Path::new("a.i3dscene")));
         assert!(l.check);
         assert_eq!(l.frames.as_deref(), Some(std::path::Path::new("out")));
+        assert_eq!(l.crs_file.as_deref(), Some(std::path::Path::new("c.crs")));
     }
 }
