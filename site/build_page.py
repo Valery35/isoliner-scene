@@ -34,6 +34,11 @@ RUSTGIS = "https://github.com/opengeos/RustGIS"
 
 # Лента выпусков: свежие сверху.
 FEED = (
+    ("2026-11-13", "pro", "1.5.6",
+     "Система координат сцены в параметрах сцены, справка 2.17 и 2.18 "
+     "полнее, глава «Isoliner3D в RustGIS» в руководстве.",
+     "The scene coordinate system in the scene settings, fuller help for "
+     "2.17 and 2.18, a manual chapter on Isoliner3D in RustGIS."),
     ("2026-11-13", "rust", "0.4.0",
      "Первый выпуск расширения. Слои проекта RustGIS открываются в сцене "
      "Isoliner3D в системе координат карты, инструменты 2.24 и 2.17 "
