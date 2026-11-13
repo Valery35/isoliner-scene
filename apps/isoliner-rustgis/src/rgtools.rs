@@ -82,7 +82,7 @@ impl Frame {
 }
 
 /// Код EPSG из текста поля: `EPSG:28410`, `epsg:28410` или `28410`.
-fn epsg(text: &str) -> Option<String> {
+pub fn epsg(text: &str) -> Option<String> {
     let t = text.trim();
     let digits = t
         .strip_prefix("EPSG:")

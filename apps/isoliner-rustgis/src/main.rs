@@ -41,9 +41,12 @@ fn launch(path: &Path) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let spawn = |flags: u32| {
         let mut cmd = Command::new(&exe);
-        cmd.arg("scene")
-            .arg(path)
-            .stdin(Stdio::null())
+        cmd.arg("scene").arg(path);
+        // сцена из слоёв: систему сцены можно менять в окне, выбор - файлом
+        if path == session::scene_path() {
+            cmd.arg("--crs-file").arg(session::crs_path());
+        }
+        cmd.stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
         #[cfg(windows)]

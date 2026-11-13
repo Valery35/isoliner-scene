@@ -234,6 +234,8 @@ fn wrap(parts: Vec<Part>, title: &str, authid: &str) -> Option<Package> {
             authid: authid.to_string(),
             wkt: String::new(),
         },
+        // как модуль: поле scene_crs окна «Параметры сцены»
+        state: serde_json::json!({"scene_crs": authid}),
         ..SceneMeta::default()
     };
     Some(Package {

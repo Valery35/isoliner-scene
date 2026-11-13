@@ -106,13 +106,33 @@ pub struct Layers {
     pub crs: Option<String>,
 }
 
+/// Файл выбора системы сцены: код EPSG, его пишет окно сцены
+/// (поле `scene_crs` окна «Параметры сцены», ключ `--crs-file`).
+pub fn crs_path() -> PathBuf {
+    scene_path().with_extension("crs")
+}
+
+/// Система сцены, как у карты (решение автора от 13 ноября 2026 года):
+/// выбор в окне сцены, иначе проекция карты RustGIS (`host.view`,
+/// `"EPSG:n"`), иначе None - зона UTM по середине слоёв. Проекции карты
+/// «mercator» и «globe» - не система для метров сцены.
+fn scene_crs<R: BufRead, W: Write>(host: &mut Host<R, W>, chosen: &Path) -> Option<String> {
+    if let Some(c) = std::fs::read_to_string(chosen)
+        .ok()
+        .and_then(|t| crate::rgtools::epsg(&t))
+    {
+        return Some(c);
+    }
+    let view = host.call("host.view", json!({})).ok()?;
+    view["projection"].as_str().and_then(crate::rgtools::epsg)
+}
+
 /// Слои проекта для сцены: видимые векторные, сверху вниз, с объектами.
 ///
-/// Сцена строится в метрах системы первого слоя, если она метрическая:
-/// RustGIS выгружает слой Shapefile в системе, в которой его прочитал,
-/// и называет её код, остальные слои - выгрузкой в ту же систему.
-/// Слой в градусах, итог тел Isoliner3D или неудачная выгрузка - сцена
-/// в метрах зоны UTM по градусам `host.features`.
+/// Сцена строится в метрах системы [`scene_crs`]: RustGIS выгружает
+/// слои Shapefile в эту систему сам. Системы нет, она в градусах, итог
+/// тел Isoliner3D в слоях или выгрузка не удалась - сцена в метрах зоны
+/// UTM по градусам `host.features`.
 pub fn project_layers<R: BufRead, W: Write>(host: &mut Host<R, W>) -> Result<Layers, String> {
     let list = host.call("host.layers", json!({}))?;
     let mut out = Vec::new();
@@ -133,7 +153,14 @@ pub fn project_layers<R: BufRead, W: Write>(host: &mut Host<R, W>) -> Result<Lay
         ids.push(id);
         out.push((name, with));
     }
-    if !bodies && let Some((list, crs)) = native(host, &ids, &out) {
+    let target = if bodies || ids.is_empty() {
+        None
+    } else {
+        scene_crs(host, &crs_path())
+    };
+    if let Some(target) = target
+        && let Some((list, crs)) = native(host, &ids, &out, &target)
+    {
         return Ok(Layers {
             list,
             crs: Some(crs),
@@ -145,40 +172,38 @@ pub fn project_layers<R: BufRead, W: Write>(host: &mut Host<R, W>) -> Result<Lay
     })
 }
 
-/// Слои в метрах своей системы выгрузкой RustGIS. None - система первого
-/// слоя в градусах или выгрузка не удалась.
+/// Слои в метрах системы `target` выгрузкой RustGIS. None - система
+/// в градусах или выгрузка не удалась.
 fn native<R: BufRead, W: Write>(
     host: &mut Host<R, W>,
     ids: &[i64],
     named: &[(String, J)],
+    target: &str,
 ) -> Option<(Vec<(String, J)>, String)> {
     let dir = scene_path().with_extension("export");
     std::fs::create_dir_all(&dir).ok()?;
-    let mut crs: Option<String> = None;
     let mut out = Vec::new();
     for (id, (name, _)) in ids.iter().zip(named) {
         let shp = dir.join(format!("layer-{id}.shp"));
         for ext in ["shp", "shx", "dbf", "prj", "cpg"] {
             let _ = std::fs::remove_file(shp.with_extension(ext));
         }
-        let mut params = json!({"layer": id, "path": shp.display().to_string().replace('\\', "/")});
-        if let Some(c) = &crs {
-            params["crs"] = json!(c);
-        }
-        let answer = host.call("share.exportLayer", params).ok()?;
+        let path = shp.display().to_string().replace('\\', "/");
+        host.call(
+            "share.exportLayer",
+            json!({"layer": id, "path": path, "crs": target}),
+        )
+        .ok()?;
         let fc = std::fs::read(&shp)
             .ok()
             .and_then(|b| crate::shp::read(&b).ok())?;
-        if crs.is_none() {
-            let code = answer["crs"].as_str()?.to_string();
-            if degrees(&fc) {
-                return None;
-            }
-            crs = Some(code);
+        // система в градусах - не метры сцены
+        if out.is_empty() && degrees(&fc) {
+            return None;
         }
         out.push((name.clone(), fc));
     }
-    Some((out, crs?))
+    Some((out, target.to_string()))
 }
 
 /// Все координаты в пределах градусов: слой в долготе и широте.
@@ -474,8 +499,8 @@ mod tests {
         assert_eq!(said[1]["call"]["op"], "host.layers");
         assert_eq!(said[2]["call"]["op"], "host.features");
         assert_eq!(said[2]["call"]["params"]["layer"], 3);
-        // выгрузка в системе слоя не ответила - сцена по градусам
-        assert_eq!(said[3]["call"]["op"], "share.exportLayer");
+        // проекция карты не ответила - сцена по градусам в зоне UTM
+        assert_eq!(said[3]["call"]["op"], "host.view");
         assert_eq!(said[4]["id"], 2);
         assert_eq!(said[4]["ok"]["parts"], 1, "{}", said[4]);
         assert_eq!(launched.get(), 1);

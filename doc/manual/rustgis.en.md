@@ -62,9 +62,13 @@ The result goes to the project as a new layer. Undo in RustGIS
   features in WGS 84 degrees and without Z. The degrees go to metres of
   the UTM zone at the middle of the input layers for the run, and the
   result goes back to degrees. The run messages name the zone.
-- The scene is built in metres of the first visible layer's system when
-  that system is in metres. RustGIS brings the other layers to the same
-  system. Layers in degrees give a scene in metres of a UTM zone.
+- The scene's coordinate system works like the map's. By default the
+  scene is built in the RustGIS map projection when the map has an EPSG
+  code in metres. A Mercator map, the globe or a system in degrees give
+  a scene in metres of a UTM zone. A code in the Scene coordinate system
+  (EPSG) field of Scene Settings, on the View tab, wins over the map.
+  A new system applies at the next press of Isoliner3D Scene. RustGIS
+  brings the layers to the scene's system.
 - Heights come from fields. For 2.24 it is the axis elevation field or
   the constant elevation. For 2.17 it is the collar elevation field.
 - A 2.24 body goes to the project as an outline in plan, the top faces
