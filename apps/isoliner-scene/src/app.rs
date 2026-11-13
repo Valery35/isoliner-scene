@@ -67,6 +67,9 @@ fn grouped(x: f64, decimals: usize) -> String {
 }
 
 /// Подсказка по мыши, как `CAMERA_HINT` окна модуля.
+/// Потолок подписей короба, как у окна модуля: больше забили бы сцену.
+const LABEL_CAP: usize = 60;
+
 const HINT: &str = "Левая кнопка - вращение, Ctrl + левая или средняя - сдвиг, колесо - масштаб, Ctrl + колесо - угол обзора, щелчок правой - центр вращения, щелчок левой - опрос точки.";
 
 struct Gpu {
@@ -1002,10 +1005,17 @@ impl SceneApp {
             .gpu
             .as_ref()
             .map(|g| GpuScene::upload(&g.device, &pkg.parts, self.frame));
-        // показ частей как в окне QGIS: короб выключен - оформление скрыто
+        // показ частей как в окне QGIS: короб выключен - оформление
+        // скрыто. Подписи короба буквами из отрезков (оформление-меш)
+        // пакет несёт для других просмотрщиков, окно ставит их само
+        // поверх кадра, как окно модуля.
         if let Some(scene) = self.scene.as_mut() {
             for (p, row) in scene.parts.iter_mut().zip(&self.rows) {
-                p.visible = pkg.meta.part_shown(row.info.as_ref());
+                let glyphs = row
+                    .info
+                    .as_ref()
+                    .is_some_and(|i| i.decor && i.kind == scene_format::PartKind::Mesh);
+                p.visible = pkg.meta.part_shown(row.info.as_ref()) && !glyphs;
             }
         }
         self.pkg = Some(pkg);
@@ -1127,6 +1137,148 @@ impl SceneApp {
                 }
                 painter.text(s, align, text, font.clone(), egui::Color32::from_gray(30));
             }
+        }
+    }
+
+    /// Короб с подписями виден: в пакете есть линии оформления и они
+    /// показаны.
+    fn box_visible(&self) -> bool {
+        let Some(scene) = self.scene.as_ref() else {
+            return false;
+        };
+        self.rows.iter().enumerate().any(|(i, r)| {
+            r.info
+                .as_ref()
+                .is_some_and(|info| info.decor && info.kind == scene_format::PartKind::Lines)
+                && scene.parts.get(i).is_some_and(|p| p.visible)
+        })
+    }
+
+    /// Охват координатного короба в настоящих координатах, как
+    /// `_box_scene` модуля: тела сцены целиком, до обрезки, и свои
+    /// границы короба из окна QGIS, если они были заданы.
+    fn box_range(&self) -> Option<([f64; 3], [f64; 3])> {
+        let pkg = self.pkg.as_ref()?;
+        let src = self.full.as_ref().unwrap_or(&pkg.parts);
+        let body: Vec<Part> = src
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !self.is_decor(*i))
+            .map(|(_, p)| p.clone())
+            .collect();
+        let (lo, hi) = mesh::bounds(&body)?;
+        let st = &pkg.meta.state;
+        let rng: Option<Vec<f64>> = st
+            .get("box_range_on")
+            .and_then(serde_json::Value::as_bool)
+            .filter(|on| *on)
+            .and_then(|_| st.get("box_range"))
+            .and_then(serde_json::Value::as_array)
+            .map(|a| a.iter().filter_map(serde_json::Value::as_f64).collect());
+        Some(scene_core::axes::custom_range(lo, hi, rng.as_deref()))
+    }
+
+    /// Подписи координатного короба поверх кадра, как в окне модуля:
+    /// штрихи и числа на рёбрах, ближних к камере, стрелка севера.
+    /// Шаг, множитель подписи и выбор рёбер берутся из состояния окна
+    /// QGIS в пакете. Подписи оси, смотрящей на камеру торцом,
+    /// и налезающие на соседние не ставятся.
+    fn box_marks(&self, ui: &egui::Ui, rect: egui::Rect) {
+        use scene_core::axes;
+        if !self.box_visible() {
+            return;
+        }
+        let (Some(pkg), Some((lo, hi))) = (self.pkg.as_ref(), self.box_range()) else {
+            return;
+        };
+        let st = &pkg.meta.state;
+        let num = |k: &str, d: f64| st.get(k).and_then(serde_json::Value::as_f64).unwrap_or(d);
+        let (sxy, sz) = (num("tick_xy", 0.0), num("tick_z", 0.0));
+        let (mxy, mz) = (num("mult_xy", 1.0), num("mult_z", 1.0));
+        let near = st
+            .get("box_near")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(true);
+        let view = self.view_camera();
+        let frame = self.frame_now();
+        let sides = if near {
+            axes::near_sides(lo, hi, frame.to_world(camera::eye(&view)))
+        } else {
+            axes::ORIGIN_SIDES
+        };
+        let (w, h) = (f64::from(rect.width()), f64::from(rect.height()));
+        let at = |p: [f64; 3]| {
+            camera::to_screen(&view, w, h, frame.to_view(p))
+                .map(|[x, y]| rect.min + egui::vec2(x as f32, y as f32))
+        };
+        let painter = ui.painter_at(rect);
+        let dark = self.dark;
+        let ink = if dark {
+            egui::Color32::from_rgb(200, 206, 220)
+        } else {
+            egui::Color32::from_rgba_unmultiplied(64, 71, 92, 230)
+        };
+        let (text, halo) = if dark {
+            (egui::Color32::from_gray(235), egui::Color32::from_gray(20))
+        } else {
+            (egui::Color32::from_gray(30), egui::Color32::WHITE)
+        };
+        let ticks = axes::tick_marks(lo, hi, 5, [sxy, sxy, sz], sides);
+        let arrow = axes::north_arrow(lo, hi);
+        for (p, q) in ticks.iter().map(|t| (t.a, t.b)).chain(arrow) {
+            if let (Some(p), Some(q)) = (at(p), at(q)) {
+                painter.line_segment([p, q], egui::Stroke::new(1.4, ink));
+            }
+        }
+        let font = egui::FontId::proportional(11.0);
+        let put = |pos: egui::Pos2, align: egui::Align2, s: &str| {
+            for o in [
+                egui::vec2(-1.0, 0.0),
+                egui::vec2(1.0, 0.0),
+                egui::vec2(0.0, -1.0),
+                egui::vec2(0.0, 1.0),
+            ] {
+                painter.text(pos + o, align, s, font.clone(), halo);
+            }
+            painter.text(pos, align, s, font.clone(), text)
+        };
+        if let Some(tip) = at(arrow[0].1) {
+            put(tip, egui::Align2::CENTER_BOTTOM, self.t("С"));
+        }
+        // подпись уходит от штриха в его же сторону на экране
+        let mut taken: Vec<egui::Rect> = Vec::new();
+        for t in ticks.iter().take(LABEL_CAP) {
+            if axes::edge_on(t.axis, view.azimuth, view.elevation) {
+                continue;
+            }
+            let (Some(a), Some(b)) = (at(t.a), at(t.b)) else {
+                continue;
+            };
+            let d = (b - a).normalized();
+            let d = if d.x.is_finite() {
+                d
+            } else {
+                egui::vec2(-1.0, 0.0)
+            };
+            let align = if d.x > 0.4 {
+                egui::Align2::LEFT_CENTER
+            } else if d.x < -0.4 {
+                egui::Align2::RIGHT_CENTER
+            } else if d.y > 0.0 {
+                egui::Align2::CENTER_TOP
+            } else {
+                egui::Align2::CENTER_BOTTOM
+            };
+            let mult = if t.axis == 2 { mz } else { mxy };
+            let s = axes::tick_label(t.value, mult);
+            let pos = b + d * 3.0;
+            let galley = painter.layout_no_wrap(s.clone(), font.clone(), text);
+            let r = align.anchor_size(pos, galley.size()).expand(1.0);
+            if taken.iter().any(|o| o.intersects(r)) {
+                continue;
+            }
+            taken.push(r);
+            put(pos, align, &s);
         }
     }
 
@@ -2044,6 +2196,7 @@ impl SceneApp {
                 egui::Color32::WHITE,
             );
         }
+        self.box_marks(ui, rect);
         self.section_marks(ui, rect);
         // линия измерения: отрезки и точки поверх кадра, если разметка
         // не скрыта значком «глаз»
@@ -2188,8 +2341,15 @@ impl SceneApp {
                             self.cam.ortho = !self.cam.ortho;
                             self.dirty = true;
                         }
-                        let decor: Vec<usize> =
-                            (0..self.rows.len()).filter(|&i| self.is_decor(i)).collect();
+                        // подписи буквами из пакета не включаются: окно
+                        // ставит свои поверх кадра
+                        let decor: Vec<usize> = (0..self.rows.len())
+                            .filter(|&i| {
+                                self.rows[i].info.as_ref().is_some_and(|info| {
+                                    info.decor && info.kind != scene_format::PartKind::Mesh
+                                })
+                            })
+                            .collect();
                         let shown = self.scene.as_ref().is_some_and(|s| {
                             decor
                                 .iter()

@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Деления, подписи и шкалы вида по разрезу. Перенос части `axes.py`
-//! модуля: `nice_step`, `nice_ticks`, `tick_label`, `azimuth`,
+//! модуля: `nice_step`, `nice_ticks`, `tick_label`, `custom_range`,
+//! `near_sides`, `tick_marks`, `north_arrow`, `azimuth`,
 //! `section_scales`. Координаты настоящие, метры.
 
 type V3 = [f64; 3];
@@ -95,6 +96,134 @@ pub fn depth_label(depth: f64, step: f64) -> String {
     } else {
         text
     }
+}
+
+/// Охват короба: свой, заданный в окне модуля, или по сцене, как
+/// `custom_range` модуля. `rng` - xmin, xmax, ymin, ymax, zmin, zmax.
+/// Пара, где наибольшее не больше наименьшего, не задана: по этой оси
+/// охват остаётся от сцены.
+pub fn custom_range(lo: V3, hi: V3, rng: Option<&[f64]>) -> (V3, V3) {
+    let (mut lo, mut hi) = (lo, hi);
+    if let Some(r) = rng.filter(|r| r.len() >= 6) {
+        for k in 0..3 {
+            let (a, b) = (r[2 * k], r[2 * k + 1]);
+            if b > a {
+                lo[k] = a;
+                hi[k] = b;
+            }
+        }
+    }
+    (lo, hi)
+}
+
+/// Стороны короба для подписей: какое из четырёх параллельных рёбер
+/// несёт деления оси. false - наименьшая координата, true - наибольшая.
+/// `x` - ребро оси X (сторона по Y, по Z), `y` - ребро оси Y (по X,
+/// по Z), `z` - вертикальное ребро (по X, по Y).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Sides {
+    pub x: [bool; 2],
+    pub y: [bool; 2],
+    pub z: [bool; 2],
+}
+
+/// Подписи у начала координат, как `ORIGIN_SIDES` модуля.
+pub const ORIGIN_SIDES: Sides = Sides {
+    x: [false; 2],
+    y: [false; 2],
+    z: [false; 2],
+};
+
+/// Рёбра для подписей, ближние к камере `cam` (настоящие координаты),
+/// как `near_sides` модуля. Плановые оси по ребру со стороны камеры,
+/// вертикальная по ребру ближнему по X и дальнему по Y, чтобы не встать
+/// перед моделью. Камера ниже середины короба переносит плановые
+/// подписи наверх.
+pub fn near_sides(lo: V3, hi: V3, cam: V3) -> Sides {
+    let mid = |k: usize| (lo[k] + hi[k]) / 2.0;
+    let xn = cam[0] > mid(0);
+    let yn = cam[1] > mid(1);
+    let zb = cam[2] < mid(2);
+    Sides {
+        x: [yn, zb],
+        y: [xn, zb],
+        z: [xn, !yn],
+    }
+}
+
+fn pick(lo: V3, hi: V3, axis: usize, side: bool) -> f64 {
+    if side { hi[axis] } else { lo[axis] }
+}
+
+/// Деление короба: ось, значение, штрих от ребра `a` наружу к `b`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Tick {
+    pub axis: usize,
+    pub value: f64,
+    pub a: V3,
+    pub b: V3,
+}
+
+/// Штрихи на рёбрах короба, как `tick_marks` модуля. `steps` - шаг
+/// делений по X, Y, Z, ноль - круглый шаг от размаха. Штрих уходит
+/// от ребра наружу в плане на 2 % наибольшего размаха.
+pub fn tick_marks(lo: V3, hi: V3, want: usize, steps: [f64; 3], sides: Sides) -> Vec<Tick> {
+    let span = (0..3).map(|k| hi[k] - lo[k]).fold(0.0, f64::max);
+    let ln = if span > 0.0 { span * 0.02 } else { 0.02 };
+    // по какой оси уводить штрих наружу: плановые друг в друга,
+    // вертикальную по X
+    let away = [1usize, 0, 0];
+    // две прочие координаты ребра каждой оси
+    let fixed: [[(usize, bool); 2]; 3] = [
+        [(1, sides.x[0]), (2, sides.x[1])],
+        [(0, sides.y[0]), (2, sides.y[1])],
+        [(0, sides.z[0]), (1, sides.z[1])],
+    ];
+    let mut out = Vec::new();
+    for axis in 0..3 {
+        let other = away[axis];
+        let mut base = lo;
+        let mut out_dir = -1.0;
+        for (k, side) in fixed[axis] {
+            base[k] = pick(lo, hi, k, side);
+            if k == other && side {
+                out_dir = 1.0;
+            }
+        }
+        for value in nice_ticks(lo[axis], hi[axis], want, steps[axis]) {
+            let mut a = base;
+            a[axis] = value;
+            let mut b = a;
+            b[other] = a[other] + out_dir * ln;
+            out.push(Tick { axis, value, a, b });
+        }
+    }
+    out
+}
+
+/// Стрелка севера сбоку от короба, как `north_arrow` модуля: древко
+/// и наконечник. Север - возрастание Y.
+pub fn north_arrow(lo: V3, hi: V3) -> [(V3, V3); 3] {
+    let span = (hi[0] - lo[0]).max(hi[1] - lo[1]).max(1.0);
+    let ln = span * 0.18;
+    let x = lo[0] - span * 0.12;
+    let (y0, z) = (lo[1], lo[2]);
+    let tip = [x, y0 + ln, z];
+    let wing = ln * 0.28;
+    [
+        ([x, y0, z], tip),
+        (tip, [x - wing * 0.6, y0 + ln - wing, z]),
+        (tip, [x + wing * 0.6, y0 + ln - wing, z]),
+    ]
+}
+
+/// Ось плана смотрит на камеру торцом, как `_axes_edge_on` модуля:
+/// все её подписи легли бы в одну точку, их незачем ставить.
+/// Углы камеры в градусах.
+pub fn edge_on(axis: usize, azimuth: f64, elevation: f64) -> bool {
+    let (az, el) = (azimuth.to_radians(), elevation.to_radians());
+    let look = [el.cos() * az.cos(), el.cos() * az.sin()];
+    axis < 2 && look[axis].abs() > 0.9
 }
 
 /// Азимут направления от a к b в плане, градусы 0-360 от севера.
@@ -217,6 +346,42 @@ mod tests {
         assert_eq!(depth_label(-0.0004, 0.1), "0.0");
         assert_eq!(depth_label(300.0, 100.0), "300");
         assert_eq!(depth_label(1.5, 0.0), "2");
+    }
+
+    /// Короб 0..100 x 0..50 x -30..0 с камерой у начала: деления
+    /// на рёбрах у начала, штрихи наружу, как у модуля.
+    #[test]
+    fn box_ticks_like_the_module() {
+        let (lo, hi) = ([0.0, 0.0, -30.0], [100.0, 50.0, 0.0]);
+        let t = tick_marks(lo, hi, 5, [0.0; 3], ORIGIN_SIDES);
+        let xs: Vec<f64> = t.iter().filter(|t| t.axis == 0).map(|t| t.value).collect();
+        assert_eq!(xs, [0.0, 20.0, 40.0, 60.0, 80.0, 100.0]);
+        let first = t[0];
+        assert_eq!(first.a, [0.0, 0.0, -30.0]);
+        assert_eq!(first.b, [0.0, -2.0, -30.0]);
+        let z = t.iter().find(|t| t.axis == 2).map(|t| (t.a, t.b));
+        assert_eq!(z, Some(([0.0, 0.0, -30.0], [-2.0, 0.0, -30.0])));
+        // камера над дальним углом: плановые рёбра со стороны камеры,
+        // вертикаль ближняя по X, дальняя по Y
+        let s = near_sides(lo, hi, [500.0, 500.0, 100.0]);
+        assert_eq!(
+            s,
+            Sides {
+                x: [true, false],
+                y: [true, false],
+                z: [true, false],
+            }
+        );
+        let t = tick_marks(lo, hi, 5, [0.0; 3], s);
+        assert_eq!(t[0].b, [0.0, 52.0, -30.0]);
+        assert_eq!(
+            custom_range(lo, hi, Some(&[0.0, 0.0, 0.0, 0.0, -100.0, 10.0])),
+            ([0.0, 0.0, -100.0], [100.0, 50.0, 10.0])
+        );
+        assert!(edge_on(0, 0.0, 0.0));
+        assert!(!edge_on(0, 90.0, 0.0));
+        assert!(!edge_on(2, 0.0, 0.0));
+        assert_eq!(north_arrow(lo, hi)[0].0, [-12.0, 0.0, -30.0]);
     }
 
     /// Неровная верхняя кромка: глубины справа округлены по шагу,

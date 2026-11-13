@@ -306,6 +306,8 @@ const TABLE: &[(&str, &str)] = &[
         "Nothing to clip: choose what to keep or the elevations.",
     ),
     ("Вид по разрезу", "Section view"),
+    // стрелка севера у короба
+    ("С", "N"),
     (
         "Вид по разрезу смотрит поперёк линии: поставьте измерением две точки и больше.",
         "The section view looks across a line: place two or more points with the measurement.",
