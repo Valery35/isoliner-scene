@@ -29,11 +29,25 @@ PRO_RELEASES = PRO_CODE + "/releases"
 SCENE_CODE = "https://github.com/Valery35/isoliner-scene"
 SCENE_RELEASES = SCENE_CODE + "/releases"
 SCENE_WEB = "https://valery35.github.io/isoliner-scene/app/"
-RUST_CODE = SCENE_CODE + "/tree/main/apps/isoliner-rustgis"
+RUST_CODE = SCENE_RELEASES + "/tag/rustgis-v0.4.0"
 RUSTGIS = "https://github.com/opengeos/RustGIS"
 
 # Лента выпусков: свежие сверху.
 FEED = (
+    ("2026-11-13", "rust", "0.4.0",
+     "Первый выпуск расширения. Слои проекта RustGIS открываются в сцене "
+     "Isoliner3D в системе координат карты, инструменты 2.24 и 2.17 "
+     "считают в панели «Инструменты» так же, как модуль QGIS.",
+     "The first release of the plugin. The RustGIS project's layers open in "
+     "the Isoliner3D scene in the map's coordinate system, and tools 2.24 "
+     "and 2.17 compute in the Tools pane as in the QGIS plugin."),
+    ("2026-11-13", "scene", "0.4.0",
+     "Окно сцены одно на всю линейку. Его открывают Isoliner Scene и новое "
+     "расширение Isoliner3D для RustGIS, систему координат сцены можно "
+     "выбрать, как для карты.",
+     "One scene window for the whole line, shared by Isoliner Scene and the "
+     "new Isoliner3D extension for RustGIS, with the scene's coordinate "
+     "system chosen as for the map."),
     ("2026-11-13", "pro", "1.5.5",
      "Три новых инструмента. 3D-плотность, отчёт по горизонтам блочной "
      "модели с рудой, вскрышей и маржой, тела по контуру со сводом.",
@@ -377,12 +391,12 @@ def family(b):
             (RUST_CODE, PRODUCTS["rust"],
              ("Инструменты модуля в RustGIS", "Plugin tools in RustGIS"),
              ("Расширение RustGIS. Инструменты модуля считают те же "
-              "тела и объёмы, что в QGIS, сцена открывается в окне "
-              "Isoliner Scene.",
+              "тела, что в QGIS, слои проекта открываются в окне сцены "
+              "в системе координат карты.",
               "A RustGIS extension. The plugin tools compute the same bodies "
-              "and volumes as in QGIS, the scene opens in the Isoliner Scene "
-              "window."),
-             ("В работе", "In progress")),
+              "as in QGIS, the project layers open in the scene window in the "
+              "map's coordinate system."),
+             ("Первый выпуск 0.4.0", "First release 0.4.0")),
         )))
 
     choose = b.section(
@@ -405,10 +419,10 @@ def family(b):
              "Isoliner Scene for Windows - a program without QGIS, the scene "
              "opens from a file."),
             ("Работаю в RustGIS", "I work in RustGIS",
-             "Isoliner3D для RustGIS - инструменты модуля из меню RustGIS. "
-             "Расширение в работе.",
-             "Isoliner3D for RustGIS - the plugin tools from the RustGIS menu. "
-             "The extension is in progress."))))
+             "Isoliner3D для RustGIS - инструменты модуля в панели "
+             "«Инструменты» и сцена из слоёв проекта.",
+             "Isoliner3D for RustGIS - the plugin tools in the Tools pane and "
+             "the scene from the project layers."))))
 
     b.t("lang.a", "Формат и проверки - isoliner-scene на GitHub",
         "The format and the tests - isoliner-scene on GitHub")
@@ -477,9 +491,9 @@ def scene(b):
                b.btn("cta.code", "Исходный код на GitHub",
                      "Source code on GitHub", SCENE_CODE),
                b.el("cta.note",
-                    "Выпуск 0.3.0. Пакет в браузере читается на месте "
+                    "Выпуск 0.4.0. Пакет в браузере читается на месте "
                     "и никуда не отправляется. Apache 2.0.",
-                    "Release 0.3.0. In the browser the package is read "
+                    "Release 0.4.0. In the browser the package is read "
                     "locally and is not sent anywhere. Apache 2.0.",
                     cls="note"),
                picture(),
