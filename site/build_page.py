@@ -29,7 +29,9 @@ PRO_RELEASES = PRO_CODE + "/releases"
 SCENE_CODE = "https://github.com/Valery35/isoliner-scene"
 SCENE_RELEASES = SCENE_CODE + "/releases"
 SCENE_WEB = "https://valery35.github.io/isoliner-scene/app/"
-RUST_CODE = SCENE_RELEASES + "/tag/rustgis-v0.4.0"
+RUST = PAGE + "/isoliner3d-rustgis"
+RUST_REL = SCENE_RELEASES + "/tag/rustgis-v0.4.0"
+RUST_CODE = SCENE_CODE + "/tree/main/apps/isoliner-rustgis"
 RUSTGIS = "https://github.com/opengeos/RustGIS"
 
 # Лента выпусков: свежие сверху.
@@ -175,7 +177,9 @@ section h2{font-size:clamp(26px,3.3vw,38px);max-width:24ch}
 section .sub{margin-top:16px;max-width:70ch;color:var(--ink-soft)}
 .trio{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;
   margin-top:34px}
-@media(max-width:860px){.trio{grid-template-columns:1fr}}
+.duo{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;
+  margin-top:34px}
+@media(max-width:860px){.trio,.duo{grid-template-columns:1fr}}
 .card{background:var(--paper-2);border:1px solid var(--line);
   border-radius:var(--r);padding:22px 24px;display:block;
   text-decoration:none}
@@ -322,15 +326,17 @@ var TEXTS = %s;
             json.dumps(texts, ensure_ascii=False), SCRIPT)
 
 
-def picture():
-    with open(os.path.join(HERE, "scene_demo.png"), "rb") as fh:
-        return "data:image/png;base64," + base64.b64encode(fh.read()).decode()
+def picture(name="scene_demo.png"):
+    kind = "jpeg" if name.endswith(".jpg") else "png"
+    with open(os.path.join(HERE, name), "rb") as fh:
+        return "data:image/%s;base64,%s" % (kind,
+                                            base64.b64encode(fh.read()).decode())
 
 
 def product_names(b):
     for key, (ru, en) in PRODUCTS.items():
         b.t("prod.%s" % key, ru, en)
-    return [("prod.pro", PRO), ("prod.scene", SCENE), ("prod.rust", RUST_CODE)]
+    return [("prod.pro", PRO), ("prod.scene", SCENE), ("prod.rust", RUST)]
 
 
 def family(b):
@@ -393,7 +399,7 @@ def family(b):
               "clipping, a section view, frames for a video. No QGIS to "
               "install."),
              None),
-            (RUST_CODE, PRODUCTS["rust"],
+            (RUST, PRODUCTS["rust"],
              ("Инструменты модуля в RustGIS", "Plugin tools in RustGIS"),
              ("Расширение RustGIS. Инструменты модуля считают те же "
               "тела, что в QGIS, слои проекта открываются в окне сцены "
@@ -594,10 +600,137 @@ def scene(b):
                     content)
 
 
+def rust(b):
+    nav = product_names(b)
+    hero = ('<div class="wrap hero">\n%s\n%s\n%s\n<div class="cta">%s%s%s</div>\n'
+            '%s\n<figure class="shot"><img alt="" src="%s">%s</figure>\n</div>'
+            % (b.el("hero.eyebrow", "Линейка Isoliner3D · расширение RustGIS",
+                    "The Isoliner3D family · a RustGIS extension",
+                    tag="div", cls="eyebrow"),
+               b.el("hero.h1", "Инструменты Isoliner3D и сцена прямо в RustGIS",
+                    "Isoliner3D tools and the scene right in RustGIS", tag="h1"),
+               b.el("hero.lead",
+                    "Расширение открывает слои проекта RustGIS в 3D-сцене "
+                    "Isoliner3D и добавляет инструменты модуля в панель "
+                    "«Инструменты». Тела выработок и стволы скважин считаются "
+                    "так же, как в QGIS, и ложатся слоем в проект.",
+                    "The extension opens the RustGIS project layers in the "
+                    "Isoliner3D 3D scene and adds the plugin tools to the Tools "
+                    "pane. Working bodies and borehole traces are computed as "
+                    "in QGIS and land in the project as a layer.", cls="lead"),
+               b.btn("cta.get", "Скачать расширение", "Download the extension",
+                     RUST_REL, main=True),
+               b.btn("cta.man", "Руководство", "Manual", RUST_REL),
+               b.btn("cta.code", "Исходный код на GitHub",
+                     "Source code on GitHub", RUST_CODE),
+               b.el("cta.note",
+                    "Первый выпуск 0.4.0 для RustGIS 0.6.0. Файл "
+                    "isoliner3d-0.4.0.rgplugin, руководство на русском и "
+                    "английском. Apache 2.0.",
+                    "First release 0.4.0 for RustGIS 0.6.0. The file "
+                    "isoliner3d-0.4.0.rgplugin, a manual in Russian and "
+                    "English. Apache 2.0.",
+                    cls="note"),
+               picture("rustgis_scene.jpg"),
+               b.el("hero.shot",
+                    "Сцена из слоёв проекта RustGIS. Справа - инструмент 2.24 "
+                    "в панели «Инструменты».",
+                    "The scene from the RustGIS project layers. On the right - "
+                    "tool 2.24 in the Tools pane.",
+                    tag="figcaption")))
+
+    can = b.section(
+        "can", ("Возможности", "Features"),
+        ("Что умеет", "What it does"), None,
+        b.cards("can", (
+            (None, None, ("Сцена из слоёв проекта",
+                          "A scene from the project layers"),
+             ("Кнопка «Сцена Isoliner3D» собирает видимые слои в пакет "
+              "сцены и открывает окно с той же плашкой, окном параметров "
+              "и тенями, что у модуля QGIS и Isoliner Scene.",
+              "The Isoliner3D Scene button collects the visible layers into a "
+              "scene package and opens the window with the same toolbar, "
+              "settings and shadows as the QGIS plugin and Isoliner Scene."),
+             None),
+            (None, None, ("Система координат как у карты",
+                          "The coordinate system of the map"),
+             ("Сцена строится в метрах системы карты RustGIS. Её можно "
+              "сменить кодом EPSG в окне «Параметры сцены». Карта в "
+              "градусах даёт зону UTM.",
+              "The scene is built in metres of the RustGIS map system. It can "
+              "be changed by an EPSG code in the Scene settings window. A map "
+              "in degrees gives a UTM zone."), None),
+            (None, None, ("Инструменты модуля", "The plugin tools"),
+             ("2.24 Тело вдоль выработки и 2.17 Стволы скважин в панели "
+              "«Инструменты». Поля и справка те же, что в QGIS, итог "
+              "слоем в проект с отменой.",
+              "2.24 Body along a working and 2.17 Borehole traces in the "
+              "Tools pane. The fields and help are as in QGIS, the result is a "
+              "project layer with undo."), None),
+            (None, None, ("Одно описание на всю линейку",
+                          "One description for the whole family"),
+             ("Инструменты, окно параметров и руководство собираются из "
+              "общих файлов модуля. Модуль добавит инструмент - он "
+              "появится и в RustGIS.",
+              "The tools, the settings window and the manual are built from "
+              "the plugin's shared files. A tool added to the plugin appears "
+              "in RustGIS too."), None),
+        ), cls="duo"))
+
+    how = b.section(
+        "how", ("Установка", "Installation"),
+        ("Как поставить", "How to install"), None,
+        b.rows("how", (
+            ("1. Файл", "1. The file",
+             "Скачать isoliner3d-0.4.0.rgplugin со страницы выпуска.",
+             "Download isoliner3d-0.4.0.rgplugin from the release page."),
+            ("2. RustGIS", "2. RustGIS",
+             "Вкладка <b>Модули</b>, кнопка <b>Установить из файла</b>, "
+             "выбрать скачанный файл.",
+             "The <b>Plugins</b> tab, the <b>Install from file</b> button, "
+             "choose the downloaded file."),
+            ("3. Кнопки", "3. The buttons",
+             "На вкладке <b>Модули</b> появится группа Isoliner3D - сцена, "
+             "инструменты и «О программе».",
+             "The <b>Plugins</b> tab gets an Isoliner3D group - the scene, "
+             "the tools and About."),
+            ("4. Сцена", "4. The scene",
+             "Нажать <b>Сцена Isoliner3D</b>. Повторное нажатие "
+             "перечитывает слои в уже открытом окне.",
+             "Press <b>Isoliner3D Scene</b>. A second press reloads the "
+             "layers in the window already open."))) +
+        '\n<figure class="shot"><img alt="" src="%s">%s</figure>'
+        % (picture("rustgis_tool.jpg"),
+           b.el("how.shot",
+                "Слой «Тела выработок» после инструмента 2.24.",
+                "The Working bodies layer after tool 2.24.",
+                tag="figcaption")))
+
+    limits = b.section(
+        "limits", ("Пока так", "For now"),
+        ("Чего ждём от RustGIS", "What we wait for in RustGIS"),
+        ("RustGIS хранит слои без высот и отдаёт расширениям координаты "
+         "в градусах. Поэтому тела и линии с отметками видны только в "
+         "сцене, а в проект ложится их контур в плане с объёмом и "
+         "отметками в полях. Растры расширениям пока недоступны.",
+         "RustGIS keeps layers without heights and gives extensions "
+         "coordinates in degrees. So bodies and lines with elevations are "
+         "seen only in the scene, and the project gets their plan outline "
+         "with the volume and elevations in fields. Rasters are not yet "
+         "available to extensions."), "")
+
+    content = "\n".join([hero, can, how, limits])
+    return b.render(("Isoliner3D для RustGIS · Информ++",
+                     "Isoliner3D for RustGIS · Inform++"),
+                    ("расширение RustGIS", "a RustGIS extension"), PAGE, nav,
+                    content)
+
+
 def main():
     out = os.path.join(HERE, "pages")
     os.makedirs(out, exist_ok=True)
-    for name, build in (("isoliner3d", family), ("isoliner-scene", scene)):
+    for name, build in (("isoliner3d", family), ("isoliner-scene", scene),
+                        ("isoliner3d-rustgis", rust)):
         text = build(Page())
         with open(os.path.join(out, name + ".html"), "wb") as fh:
             fh.write(text.encode("utf-8"))
