@@ -22,6 +22,25 @@
 
 ## Журнал
 
+### Isoliner3D для RustGIS 0.5.1 - 14 ноября 2026 года
+
+Тег `rustgis-v0.5.1`, по слову автора «К утру перепубликуй» и «Да, всегда»
+(установка в его RustGIS). Своя вкладка ленты, поля входа в итогах,
+несколько полей в 2.18. Пакет собран на GitHub по тегу
+(`.github/workflows/rustgis-release.yml`) - машина сборки сбоила (rustc
+падал с ошибкой доступа к памяти, синий экран), две местные сборки
+разошлись. Тексты постов - `site/posts_rustgis_0.5.1_social.md`.
+
+| Площадка | Запись |
+|---|---|
+| GitHub | https://github.com/Valery35/isoliner-scene/releases/tag/rustgis-v0.5.1 - пакет и руководство RU и EN, «Latest» у v0.4.0, SHA-256 пакета cd779c95...a1db |
+| Dropbox | `ИИ\Isoliner3D\isoliner3d-0.5.1.rgplugin`, 0.5.0 в `arhiv` |
+| RustGIS автора | установлено 0.5.1 (`rustgis-cli plugins install`) |
+| Mastodon | https://en.osm.town/@Vaery35/117612927483636123 |
+| X, LinkedIn, Facebook, ВК | не опубликовано - окно Chrome свёрнуто, ввод в редакторы не доходит |
+| Telegram | текст в файле постов, выкладывает автор |
+| Сайт informpp.ru | основная сессия |
+
 ### Isoliner3D для RustGIS 0.5.0 - 13 ноября 2026 года
 
 Тег `rustgis-v0.5.0`, по слову автора «Выпускай всюду» и «выкладывай»
