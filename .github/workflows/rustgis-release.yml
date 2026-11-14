@@ -1,0 +1,42 @@
+# Isoliner Scene - сцена Isoliner3D без QGIS.
+# Copyright (C) 2026 ООО «Информ++». Лицензия Apache 2.0.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Выпуск Isoliner3D для RustGIS по тегу rustgis-v<номер>. Пакет .rgplugin
+# собирается здесь, на чистой машине, а не на машине разработчика, тесты
+# идут перед сборкой. Текст выпуска - site/release_rustgis_<номер>.md,
+# к выпуску прикладываются пакет и руководство RU и EN. Метка Latest
+# остаётся у выпуска Isoliner Scene.
+
+name: rustgis-release
+
+on:
+  push:
+    tags: ["rustgis-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test -p isoliner-rustgis
+      - run: cargo build --release -p isoliner-rustgis
+      - name: Пакет
+        shell: pwsh
+        run: powershell -NoProfile -File apps/isoliner-rustgis/scripts/package.ps1
+      - name: Выпуск
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $ver = $tag -replace '^rustgis-v', ''
+          $notes = "site/release_rustgis_$ver.md"
+          gh release create $tag "dist/isoliner3d-$ver.rgplugin" `
+            doc/manual/isoliner3d-rustgis.ru.md doc/manual/isoliner3d-rustgis.en.md `
+            --title "Isoliner3D для RustGIS $ver" --notes-file $notes --latest=false
+          Get-FileHash "dist/isoliner3d-$ver.rgplugin" -Algorithm SHA256
