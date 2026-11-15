@@ -4,7 +4,7 @@
 
 Isoliner3D for RustGIS is a RustGIS plugin with the same scene and the
 same tools as the QGIS plugin. It runs in RustGIS for Windows from
-version 0.5.
+version 0.6.
 
 ## Installation
 
