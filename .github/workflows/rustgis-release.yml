@@ -40,3 +40,13 @@ jobs:
             doc/manual/isoliner3d-rustgis.ru.md doc/manual/isoliner3d-rustgis.en.md `
             --title "Isoliner3D для RustGIS $ver" --notes-file $notes --latest=false
           Get-FileHash "dist/isoliner3d-$ver.rgplugin" -Algorithm SHA256
+
+  # Сообщение автору в Telegram о выпуске, telegram-release.yml. Выпуск
+  # создан ключом GITHUB_TOKEN, событие release сюда не приходит.
+  telegram:
+    name: Telegram
+    needs: [release]
+    uses: ./.github/workflows/telegram-release.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit
