@@ -30,9 +30,12 @@
   - `toolbar_pro_vs_lite.png` - одна плашка в модуле и в Scene
   - `scene-params-camera.jpg`, `scene-params-box.jpg` - окно «Параметры сцены».
 
-Нет снимка новой вкладки Isoliner3D на ленте RustGIS 0.5.1, окно Chrome и
-экран были недоступны сессиям. Его стоит снять перед публикацией. Видео
-не делали, для Reddit хватит снимков.
+- `C:\Dev\isoliner-scene\site\rustgis_tab_isoliner3d.jpg` - своя вкладка
+  Isoliner3D на ленте RustGIS 0.5.1, группа «Сцена» и раскрытое меню
+  «Оболочки» с 2.11, 2.12, 2.14, 2.23.
+
+Видео не делали, для Reddit хватит снимков. К посту r/gis хорошо идут
+`scene_shadows.png` и `rustgis_tab_isoliner3d.jpg` вместе.
 
 ## Чем Isoliner3D цепляет
 
