@@ -30,12 +30,17 @@ SCENE_CODE = "https://github.com/Valery35/isoliner-scene"
 SCENE_RELEASES = SCENE_CODE + "/releases"
 SCENE_WEB = "https://valery35.github.io/isoliner-scene/app/"
 RUST = PAGE + "/isoliner3d-rustgis"
-RUST_REL = SCENE_RELEASES + "/tag/rustgis-v0.5.0"
+RUST_REL = SCENE_RELEASES + "/tag/rustgis-v0.5.1"
 RUST_CODE = SCENE_CODE + "/tree/main/apps/isoliner-rustgis"
 RUSTGIS = "https://github.com/opengeos/RustGIS"
 
 # Лента выпусков: свежие сверху.
 FEED = (
+    ("2026-11-14", "rust", "0.5.1",
+     "Своя вкладка на ленте RustGIS с меню инструментов, итоги несут "
+     "поля исходных объектов.",
+     "Its own RustGIS ribbon tab with tool menus, results keep the fields "
+     "of their input features."),
     ("2026-11-13", "rust", "0.5.0",
      "Десять инструментов модуля в панели RustGIS, итоги складываются в "
      "цепочку, объёмные итоги открываются в окне сцены.",
@@ -415,7 +420,7 @@ def family(b):
               "A RustGIS extension. The plugin tools compute the same bodies "
               "as in QGIS, the project layers open in the scene window in the "
               "map's coordinate system."),
-             ("Выпуск 0.5.0", "Release 0.5.0")),
+             ("Выпуск 0.5.1", "Release 0.5.1")),
         )))
 
     choose = b.section(
@@ -632,11 +637,11 @@ def rust(b):
                b.btn("cta.code", "Исходный код на GitHub",
                      "Source code on GitHub", RUST_CODE),
                b.el("cta.note",
-                    "Выпуск 0.5.0 для RustGIS 0.6.0. Файл "
-                    "isoliner3d-0.5.0.rgplugin, руководство на русском и "
+                    "Выпуск 0.5.1 для RustGIS 0.6.0. Файл "
+                    "isoliner3d-0.5.1.rgplugin, руководство на русском и "
                     "английском. Apache 2.0.",
-                    "Release 0.5.0 for RustGIS 0.6.0. The file "
-                    "isoliner3d-0.5.0.rgplugin, a manual in Russian and "
+                    "Release 0.5.1 for RustGIS 0.6.0. The file "
+                    "isoliner3d-0.5.1.rgplugin, a manual in Russian and "
                     "English. Apache 2.0.",
                     cls="note"),
                picture("rustgis_scene.jpg"),
@@ -694,18 +699,18 @@ def rust(b):
         ("Как поставить", "How to install"), None,
         b.rows("how", (
             ("1. Файл", "1. The file",
-             "Скачать isoliner3d-0.5.0.rgplugin со страницы выпуска.",
-             "Download isoliner3d-0.5.0.rgplugin from the release page."),
+             "Скачать isoliner3d-0.5.1.rgplugin со страницы выпуска.",
+             "Download isoliner3d-0.5.1.rgplugin from the release page."),
             ("2. RustGIS", "2. RustGIS",
              "Вкладка <b>Модули</b>, кнопка <b>Установить из файла</b>, "
              "выбрать скачанный файл.",
              "The <b>Plugins</b> tab, the <b>Install from file</b> button, "
              "choose the downloaded file."),
             ("3. Кнопки", "3. The buttons",
-             "На вкладке <b>Модули</b> появится группа Isoliner3D - сцена, "
-             "инструменты и «О программе».",
-             "The <b>Plugins</b> tab gets an Isoliner3D group - the scene, "
-             "the tools and About."),
+             "На ленте RustGIS появится своя вкладка <b>Isoliner3D</b> - сцена, "
+             "меню инструментов и «О программе».",
+             "The RustGIS ribbon gets its own <b>Isoliner3D</b> tab - the scene, "
+             "tool menus and About."),
             ("4. Сцена", "4. The scene",
              "Нажать <b>Сцена Isoliner3D</b>. Повторное нажатие "
              "перечитывает слои в уже открытом окне.",
