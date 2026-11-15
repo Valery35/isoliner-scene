@@ -1,0 +1,98 @@
+<!-- Линейка для RustGIS - блок главной страницы www.informpp.ru. -->
+<!-- Пишется руками, источник - site/pages/rustgis-line.html.       -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=Golos+Text:wght@400;500;600&display=swap');
+:root{--paper:#F1F2EC;--paper-2:#E8EAE2;--ink:#1B2420;--ink-soft:#4A5752;
+  --line:#D5D9CE;--teal:#0E7C66;--amber:#C2622C;--r:14px}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);
+  font:16px/1.55 'Golos Text',system-ui,sans-serif}
+.wrap{max-width:1120px;margin:0 auto;padding:40px 24px 36px}
+.eyebrow{font:600 12px/1 'Golos Text',sans-serif;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--teal);display:flex;align-items:center;gap:10px}
+.eyebrow::before{content:"";width:22px;height:2px;background:var(--amber)}
+h2{font:700 clamp(26px,3.3vw,36px)/1.15 'Bitter',serif;margin:14px 0 0}
+.sub{margin:14px 0 0;max-width:72ch;color:var(--ink-soft)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:30px}
+@media(max-width:900px){.grid{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.grid{grid-template-columns:1fr}}
+.card{background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r);
+  padding:20px 22px;display:flex;flex-direction:column}
+.card h3{font:700 19px/1.25 'Bitter',serif;margin:0}
+.ver{display:inline-block;margin-top:6px;font:600 12px/1 'Golos Text',sans-serif;
+  color:var(--amber)}
+.card p{margin:10px 0 14px;color:var(--ink-soft);font-size:15px;flex:1}
+.links{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;font-weight:600}
+.links a{color:var(--teal);text-decoration:none;border-bottom:1px solid currentColor}
+.kit{grid-column:1/-1;background:transparent;border-style:dashed}
+.kit p{flex:none;margin-bottom:10px}
+</style>
+<div class="wrap">
+  <div class="eyebrow">Свободная настольная ГИС на Rust</div>
+  <h2>Линейка для RustGIS</h2>
+  <p class="sub">Пять наших расширений для RustGIS. Инструменты считают так же,
+  как наши модули QGIS, и сверены с ними на тех же примерах. У каждого
+  расширения своя вкладка на ленте RustGIS, ставится оно из файла кнопкой
+  Install From File. Проверены в RustGIS 0.6.0.</p>
+  <div class="grid">
+    <div class="card">
+      <h3>Isoliner3D для RustGIS</h3><span class="ver">0.5.1</span>
+      <p>3D-сцена из слоёв проекта и десять инструментов горной геологии -
+      тела выработок, оболочки рудных тел, стволы скважин, отчёт по уступам,
+      3D-плотность.</p>
+      <div class="links">
+        <a target="_blank" href="https://github.com/Valery35/isoliner-scene/releases/tag/rustgis-v0.5.1">Выпуск</a>
+        <a target="_blank" href="https://www.informpp.ru/главная-страница/isoliner3d/isoliner3d-rustgis">Страница</a>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Isoliner для RustGIS</h3><span class="ver">0.1.2</span>
+      <p>Тринадцать инструментов кригинга, разрезов и фракталов -
+      вариограмма, кросс-валидация, декластеризация, содержания по пласту,
+      фрактальная размерность.</p>
+      <div class="links">
+        <a target="_blank" href="https://github.com/Valery35/isoliner-rustgis/releases/tag/rustgis-v0.1.2">Выпуск</a>
+        <a target="_blank" href="https://www.informpp.ru/главная-страница/qgis-isoliner">Страница</a>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Topoliner для RustGIS</h3><span class="ver">0.1.0</span>
+      <p>Одиннадцать инструментов топологии покрытий - проверка и очистка
+      полигонов и линий, сшивка узлов, ввод контуров, упрощение.</p>
+      <div class="links">
+        <a target="_blank" href="https://github.com/Valery35/topoliner-rustgis/releases/tag/rustgis-v0.1.0">Выпуск</a>
+        <a target="_blank" href="https://www.informpp.ru/главная-страница/qgis-topoliner">Страница</a>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Routeliner для RustGIS</h3><span class="ver">0.1.0</span>
+      <p>Восемь инструментов линейной привязки - сборка и калибровка
+      маршрутов, события по пикетам, продольный профиль.</p>
+      <div class="links">
+        <a target="_blank" href="https://github.com/Valery35/routeliner-rustgis/releases/tag/rustgis-v0.1.0">Выпуск</a>
+        <a target="_blank" href="https://github.com/Valery35/routeliner">Модуль QGIS</a>
+      </div>
+    </div>
+    <div class="card">
+      <h3>RustPlanetX</h3><span class="ver">0.6.1</span>
+      <p>3D-глобус PlanetX рядом с картой RustGIS - рельеф, снимки и слои
+      проекта на глобусе. Windows, Linux и macOS.</p>
+      <div class="links">
+        <a target="_blank" href="https://github.com/Valery35/rustplanetx/releases/tag/v0.6.1">Выпуск</a>
+        <a target="_blank" href="https://www.informpp.ru/главная-страница/planetx">Страница</a>
+      </div>
+    </div>
+    <div class="card kit">
+      <h3>rustgis-kit</h3>
+      <p>Общая основа расширений Isoliner3D, Isoliner, Topoliner и
+      Routeliner - связь с RustGIS, окна инструментов, системы координат,
+      сборка пакета. Открытый крейт под Apache 2.0.</p>
+      <div class="links">
+        <a target="_blank" href="https://github.com/Valery35/rustgis-kit">Исходный код</a>
+        <a target="_blank" href="https://github.com/opengeos/RustGIS">RustGIS</a>
+      </div>
+    </div>
+  </div>
+</div>
