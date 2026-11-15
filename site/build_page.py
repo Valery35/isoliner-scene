@@ -717,10 +717,10 @@ def rust(b):
              "Press <b>Isoliner3D Scene</b>. A second press reloads the "
              "layers in the window already open."))) +
         '\n<figure class="shot"><img alt="" src="%s">%s</figure>'
-        % (picture("rustgis_tool.jpg"),
+        % (picture("rustgis_tab_isoliner3d.jpg"),
            b.el("how.shot",
-                "Слой «Тела выработок» после инструмента 2.24.",
-                "The Working bodies layer after tool 2.24.",
+                "Вкладка Isoliner3D на ленте RustGIS, раскрыто меню «Оболочки».",
+                "The Isoliner3D tab on the RustGIS ribbon, the Shells menu open.",
                 tag="figcaption")))
 
     limits = b.section(
