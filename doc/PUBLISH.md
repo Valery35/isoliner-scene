@@ -37,7 +37,10 @@
 | Dropbox | `ИИ\Isoliner3D\isoliner3d-0.5.1.rgplugin`, 0.5.0 в `arhiv` |
 | RustGIS автора | установлено 0.5.1 (`rustgis-cli plugins install`) |
 | Mastodon | https://en.osm.town/@Vaery35/117612927483636123 |
-| X, LinkedIn, Facebook, ВК | не опубликовано - окно Chrome свёрнуто, ввод в редакторы не доходит |
+| X | https://x.com/Valery35/status/2122094829282763164 (16 ноября) |
+| LinkedIn | https://www.linkedin.com/feed/update/urn:li:activity:7527860695745327104/ (16 ноября) |
+| Facebook | https://www.facebook.com/valery35/posts/pfbid0o59i1hPwu32bwHBpxjwKbGWvsnAnKHqB1K7RnN6o2WuPaq4BN6McLUQpCx7dzWdjl (16 ноября) |
+| ВК | https://vk.ru/wall-241229428_83 (16 ноября, со снимком вкладки) |
 | Telegram | текст в файле постов, выкладывает автор |
 | Сайт informpp.ru | основная сессия |
 

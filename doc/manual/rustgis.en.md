@@ -68,7 +68,7 @@ open in a scene window, one window per tool. An open window reloads a
 new result by itself.
 
 The 1.09 report goes to the project as a table. A RustGIS layer cannot
-hold the 2.25 cube: its non-empty cells show in the scene window as
+hold the 2.25 cube, so its non-empty cells show in the scene window as
 points, and the Density cells box puts them in the project as a point
 layer.
 
