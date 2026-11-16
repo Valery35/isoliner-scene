@@ -37,8 +37,8 @@ program and of the QGIS plugin's view window - the toolbar, Scene
 Settings, fly-through views, video and export. The View Window chapter
 describes it.
 
-When the layers change, Isoliner3D Scene builds the scene again. An
-open window reloads it by itself, a second window does not open.
+An open scene window reads the layers again by itself when they change in
+RustGIS. Pressing the button again does not open a second window.
 
 A scene package `.i3dscene` written by the QGIS plugin opens with the
 Open… button of the scene window.
@@ -109,8 +109,6 @@ tool that needs bodies then says the layer has none.
   input) stays in the plugin, RustGIS does not give rasters to plugins.
 - Several items of a list (the 2.14 statistics) are typed comma
   separated, the field's hint lists the items.
-- An open scene of the layers reads them again by itself when they change
-  in RustGIS, as from RustGIS 0.7.0 the plugin runs as a session.
 
 ## Checking without installation
 
