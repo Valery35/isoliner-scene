@@ -8,7 +8,7 @@
   "runtime": "process",
   "session": true,
   "run": { "windows": ["bin/isoliner-rustgis.exe", "rustgis-plugin"] },
-  "minRustgisVersion": "0.6.0",
+  "minRustgisVersion": "0.7.0",
   "permissions": ["edit", "files"],
   "commands": [
     { "id": "scene", "label": "Isoliner3D\nScene", "help": "Open the Isoliner3D scene window: the project's visible layers in 3D, or an Isoliner3D scene package (.i3dscene) with its camera, parts and fly-through views. The scene follows the project's layers while it is open.", "icon": "globe_view", "params": "{\"path\"?: path to an .i3dscene file; without it the scene is built from the project's visible vector layers, heights from the Z coordinate; answers the scene name and the number of parts}" },

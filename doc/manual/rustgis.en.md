@@ -5,7 +5,7 @@
 
 Isoliner3D for RustGIS is a RustGIS plugin with the same scene and the
 same tools as the QGIS plugin. It runs in RustGIS for Windows from
-version 0.6.
+version 0.7.
 
 ## Installation
 
@@ -110,8 +110,8 @@ tool that needs bodies then says the layer has none.
   input) stays in the plugin, RustGIS does not give rasters to plugins.
 - Several items of a list (the 2.14 statistics) are typed comma
   separated, the field's hint lists the items.
-- The scene follows the layers at the press of the button. A RustGIS
-  with plugin sessions will let it follow them by itself.
+- An open scene of the layers reads them again by itself when they change
+  in RustGIS, as from RustGIS 0.7.0 the plugin runs as a session.
 
 ## Checking without installation
 
