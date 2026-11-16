@@ -22,6 +22,30 @@
 
 ## Журнал
 
+### Isoliner3D для RustGIS 0.6.0 - 16 ноября 2026 года
+
+Тег `rustgis-v0.6.0`, по слову автора «Давай сам командуй» (через рабочее
+место и основную сессию). Нужен RustGIS 0.7.0, сцена из слоёв карты в её
+системе координат через `host.features` с `crs`, без промежуточного
+Shapefile, крейт rustgis-kit 0.1.12. Пакет собран на GitHub по тегу
+(SHA-256 b0ab3686...eeae3). Тексты - `site/release_rustgis_0.6.0.md`,
+`site/posts_rustgis_0.6.0_social.md`, обе проверки текстов чистые.
+Перечитывание открытой сцены по событию слоёв в окне RustGIS не
+проверялось - открытый проект автора не трогали.
+
+| Площадка | Запись |
+|---|---|
+| GitHub | https://github.com/Valery35/isoliner-scene/releases/tag/rustgis-v0.6.0 - пакет и руководство RU и EN |
+| Dropbox | `ИИ\Isoliner3D\isoliner3d-0.6.0.rgplugin`, 0.4.0, 0.5.0 и 0.5.1 в `arhiv` |
+| RustGIS автора | установлено 0.6.0 (`rustgis-cli plugins install`) |
+| Mastodon | https://en.osm.town/@Vaery35/117627547800541462 |
+| X | https://x.com/Valery35/status/2122397546941427977 |
+| LinkedIn | https://www.linkedin.com/feed/update/urn:li:activity:7528163598150561792/ |
+| Facebook | https://www.facebook.com/valery35/posts/pfbid0Ua421X1ZaUCKsL8foNLmJ59FQDQnThYdjwmcpXYA9k9qwAys5nBHAWN5Sqh66wrXl |
+| ВК | https://vk.ru/wall-241229428_85 |
+| Telegram | кнопка приходит автору от сценария выпуска |
+| Сайт informpp.ru | основная сессия |
+
 ### Isoliner3D для RustGIS 0.5.1 - 14 ноября 2026 года
 
 Тег `rustgis-v0.5.1`, по слову автора «К утру перепубликуй» и «Да, всегда»
