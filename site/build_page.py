@@ -30,12 +30,18 @@ SCENE_CODE = "https://github.com/Valery35/isoliner-scene"
 SCENE_RELEASES = SCENE_CODE + "/releases"
 SCENE_WEB = "https://valery35.github.io/isoliner-scene/app/"
 RUST = PAGE + "/isoliner3d-rustgis"
-RUST_REL = SCENE_RELEASES + "/tag/rustgis-v0.5.1"
+RUST_REL = SCENE_RELEASES + "/tag/rustgis-v0.6.0"
 RUST_CODE = SCENE_CODE + "/tree/main/apps/isoliner-rustgis"
 RUSTGIS = "https://github.com/opengeos/RustGIS"
 
 # Лента выпусков: свежие сверху.
 FEED = (
+    ("2026-11-16", "rust", "0.6.0",
+     "Сцена собирается прямо из слоёв карты RustGIS в её системе "
+     "координат и сама перечитывает их при смене, нужен RustGIS 0.7.0.",
+     "The scene is built right from the RustGIS map layers in the map "
+     "coordinate system and reloads them as they change, RustGIS 0.7.0 is "
+     "needed."),
     ("2026-11-14", "rust", "0.5.1",
      "Своя вкладка на ленте RustGIS с меню инструментов, итоги несут "
      "поля исходных объектов.",
@@ -420,7 +426,7 @@ def family(b):
               "A RustGIS extension. The plugin tools compute the same bodies "
               "as in QGIS, the project layers open in the scene window in the "
               "map's coordinate system."),
-             ("Выпуск 0.5.1", "Release 0.5.1")),
+             ("Выпуск 0.6.0", "Release 0.6.0")),
         )))
 
     choose = b.section(
@@ -637,11 +643,11 @@ def rust(b):
                b.btn("cta.code", "Исходный код на GitHub",
                      "Source code on GitHub", RUST_CODE),
                b.el("cta.note",
-                    "Выпуск 0.5.1 для RustGIS 0.6.0. Файл "
-                    "isoliner3d-0.5.1.rgplugin, руководство на русском и "
+                    "Выпуск 0.6.0 для RustGIS 0.7.0 и новее. Файл "
+                    "isoliner3d-0.6.0.rgplugin, руководство на русском и "
                     "английском. Apache 2.0.",
-                    "Release 0.5.1 for RustGIS 0.6.0. The file "
-                    "isoliner3d-0.5.1.rgplugin, a manual in Russian and "
+                    "Release 0.6.0 for RustGIS 0.7.0 or later. The file "
+                    "isoliner3d-0.6.0.rgplugin, a manual in Russian and "
                     "English. Apache 2.0.",
                     cls="note"),
                picture("rustgis_scene.jpg"),
@@ -699,8 +705,8 @@ def rust(b):
         ("Как поставить", "How to install"), None,
         b.rows("how", (
             ("1. Файл", "1. The file",
-             "Скачать isoliner3d-0.5.1.rgplugin со страницы выпуска.",
-             "Download isoliner3d-0.5.1.rgplugin from the release page."),
+             "Скачать isoliner3d-0.6.0.rgplugin со страницы выпуска.",
+             "Download isoliner3d-0.6.0.rgplugin from the release page."),
             ("2. RustGIS", "2. RustGIS",
              "Вкладка <b>Модули</b>, кнопка <b>Установить из файла</b>, "
              "выбрать скачанный файл.",
@@ -712,10 +718,10 @@ def rust(b):
              "The RustGIS ribbon gets its own <b>Isoliner3D</b> tab - the scene, "
              "tool menus and About."),
             ("4. Сцена", "4. The scene",
-             "Нажать <b>Сцена Isoliner3D</b>. Повторное нажатие "
-             "перечитывает слои в уже открытом окне.",
-             "Press <b>Isoliner3D Scene</b>. A second press reloads the "
-             "layers in the window already open."))) +
+             "Нажать <b>Сцена Isoliner3D</b>. Открытое окно само "
+             "перечитывает слои, когда они меняются на карте.",
+             "Press <b>Isoliner3D Scene</b>. The open window reloads the "
+             "layers by itself as they change on the map."))) +
         '\n<figure class="shot"><img alt="" src="%s">%s</figure>'
         % (picture("rustgis_tab_isoliner3d.jpg"),
            b.el("how.shot",
@@ -726,11 +732,11 @@ def rust(b):
     limits = b.section(
         "limits", ("Пока так", "For now"),
         ("Чего ждём от RustGIS", "What we wait for in RustGIS"),
-        ("RustGIS хранит слои без высот и отдаёт расширениям координаты "
-         "в градусах. Поэтому тела и линии с отметками видны только в "
+        ("RustGIS хранит слои без высот, а инструментам расширения отдаёт "
+         "координаты в градусах. Поэтому тела и линии с отметками видны только в "
          "сцене, а в проект ложится их контур в плане с объёмом и "
          "отметками в полях. Растры расширениям пока недоступны.",
-         "RustGIS keeps layers without heights and gives extensions "
+         "RustGIS keeps layers without heights and gives extension tools "
          "coordinates in degrees. So bodies and lines with elevations are "
          "seen only in the scene, and the project gets their plan outline "
          "with the volume and elevations in fields. Rasters are not yet "
